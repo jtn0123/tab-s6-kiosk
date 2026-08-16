@@ -38,7 +38,8 @@ decision/status logs as things happen.
 - [ ] Confirm **OEM unlocking** toggle exists in Developer options (if absent → STOP, GSI path unavailable)
 - [ ] Note current firmware build (Settings → About → Software information)
 - [ ] Update to latest stock One UI 4.1 first — GSI runs on top of these vendor blobs
-- [ ] Solve the Odin problem (macOS host): borrowed Windows box / Windows VM with USB passthrough / Heimdall
+- [x] Solve the Odin problem: **physical Windows gaming PC**, Claude drives via RDP/SSH from the Mac, Justin handles tablet + button combos. VM rejected (USB passthrough risk). Heimdall = backup only.
+- [ ] Enable OpenSSH Server on gaming PC + key auth, so downloads can be staged remotely
 - [ ] Download + stash stock firmware for recovery (SamFw/Frija) → `downloads/` (gitignored)
 - [ ] Download TWRP for gts6l/gts6lwifi + patched vbmeta (XDA thread links below)
 - [ ] Pick + download GSI image (arm64) from the Tab S6 GSI thread
@@ -90,6 +91,7 @@ decision/status logs as things happen.
 | 2026-08-16 | Custom WebView kiosk APK over Fully Kiosk | Fits the project; boots straight into panel as launcher; Fully Kiosk remains fallback |
 | 2026-08-16 | InkyPi server work is the LAST phase | Tablet must be flashed + stable first; panel can point at existing `/api/current_image` meanwhile |
 | 2026-08-16 | InkyPi PRs go to jtn0123/InkyPi | User's fork is the live project; do not PR the parent repo |
+| 2026-08-16 | Flash via physical Windows gaming PC (RDP/SSH remote-driven), not a Mac VM | Direct USB removes passthrough-hiccup-mid-write risk; SSH lets downloads be staged ahead of flash day |
 
 ---
 
