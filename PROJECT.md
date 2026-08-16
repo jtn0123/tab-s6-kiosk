@@ -58,6 +58,14 @@ decision/status logs as things happen.
 - [ ] Back up anything on the tablet worth keeping (unlock = full wipe)
 - [ ] Hardware: smart plug for 85% charge cycling, wall mount ideas, cable routing
 
+### Phase 0.5 — Gaming PC prep (done 2026-08-16, via RDP from the Mac)
+- [x] RDP working: Windows App on Mac → `rdp` local user on Justin_Gaming_PC (PIN/MSA can't RDP; dedicated local admin user created). Physical console stays on Justin's session.
+- [x] Windows App reset: old Navy work account signed out, gov workspaces removed; only the gaming-PC connection remains
+- [x] Flash kit copied NAS → `C:\Users\rdp\Downloads\S6 Tab` (firmware zip verified 6.28GB)
+- [x] Odin 3.14.4 extracted; Samsung USB driver v1.5.51 installed
+- [ ] Tablet USB detection check (inconclusive — not visible in Device Manager yet; replug + unlock test pending; real test is download mode on flash day)
+- Known quirk: synthetic typing into the RDP session garbles (every key → 'a'); workaround = Mac clipboard + ⌘V redirection, works reliably. Passwords always typed by Justin.
+
 ### Phase 1 — Flash weekend
 - [ ] Enable OEM unlocking → unlock bootloader (wipes device, blows Knox fuse — permanent)
 - [ ] Odin: TWRP in AP + vbmeta, auto-reboot OFF
