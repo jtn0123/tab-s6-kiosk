@@ -42,7 +42,7 @@ decision/status logs as things happen.
 - [x] USB debugging enabled in Developer options
 - [x] Solve the Odin problem: **physical Windows gaming PC**, Justin at the keyboard. VM rejected (USB passthrough risk). Heimdall = backup only.
 - [x] ~~SSH into gaming PC~~ **ABANDONED 2026-08-16** — PC's Windows servicing stack is broken (likely gaming debloat); capability installer hung, removed OpenSSH files, MSI reinstall silently failed. Not worth more time. New plan: stage downloads on the Mac → 512GB USB drive → PC. Flash day is chat-guided (or Chrome Remote Desktop if wanted — browser-based, no Windows services). Leftover on PC: none (orphaned sshd service was deleted; authorized_keys file in C:\ProgramData\ssh is inert).
-- [ ] Stage all downloads on the Mac into `downloads/` → copy to USB drive
+- [ ] Stage all downloads to the NAS: `\\10.27.27.196\media\Media\S6 Tab` (mounted at `/Volumes/media/Media/S6 Tab` on the Mac) — folders 01-firmware / 02-odin / 03-twrp-vbmeta / 04-gsi / 05-apks. Gaming PC reads the share directly on flash day; USB drive no longer needed.
 - [ ] Download + stash stock firmware for recovery (SamFw/Frija) → `downloads/` (gitignored)
 - [ ] Download TWRP for gts6l/gts6lwifi + patched vbmeta (XDA thread links below)
 - [ ] Pick + download GSI image (arm64) from the Tab S6 GSI thread
