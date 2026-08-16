@@ -63,7 +63,8 @@ decision/status logs as things happen.
 - [x] Windows App reset: old Navy work account signed out, gov workspaces removed; only the gaming-PC connection remains
 - [x] Flash kit copied NAS → `C:\Users\rdp\Downloads\S6 Tab` (firmware zip verified 6.28GB)
 - [x] Odin 3.14.4 extracted; Samsung USB driver v1.5.51 installed
-- [ ] Tablet USB detection check (inconclusive — not visible in Device Manager yet; replug + unlock test pending; real test is download mode on flash day)
+- [x] Tablet USB detection: NOT visible under the `rdp` RDP session; works under Justin's console session but with flapping connect/disconnect toasts (marginal cable/port — rear USB 2.0 port + known-good cable to try). Both XDA zips staged (multidisabler built from ianmacd GitHub source, T860 support verified; tabs6-gsi-fixes.zip downloaded by Justin, verified, on NAS).
+- **HANDOVER 2026-08-16**: flash execution moved to a Claude session running ON the gaming PC under Justin's own account (where USB works). Full instructions in `TURNOVER.md` on the NAS (`\\10.27.27.196\media\Media\S6 Tab`); that session logs to `PROGRESS.md` alongside it — sync it back into this repo afterwards.
 - Known quirk: synthetic typing into the RDP session garbles (every key → 'a'); workaround = Mac clipboard + ⌘V redirection, works reliably. Passwords always typed by Justin.
 
 ### Phase 1 — Flash weekend
