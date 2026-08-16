@@ -15,6 +15,7 @@ decision/status logs as things happen.
 |---|---|
 | 2026-08-16 | Project created. Planning done, nothing flashed yet. |
 | 2026-08-16 | Model confirmed **SM-T860 (Wi-Fi)**. Tablet charging; OEM-unlock check pending. Odin host machine TBD. |
+| 2026-08-16 | **GREEN LIGHT**: OEM unlocking present. Firmware T860XXS5DWH1 / XAR / bootloader v5. Remaining Phase 0: software-update check, gaming PC SSH, downloads staging, backup, hardware bits. |
 
 ---
 
@@ -35,9 +36,10 @@ decision/status logs as things happen.
 
 ### Phase 0 — Prep (no flashing, reversible)
 - [x] Confirm exact model: **SM-T860 (Wi-Fi)** — confirmed 2026-08-16
-- [ ] Confirm **OEM unlocking** toggle exists in Developer options (if absent → STOP, GSI path unavailable)
-- [ ] Note current firmware build (Settings → About → Software information)
-- [ ] Update to latest stock One UI 4.1 first — GSI runs on top of these vendor blobs
+- [x] Confirm **OEM unlocking** toggle exists in Developer options — **present, GO** (2026-08-16)
+- [x] Note current firmware: **SP2A.220305.013 / T860XXS5DWH1** (Android 12 / One UI 4.1, ~Aug 2023 patch), CSC **XAR** (US unbranded), **bootloader rev 5** (staged firmware must be v5+)
+- [ ] Software update check on tablet — if "up to date", already on final stock; else let it finish and record new build
+- [x] USB debugging enabled in Developer options
 - [x] Solve the Odin problem: **physical Windows gaming PC**, Claude drives via RDP/SSH from the Mac, Justin handles tablet + button combos. VM rejected (USB passthrough risk). Heimdall = backup only.
 - [ ] Enable OpenSSH Server on gaming PC + key auth, so downloads can be staged remotely
 - [ ] Download + stash stock firmware for recovery (SamFw/Frija) → `downloads/` (gitignored)
