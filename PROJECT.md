@@ -40,8 +40,9 @@ decision/status logs as things happen.
 - [x] Note current firmware: **SP2A.220305.013 / T860XXS5DWH1** (Android 12 / One UI 4.1, ~Aug 2023 patch), CSC **XAR** (US unbranded), **bootloader rev 5** (staged firmware must be v5+)
 - [ ] Software update check on tablet — if "up to date", already on final stock; else let it finish and record new build
 - [x] USB debugging enabled in Developer options
-- [x] Solve the Odin problem: **physical Windows gaming PC**, Claude drives via RDP/SSH from the Mac, Justin handles tablet + button combos. VM rejected (USB passthrough risk). Heimdall = backup only.
-- [ ] Enable OpenSSH Server on gaming PC + key auth, so downloads can be staged remotely
+- [x] Solve the Odin problem: **physical Windows gaming PC**, Justin at the keyboard. VM rejected (USB passthrough risk). Heimdall = backup only.
+- [x] ~~SSH into gaming PC~~ **ABANDONED 2026-08-16** — PC's Windows servicing stack is broken (likely gaming debloat); capability installer hung, removed OpenSSH files, MSI reinstall silently failed. Not worth more time. New plan: stage downloads on the Mac → 512GB USB drive → PC. Flash day is chat-guided (or Chrome Remote Desktop if wanted — browser-based, no Windows services). Leftover on PC: none (orphaned sshd service was deleted; authorized_keys file in C:\ProgramData\ssh is inert).
+- [ ] Stage all downloads on the Mac into `downloads/` → copy to USB drive
 - [ ] Download + stash stock firmware for recovery (SamFw/Frija) → `downloads/` (gitignored)
 - [ ] Download TWRP for gts6l/gts6lwifi + patched vbmeta (XDA thread links below)
 - [ ] Pick + download GSI image (arm64) from the Tab S6 GSI thread
