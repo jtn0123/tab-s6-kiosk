@@ -1,0 +1,6 @@
+downloads/
+*.img
+*.tar
+*.zip
+*.apk
+.DS_Store
