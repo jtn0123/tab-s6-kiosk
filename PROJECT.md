@@ -47,7 +47,7 @@ decision/status logs as things happen.
   - [x] 03: TWRP **3.7.0_9-0-gts6lwifi** (dl.twrp.me, 64MB) + generic AVB-disabled **vbmeta.tar** (dl.twrp.me/gts4lv — correct per both GSI guides)
   - [x] 04: **MisterZtr LineageOS 23.2 (Android 16) VANILLA EXT4 GSI** `LineageOS-23.2-20260524-VANILLA-EXT4-GSI.7z` (0.9GB; ⚠️ EXT4 variant required — EROFS does not boot on T860; VANILLA confirmed working by community)
   - [x] 05: SmartTube 32.10 arm64 + Brave arm64 APKs
-  - [ ] 01: stock firmware `SAMFW.COM_SM-T860_XAR_T860XXU5DXJ1_fac.zip` 6.28GB — **downloading in background**, verify MD5 `79a605dc5f41bbd686d957368ecfb415`
+  - [x] 01: stock firmware `SAMFW.COM_SM-T860_XAR_T860XXU5DXJ1_fac.zip` 6.28GB — downloaded, **MD5 verified** `79a605dc5f41bbd686d957368ecfb415` ✓
   - [ ] **MANUAL (Justin, XDA login required)**: `tabs6-gsi-fixes.zip` (341KB — storage/speakers/haptics fixes for Android 16 GSIs, flash in TWRP after every GSI update) from https://xdaforums.com/attachments/tabs6-gsi-fixes-zip.6367800/ (thread: xdaforums.com/t/….4796316/) → save to NAS folder 03
   - [ ] **MANUAL (Justin, XDA login required)**: multidisabler zip (encryption disabler, Mentalmuso flow) from https://xdaforums.com/t/….3919714/ → save to NAS folder 03
 - Install guide to follow: Sage's LineageOS 23 GSI instructions — https://xdaforums.com/t/lineageos-23-android-16-gsi-instructions.4767423/ (uses this exact firmware page, TWRP 3.7.0, MisterZtr EXT4)
