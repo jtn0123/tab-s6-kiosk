@@ -14,6 +14,7 @@ decision/status logs as things happen.
 | Date | Update |
 |---|---|
 | 2026-08-16 | Project created. Planning done, nothing flashed yet. |
+| 2026-08-16 | Model confirmed **SM-T860 (Wi-Fi)**. Tablet charging; OEM-unlock check pending. Odin host machine TBD. |
 
 ---
 
@@ -33,7 +34,7 @@ decision/status logs as things happen.
 ## Phases
 
 ### Phase 0 — Prep (no flashing, reversible)
-- [ ] Confirm exact model: Settings → About tablet (expect SM-T860 Wi-Fi or SM-T865 LTE)
+- [x] Confirm exact model: **SM-T860 (Wi-Fi)** — confirmed 2026-08-16
 - [ ] Confirm **OEM unlocking** toggle exists in Developer options (if absent → STOP, GSI path unavailable)
 - [ ] Note current firmware build (Settings → About → Software information)
 - [ ] Update to latest stock One UI 4.1 first — GSI runs on top of these vendor blobs
