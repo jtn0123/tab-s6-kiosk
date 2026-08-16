@@ -38,11 +38,20 @@ decision/status logs as things happen.
 - [x] Confirm exact model: **SM-T860 (Wi-Fi)** — confirmed 2026-08-16
 - [x] Confirm **OEM unlocking** toggle exists in Developer options — **present, GO** (2026-08-16)
 - [x] Note current firmware: **SP2A.220305.013 / T860XXS5DWH1** (Android 12 / One UI 4.1, ~Aug 2023 patch), CSC **XAR** (US unbranded), **bootloader rev 5** (staged firmware must be v5+)
-- [ ] Software update check on tablet — if "up to date", already on final stock; else let it finish and record new build
+- [x] Software update check: moot — Samsung's FUS server confirms DWH1 is the latest OTA for XAR (verified via samloader 2026-08-16). A newer factory package T860XXU5DXJ1 (Oct 2024 maintenance, same 2023-08 security patch) exists on samfw; staged as the restore copy.
 - [x] USB debugging enabled in Developer options
 - [x] Solve the Odin problem: **physical Windows gaming PC**, Justin at the keyboard. VM rejected (USB passthrough risk). Heimdall = backup only.
 - [x] ~~SSH into gaming PC~~ **ABANDONED 2026-08-16** — PC's Windows servicing stack is broken (likely gaming debloat); capability installer hung, removed OpenSSH files, MSI reinstall silently failed. Not worth more time. New plan: stage downloads on the Mac → 512GB USB drive → PC. Flash day is chat-guided (or Chrome Remote Desktop if wanted — browser-based, no Windows services). Leftover on PC: none (orphaned sshd service was deleted; authorized_keys file in C:\ProgramData\ssh is inert).
-- [ ] Stage all downloads to the NAS: `\\10.27.27.196\media\Media\S6 Tab` (mounted at `/Volumes/media/Media/S6 Tab` on the Mac) — folders 01-firmware / 02-odin / 03-twrp-vbmeta / 04-gsi / 05-apks. Gaming PC reads the share directly on flash day; USB drive no longer needed.
+- [~] Stage all downloads to the NAS: `\\10.27.27.196\media\Media\S6 Tab` (mounted at `/Volumes/media/Media/S6 Tab` on the Mac). Gaming PC reads the share directly on flash day; USB drive no longer needed.
+  - [x] 02: Odin 3.14.4 (SamFw mirror) + Samsung USB driver
+  - [x] 03: TWRP **3.7.0_9-0-gts6lwifi** (dl.twrp.me, 64MB) + generic AVB-disabled **vbmeta.tar** (dl.twrp.me/gts4lv — correct per both GSI guides)
+  - [x] 04: **MisterZtr LineageOS 23.2 (Android 16) VANILLA EXT4 GSI** `LineageOS-23.2-20260524-VANILLA-EXT4-GSI.7z` (0.9GB; ⚠️ EXT4 variant required — EROFS does not boot on T860; VANILLA confirmed working by community)
+  - [x] 05: SmartTube 32.10 arm64 + Brave arm64 APKs
+  - [ ] 01: stock firmware `SAMFW.COM_SM-T860_XAR_T860XXU5DXJ1_fac.zip` 6.28GB — **downloading in background**, verify MD5 `79a605dc5f41bbd686d957368ecfb415`
+  - [ ] **MANUAL (Justin, XDA login required)**: `tabs6-gsi-fixes.zip` (341KB — storage/speakers/haptics fixes for Android 16 GSIs, flash in TWRP after every GSI update) from https://xdaforums.com/attachments/tabs6-gsi-fixes-zip.6367800/ (thread: xdaforums.com/t/….4796316/) → save to NAS folder 03
+  - [ ] **MANUAL (Justin, XDA login required)**: multidisabler zip (encryption disabler, Mentalmuso flow) from https://xdaforums.com/t/….3919714/ → save to NAS folder 03
+- Install guide to follow: Sage's LineageOS 23 GSI instructions — https://xdaforums.com/t/lineageos-23-android-16-gsi-instructions.4767423/ (uses this exact firmware page, TWRP 3.7.0, MisterZtr EXT4)
+- Post-install notes from research: fingerprint never works on GSI (fine); exFAT microSD unsupported (reformat FAT32/ext4); enable Treble Settings → Samsung features → "extend brightness range"; TWRP may not see internal storage for dirty flashes — put system.img on SD card
 - [ ] Download + stash stock firmware for recovery (SamFw/Frija) → `downloads/` (gitignored)
 - [ ] Download TWRP for gts6l/gts6lwifi + patched vbmeta (XDA thread links below)
 - [ ] Pick + download GSI image (arm64) from the Tab S6 GSI thread
