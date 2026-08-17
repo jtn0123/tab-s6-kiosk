@@ -119,10 +119,20 @@ What actually breaks on this device, and whether it is recoverable:
 - **`aapt2` on Windows writes asset subdirectory separators as backslashes**, silently breaking
   `file:///android_asset/` lookups. Keep assets flat.
 
-## Not done
+## Ideas, not built
 
-WebView kiosk hardening (auto-start, screen pinning), InkyPi integration, on-device settings UI.
-Ideas are tracked at the end of `PROGRESS.md`.
+**Presence-based wake.** A mmWave sensor (LD2410 on an ESP32, via ESPHome) publishes
+`binary_sensor.kitchen_presence` to Home Assistant. Inky OLED already talks to HA, so it polls that
+entity and only holds the screen awake when someone is actually there. mmWave rather than PIR
+because PIR thinks you left the moment you stand still. Solves burn-in and usefulness together
+instead of trading one against the other.
+
+Implementation note for later: releasing `FLAG_KEEP_SCREEN_ON` is enough to let the screen sleep
+normally; *waking* it needs a wake permission. Forcing an immediate screen-off would require
+device-admin rights — avoid.
+
+**Others:** NAS photo-rotation card (doubles as burn-in mitigation), now-playing tile from
+Plex/Jellyfin, kitchen timer, on-device settings UI, screen pinning.
 
 ## Secret scanning
 
