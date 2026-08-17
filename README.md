@@ -80,7 +80,7 @@ Each uses a different mechanism, so each applies and reverts on its own.
 | K | **Magisk root** | `adb root` kills all transports on this device | n/a | Play Integrity fails |
 | L | Wi-Fi-only cleanup + battery % | permanent "No service"; battery % won't show | yes | none |
 | M | SD card | endless "format this card" prompt | yes | **erases the card** |
-| N | Adaptive brightness (RRO) | GSI hardcodes the feature off | yes | none — **leave off until sensor tested** |
+| N | Adaptive brightness (RRO) | GSI hardcodes it off — **but the sensor is dead anyway** | yes | none (removed) |
 
 Start with **C** and **J** — both free, and both fix real defects. C includes a fingerprint
 procedure that likely disproves the "fingerprint never works on a GSI" folklore. J covers the AV1
@@ -105,7 +105,7 @@ What actually breaks on this device, and whether it is recoverable:
 | Brightness capped far below panel capability | **Fixed** — Treble "extend brightness range" |
 | Colour clamped to sRGB on a P3 panel | **Improved** — vendor vivid mode |
 | UI rendered at 360 dpi on a ~287 dpi panel | **Not a defect.** Samsung's own `/vendor/build.prop` sets `ro.sf.lcd_density=360`. The GSI matches stock exactly — see patch A |
-| No adaptive brightness | **Half-fixed** — resource overlay works (patch N), but the light sensor reports 0 lux |
+| No adaptive brightness | **Not fixable.** The overlay works (patch N) but the ambient light sensor returns 0 lux under torchlight — the SSC ALS driver needs Samsung's sensor stack |
 | HDR pipeline inert (`mMaxDesiredHdrRatio = 1.0`) | **Probably fixable** — patch A, unverified on-device |
 | Speakers thinner than stock | **Not the DSP** — it is loaded and calibrated. Missing Atmos/SoundAlive; use patch E |
 | `adb root` kills USB and wireless until reboot | **Worked around** — Magisk root, patch K |

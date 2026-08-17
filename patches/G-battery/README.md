@@ -76,3 +76,40 @@ is set.
 If Patch D's `stay_on_while_plugged_in` is set, the screen stays lit continuously, which adds heat.
 Heat plus a full charge is the worst case for battery wear. **These two patches interact** — capping
 charge matters more if the display is always on.
+
+## Proof the cap is actually enforced
+
+`batt_full_capacity` is a Samsung vendor-kernel node, so it is fair to ask whether it still does
+anything under a GSI. It does — toggling it flips the charger within seconds:
+
+| `batt_full_capacity` | `status` | `current_now` |
+|---|---|---|
+| **80** (cap on) | `Not charging` | **17 mA** |
+| **0** (cap off) | `Charging` | **408 mA** |
+| **80** (restored) | `Not charging` | **17 mA** |
+
+Reproduce it yourself while plugged in:
+
+```bash
+adb shell "su -c 'cd /sys/class/power_supply/battery; \
+  echo 0 > batt_full_capacity; sleep 6; echo \"off: \$(cat status) \$(cat current_now)\"; \
+  echo 80 > batt_full_capacity; sleep 6; echo \"on:  \$(cat status) \$(cat current_now)\"'"
+```
+
+### Reading the state correctly
+
+Two things confuse people into thinking the cap failed:
+
+**The level still shows 100%.** The node stops charging *above* the threshold; it cannot discharge
+the cell. If the battery was full when you applied the cap, it stays full until you actually use
+the tablet. Once it drops below 80% it charges back to 80% and holds. Nothing is wrong.
+
+**`status` reads `Not charging`, not `Full`.** That is the signature of the cap actively holding
+the charger off. A normally-terminated full battery reports `Full`. If you see `Not charging` with
+the charger plugged in, the cap is doing its job.
+
+### What the test incidentally showed
+
+With the cap off at "100%", the tablet still drew **408 mA** — it was trickle-topping a cell it
+considered full. That continuous top-up at maximum charge, warm, forever, is exactly the wear this
+patch exists to prevent.

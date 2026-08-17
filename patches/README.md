@@ -26,7 +26,7 @@ Everything here was researched and — where possible — **validated in an Andr
 | **A** | Display config | `/vendor/etc/displayconfig/` | yes | **bootloop if malformed** | **no** |
 | **L** | Wi-Fi-only cleanup + battery % — **applied** | Magisk module + lineagesettings | yes | none | partly (`/data`) |
 | **M** | SD card mounts at last — **applied** | reformat ext4 | yes | **erases the card** | yes |
-| **N** | Adaptive brightness — **overlay works, sensor doubtful** | RRO in `/product/overlay` | yes | none — **leave off until tested** | yes (`/data`) |
+| **N** | Adaptive brightness — **overlay works, sensor dead** | RRO in `/product/overlay` | yes | none (removed) | yes (`/data`) |
 | **F** | Speaker tuning — **closed, no action** | `tinymix` read-only | yes | none (reads only) | n/a |
 
 **Start with C.** It is free, instant, and two of its three items are still untried —
@@ -104,9 +104,14 @@ A **runtime resource overlay** flips it. Built with aapt2 alone (~8.5 KB), insta
 
 Verified: `mAutoBrightnessAvailable` false→true, and `mBrightnessReason` manual→**automatic**.
 
-⚠️ **But the light sensor reports 0 lux**, so the controller computes ~2.7% brightness. Leave
-adaptive brightness **off** until you run the 15-second torch test in the patch README. The overlay
-is correct either way, and doubles as a template for changing any framework `config_*` value.
+**But the light sensor is dead.** Confirmed by physical test: a torch shone directly at it and
+waved around produced no change at all across 20 seconds — the framework receives a steady 5 Hz
+stream of `0.00` events. The chip is driven by the Snapdragon Sensor Core, every sysfs node is
+read-only, and there is no enable path; it needs Samsung's sensor stack, which the GSI replaced.
+The resource was never the blocker.
+
+Module **removed from the device**, brightness left manual. Kept here because it is a working
+template for changing any framework `config_*` value on this GSI.
 
 ## K — Magisk root (prerequisite for A, B, G, H, L, M, N)
 `K-magisk-root/README.md`

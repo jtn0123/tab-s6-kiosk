@@ -1,10 +1,14 @@
 # Patch N — Adaptive brightness (runtime resource overlay)
 
-**Status: BUILT and INSTALLED. The overlay works. Whether adaptive brightness is *usable* depends
-on a sensor test that needs a human — see "The unresolved half".**
+**Status: the overlay works. Adaptive brightness does not, and cannot. Module removed from the
+device; kept here as a template.**
 
-⚠️ **Leave adaptive brightness OFF until you have run that test.** If the sensor really is dead,
-turning it on pins the screen to ~2.7% brightness — far worse than manual.
+The overlay does exactly its job — `mAutoBrightnessAvailable` false→true, `mBrightnessReason`
+manual→automatic. But the ambient light sensor returns zero regardless of actual light, which was
+**confirmed by physical test** (see below), so adaptive brightness would pin the screen at ~2.7%.
+
+**Do not install this expecting working adaptive brightness.** Its lasting value is as a worked
+example of changing a hardcoded framework resource on a GSI.
 
 ## The problem
 
@@ -93,25 +97,75 @@ $ cat /sys/class/sensors/light_sensor/name       # VEML3328
 The Samsung sensor stack is running (`vendor.sensors-hal-2-0-multihal`, `sscrpcd`, `factory.ssc`
 all alive), the node exists, and it reads ~zero on every channel.
 
-`android.sensor.light` is an **on-change** sensor: it only emits when the value changes. One zero
-sample at boot and silence afterwards is exactly what you would see *either* from a dead driver
-*or* from a tablet sitting in a genuinely dark spot.
+`android.sensor.light` is an **on-change** sensor, so a single zero sample could equally mean a dead
+driver *or* a tablet sitting somewhere dark. That ambiguity cannot be resolved over adb — it needs
+someone to change the light.
 
-**That ambiguity cannot be resolved from adb.** It needs someone to change the light.
+### The physical test — and the verdict
 
-### The test (takes 15 seconds)
+Sampled the driver node and the framework once a second for 20 seconds while a phone torch was
+shone directly at the sensor and waved around to vary it:
 
-With the tablet awake and face-up, run this and shine a phone torch at the **top edge near the
-front camera**, then cover it with your hand:
-
-```bash
-adb shell "su -c 'for i in 1 2 3 4 5 6 7 8 9 10; do cat /sys/class/sensors/light_sensor/lux; sleep 1; done'"
+```
+1   driver=[0,0,0,0,2,0]  framework=mAmbientLux=-1.0
+2   driver=[0,0,0,0,2,0]  framework=mAmbientLux=-1.0
+...
+20  driver=[0,0,0,0,2,0]  framework=mAmbientLux=-1.0
 ```
 
-- **Numbers move** → the sensor is fine, it was just dark. Enable adaptive brightness and you are
-  done: `adb shell settings put system screen_brightness_mode 1`
-- **Stays `0,0,0,0,2,0`** → the ALS is not functional under this GSI. Leave adaptive brightness off
-  and remove this module; the resource is not the blocker and no overlay can fix it.
+Not one value moved. And the framework *is* receiving a steady 5 Hz event stream — every event is
+zero:
+
+```
+veml3328 Ambient Light Sensor: last 50 events
+     1 (ts=97.559603300) 0.00, 0.00, 0.00,
+     2 (ts=97.759596425) 0.00, 0.00, 0.00,
+     3 (ts=97.959436477) 0.00, 0.00, 0.00,     <- 200ms apart, all zero
+```
+
+**Verdict: the ALS is non-functional under this GSI.** Delivery works; the data is zero.
+
+### Why it cannot be fixed from here
+
+The chip is on i2c at `9-0033` (matching sensor handle `0x00000033`) and is driven by the
+**Snapdragon Sensor Core** through `sscrpcd`, not by a directly controllable kernel driver. Every
+sysfs node is read-only and there is **no `enable` node at all**:
+
+```
+-r--r--r--  lux
+-r--r--r--  raw_data
+-r--r--r--  name        VEML3328
+-r--r--r--  vendor      CAPELLA
+drwxr-xr-x  power       (runtime-PM only - no sensor enable)
+```
+
+So there is nothing to poke. The SSC's ALS driver needs Samsung's system-side sensor configuration,
+which the GSI replaced. No resource overlay can reach it — the resource was never the blocker.
+
+Fixing it would mean restoring Samsung's sensor stack, which is the same class of problem as the
+missing Dolby/SoundAlive audio layer: a proprietary system-side component a GSI cannot carry.
+
+### Current state on the device
+
+Module **removed**, `screen_brightness_mode=0` (manual). Brightness is set manually and stays put.
+
+## Why this is kept
+
+The overlay is a working, reusable template for changing *any* framework resource on this GSI —
+the only way to alter `config_*` booleans and arrays a generic image hardcodes. `build.ps1` and
+`rro/` are about twenty lines total; point them at a different resource name and rebuild.
+
+To reuse it, edit `rro/res/values/config.xml`, rebuild, and ship the APK in a Magisk module at
+`system/product/overlay/`. Framework overlays **must** be preinstalled — `pm install` will not work
+for one targeting `android`.
+
+## Install (only if you have a reason)
+
+```bash
+powershell -File build.ps1
+# then place autobrightness-overlay.apk at
+#   <module>/system/product/overlay/ and reboot
+```
 
 ## Revert
 
@@ -120,9 +174,3 @@ adb shell "su -c 'rm -rf /data/adb/modules/autobrightness_t860'"
 adb shell "settings put system screen_brightness_mode 0"
 adb reboot
 ```
-
-## Why this is worth keeping even if the sensor is dead
-
-The overlay is a working, reusable template for changing *any* framework resource on this GSI —
-which is the only way to alter `config_*` booleans and arrays that a GSI hardcodes. `build.ps1`
-and `rro/` are about twenty lines total; point them at a different resource name and rebuild.
