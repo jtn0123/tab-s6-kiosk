@@ -516,6 +516,7 @@
     fetchedAt: 0,
     stale: false,
     subs: [],
+    lastHour: -1,   // wall-clock hour of the last rollover check; see init()
 
     onData: function (fn) { this.subs.push(fn); },
 
@@ -539,6 +540,22 @@
       }
       this.fetch();
       setInterval(this.fetch.bind(this), (C.weatherRefreshMinutes || 15) * 60 * 1000);
+
+      /* Refetch on the hour boundary as well as on the refresh timer.
+         Why: the hourly strip re-anchors itself the moment the wall clock crosses into a
+         new hour (its own 15 s tick watches nowIndex), but the big "Now" temperature only
+         changes when a fetch lands. Between a rollover and the next scheduled fetch the
+         two disagree on screen — observed live as "65°" on the Now card beside "NOW 66°"
+         in the strip, because the card still held the 6:55 reading while the strip had
+         advanced to the 07:00 slot. Same instant, two different current temperatures.
+         Refetching on the rollover keeps every card sourced from one payload, and costs
+         at most one extra request per hour. */
+      setInterval(function () {
+        var h = new Date().getHours();
+        if (weather.lastHour === h) return;
+        weather.lastHour = h;
+        if (weather.fetchedAt) weather.fetch();   // skip the boot pass; init() already fetched
+      }, 15000);
 
       /* Changing units re-requests rather than converting locally: Open-Meteo will hand
          back mph/inch or km/h/mm to match, so every derived field stays consistent.
