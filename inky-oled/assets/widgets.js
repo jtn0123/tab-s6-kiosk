@@ -723,10 +723,14 @@
         + section("Wind", statGrid([
             ["Speed", Math.round(cur.wind_speed_10m) + " " + fmt.speedUnit()],
             ["Gusts", Math.round(cur.wind_gusts_10m) + " " + fmt.speedUnit()],
-            ["Direction", fmt.compass(cur.wind_direction_10m),
-              Math.round(cur.wind_direction_10m) + "°"],
-            ["Arrow", '<span class="wind-arrow" style="transform:rotate('
-              + Math.round(cur.wind_direction_10m + 180) + 'deg)">&uarr;</span>', "blowing toward"]
+            /* The arrow belongs with Direction, not in a cell of its own labelled "Arrow" —
+               that labelled a decoration as if it were a measurement, and sat next to the
+               Direction cell already carrying the same fact. It points where the wind is
+               blowing toward, i.e. bearing + 180. */
+            ["Direction", fmt.compass(cur.wind_direction_10m)
+              + ' <span class="wind-arrow" style="transform:rotate('
+              + Math.round(cur.wind_direction_10m + 180) + 'deg)">&uarr;</span>',
+              Math.round(cur.wind_direction_10m) + "° · blowing toward"]
           ]))
 
         + section("Sun", statGrid([
