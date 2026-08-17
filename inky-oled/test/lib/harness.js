@@ -23,6 +23,16 @@ function readAsset(name) {
   return fs.readFileSync(path.join(ASSETS, name), "utf8");
 }
 
+/* The <script src> list, in document order. The app is nine flat files loaded in a
+   load-bearing order (wx-ui before every widget; wx-weather before the two widgets that
+   read its payload), so both the harness and assets.test.js take that order from the page
+   itself rather than keeping a second copy of it. */
+function scriptOrder(html) {
+  return (html.match(/<script src="([^"]+)"/g) || []).map(function (s) {
+    return s.replace(/^<script src="/, "").replace(/"$/, "");
+  });
+}
+
 /* ---------------- virtual clock ---------------- */
 
 function makeClock(startMs) {
@@ -177,12 +187,19 @@ function createApp(opts) {
   var ctx = vm.createContext(sandbox);
   if (opts.random) vm.runInContext("Math", ctx).random = opts.random;
 
-  /* Absolute filenames, not bare "app.js": node's --experimental-test-coverage attributes a
-     vm script to whatever `filename` says, and only counts paths under the project root. With
-     a bare name the app sources were invisible to the coverage report, which then cheerfully
-     printed 100% of nothing. */
-  vm.runInContext(readAsset("app.js"), ctx, { filename: path.join(ASSETS, "app.js") });
-  vm.runInContext(readAsset("widgets.js"), ctx, { filename: path.join(ASSETS, "widgets.js") });
+  /* The sources are run in the SAME ORDER index.html loads them, and that order is read out
+     of index.html rather than restated here — a harness with its own hard-coded list would
+     go on passing after somebody added a widget file and forgot the script tag, which is
+     precisely the failure this arrangement can have.
+
+     Absolute filenames, not bare "app.js": node's --experimental-test-coverage attributes a
+     vm script to whatever `filename` says, and only counts paths under the project root.
+     With a bare name the app sources were invisible to the coverage report, which then
+     cheerfully printed 100% of nothing. */
+  scriptOrder(opts.html || readAsset("index.html")).forEach(function (name) {
+    if (name === "config.js") return;                 // CONFIG is supplied by the test
+    vm.runInContext(readAsset(name), ctx, { filename: path.join(ASSETS, name) });
+  });
 
   var WP = sandbox.WP;
 
@@ -267,5 +284,6 @@ module.exports = {
   makeStorage: makeStorage,
   defaultConfig: defaultConfig,
   readAsset: readAsset,
+  scriptOrder: scriptOrder,
   ASSETS: ASSETS
 };

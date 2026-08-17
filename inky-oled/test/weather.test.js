@@ -191,7 +191,7 @@ test("no location configured disables weather with an explicit message", functio
   cfg.location = { name: "", latitude: null, longitude: null };
   var app = h.createApp({ config: cfg });
   assert.equal(app.text("wx-desc"), "No location set");
-  assert.match(app.text("status"), /no location in config\.js/);
+  assert.match(app.text("status"), /no location set/);
   assert.equal(app.fetches.length, 0, "must not call Open-Meteo without coordinates");
 });
 

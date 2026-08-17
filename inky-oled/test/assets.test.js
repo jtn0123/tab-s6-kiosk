@@ -108,17 +108,74 @@ test("no test code is shipped inside the APK", function () {
   assert.ok(fs.existsSync(path.join(__dirname, "..", "test")), "tests live outside assets/");
 });
 
-test("index.html loads exactly the three scripts that exist", function () {
+test("index.html loads exactly the scripts that exist, in the order they need", function () {
+  /* Load order is load-bearing, not incidental:
+       app.js     defines WP, which every file below reads at parse time
+       wx-ui.js   hangs the shared builders off WP.ui, so it precedes every widget
+       wx-weather resolves into WP.registry before wx-hourly / wx-daily read it, and
+       wx-sensors before wx-settings, which quotes its mode in the About line.
+     Getting this wrong is a blank wall panel, so it is pinned rather than assumed. */
   var html = h.readAsset("index.html");
-  var srcs = (html.match(/<script src="([^"]+)"/g) || []).map(function (s) {
-    return s.replace(/^<script src="/, "").replace(/"$/, "");
-  });
-  assert.deepEqual(srcs, ["config.js", "app.js", "widgets.js"]);
+  var srcs = h.scriptOrder(html);
+  assert.deepEqual(srcs, [
+    "config.js", "app.js", "wx-ui.js",
+    "wx-clock.js", "wx-timer.js", "wx-weather.js", "wx-hourly.js",
+    "wx-daily.js", "wx-sensors.js", "wx-system.js", "wx-settings.js"
+  ]);
   srcs.forEach(function (s) {
     assert.ok(fs.existsSync(path.join(h.ASSETS, s)), "index.html loads a missing file: " + s);
   });
   var css = (html.match(/href="([^"]+\.css)"/) || [])[1];
   assert.ok(fs.existsSync(path.join(h.ASSETS, css)), "missing stylesheet: " + css);
+});
+
+test("every .js in assets/ is actually loaded by the page", function () {
+  /* The other half of the check above: a widget file that exists but has no script tag is
+     dead code that a coverage report will happily call untested, and a widget file that is
+     REMOVED while its tag stays behind is a 404 on the wall. */
+  var srcs = h.scriptOrder(h.readAsset("index.html"));
+  fs.readdirSync(h.ASSETS)
+    .filter(function (n) { return /\.js$/.test(n); })
+    .forEach(function (n) {
+      assert.ok(srcs.indexOf(n) !== -1, "assets/" + n + " is never loaded by index.html");
+    });
+});
+
+test("one widget, one file, and each file registers exactly the widget it is named for", function () {
+  /* widgets.js was 1830 lines holding eight unrelated things. The split only stays split if
+     the naming stays honest: wx-<plugin>.js registers <plugin> and nothing else. */
+  var app = h.createApp({});
+  app.WP.WIDGETS.forEach(function (name) {
+    var file = "wx-" + name + ".js";
+    assert.ok(fs.existsSync(path.join(h.ASSETS, file)), "no " + file);
+    var src = fs.readFileSync(path.join(h.ASSETS, file), "utf8");
+    var regs = (src.match(/WP\.register\(/g) || []).length;
+    assert.equal(regs, 1, file + " registers " + regs + " widgets");
+    assert.match(src, new RegExp('name:\\s*"' + name + '"'),
+      file + " does not define the widget it is named after");
+  });
+  assert.equal(Object.keys(app.registry).length, app.WP.WIDGETS.length);
+  assert.equal(fs.existsSync(path.join(h.ASSETS, "widgets.js")), false,
+    "the monolith is back");
+});
+
+test("the shared builders live in one place and every widget reads them from it", function () {
+  var app = h.createApp({});
+  var ui = app.WP.ui;
+  assert.ok(ui, "WP.ui is gone — the panel builders have been copied back into the widgets");
+  ["statGrid", "section", "hero", "bar", "btn", "segmented", "switchRow"].forEach(function (k) {
+    assert.equal(typeof ui[k], "function", "WP.ui." + k + " is missing");
+  });
+  /* no widget file may define its own copy of one */
+  fs.readdirSync(h.ASSETS)
+    .filter(function (n) { return /^wx-/.test(n) && n !== "wx-ui.js"; })
+    .forEach(function (n) {
+      var src = fs.readFileSync(path.join(h.ASSETS, n), "utf8");
+      Object.keys(ui).forEach(function (k) {
+        assert.equal(new RegExp("function\\s+" + k + "\\s*\\(").test(src), false,
+          n + " has its own copy of " + k + "()");
+      });
+    });
 });
 
 /* ---------------- Content Security Policy ----------------

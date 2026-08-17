@@ -319,7 +319,7 @@ test("the demo badge says demo and the panel says why", function () {
   var app = boot();
   assert.equal(app.text("ha-badge"), "demo");
   app.WP.panels.open("sensors");
-  assert.match(app.qs('[data-panel="sensors"] [data-sub]').textContent, /DEMO/);
+  assert.match(app.qs('[data-panel="sensors"] [data-sub]').textContent, /Demo data/);
   assert.match(app.panelBody("sensors").textContent, /Simulated home/);
 });
 

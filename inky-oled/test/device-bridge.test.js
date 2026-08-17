@@ -65,7 +65,7 @@ test("the panel renders every section from one snapshot", function () {
 
   var net = stats(body, "Network");
   assert.equal(net["Transport"], "Wi-Fi");
-  assert.equal(net["Internet"], "Validated");
+  assert.equal(net["Internet"], "Working");
   assert.equal(net["Metered"], "No");
   assert.equal(net["Interface"], "wlan0");
   assert.equal(net["Down"], "144 Mbps");
@@ -100,19 +100,19 @@ test("storage and memory percentages come out of the snapshot's own numbers", fu
 test("no bridge at all degrades to an explicit message, not a blank card", function () {
   var app = h.createApp({});                       // window.Android absent
   assert.equal(app.text("sys-big"), "n/a");
-  assert.equal(app.text("sys-sub"), "no Android bridge");
+  assert.equal(app.text("sys-sub"), "no device link");
   assert.equal(app.WP.bridge.present(), false);
 
   app.WP.panels.open("system");
-  assert.match(app.panelBody("system").textContent, /bridge is not attached/);
-  assert.match(app.qs('[data-panel="system"] [data-sub]').textContent, /bridge unavailable/);
+  assert.match(app.panelBody("system").textContent, /link is not available/);
+  assert.match(app.qs('[data-panel="system"] [data-sub]').textContent, /sensors unavailable/);
   assert.deepEqual(app.logs.error, []);
 });
 
 test("a bridge that returns junk is treated as absent, not as a crash", function () {
   var app = h.createApp({ bridge: fake.make({ broken: true }) });
   assert.equal(app.text("sys-big"), "n/a");
-  assert.equal(app.text("sys-sub"), "bridge error", "a present-but-broken bridge says so");
+  assert.equal(app.text("sys-sub"), "sensor error", "a present-but-broken bridge says so");
   assert.deepEqual(app.logs.error, []);
 });
 
@@ -239,9 +239,9 @@ test("an unchanged snapshot writes nothing to the tile", function () {
 test("the Settings panel reports whether the bridge is attached", function () {
   var withBridge = h.createApp({ bridge: fake.make({}) });
   withBridge.WP.panels.open("settings");
-  assert.match(withBridge.panelBody("settings").textContent, /Bridge: attached/);
+  assert.match(withBridge.panelBody("settings").textContent, /device sensors: connected/);
 
   var without = h.createApp({});
   without.WP.panels.open("settings");
-  assert.match(without.panelBody("settings").textContent, /Bridge: not attached/);
+  assert.match(without.panelBody("settings").textContent, /device sensors: unavailable/);
 });

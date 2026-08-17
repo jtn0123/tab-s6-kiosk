@@ -30,6 +30,48 @@
   --card-line2:#2a2a2a;
   --press:     rgba(255, 255, 255, 0.10);
 
+  /* ---------------- type ramp ----------------
+     Sizes used to be chosen per element: 30 distinct font-size values across eight panels,
+     which is the main reason the panels did not read as one app. Every size now comes off
+     this ramp and nothing may introduce a new value — pick the NEAREST step.
+
+     Nine steps: a ~1.16 ratio through the text range (fine enough that adjacent tiers are
+     distinguishable at 2-4 m without any tier feeling arbitrary), then three larger jumps
+     for the hero tiers, which are read as shapes rather than as text.
+
+     Units are vh for the same reason the rest of the layout is: this panel has exactly one
+     viewport and the whole column is a height budget. The remap was measured on device
+     against that budget — see the overflow/slack line in the boot log, which must stay
+     overflow=0 in all four 12h/24h x seconds combinations. */
+  --fs-caption:    1.4vh;    /* units, badges, tile sub-lines, chart ticks */
+  --fs-label:      1.6vh;    /* letter-spaced small caps: field and card labels */
+  --fs-note:       1.85vh;   /* section headings, panel subtitles, secondary prose */
+  --fs-body:       2.15vh;   /* list rows, chips, the toast */
+  --fs-body-lg:    2.45vh;   /* things a finger aims at: buttons, switch rows */
+  --fs-title-sm:   2.9vh;    /* stat values, tile glyphs, world-clock times */
+  --fs-title:      3.4vh;    /* panel titles, tile headline numbers */
+  --fs-hero:       5.2vh;    /* the home weather hero */
+  --fs-display:    7.6vh;    /* the clock, and a panel's one big readout */
+  --fs-display-xl: 10.5vh;   /* the stopwatch — the entire point of its own screen */
+
+  /* One recipe for every letter-spaced small-caps label, so a section heading looks the
+     same in Conditions as it does in Settings (see the label block further down). */
+  --label-track:  0.16em;
+  --label-weight: 500;
+
+  /* ---------------- motion ----------------
+     Three durations, one easing. Nothing in the app animates on a number that is not one
+     of these, so a press, a switch knob and a panel entrance all feel like the same
+     machine. The two deliberate exceptions are documented where they occur: the line under
+     the toast vanishes instantly (transition:none) so the two are never legible through
+     each other, and the burn-in drift uses --dur-drift, which is slow enough to be
+     invisible rather than to be "animation". */
+  --ease:       cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-press:  0.12s;   /* finger feedback — must beat the eye, not be admired */
+  --dur-ui:     0.2s;    /* panels, switch knobs, badges, bars */
+  --dur-fill:   0.3s;    /* a progress bar sweeping to a new width reads better slightly slower */
+  --dur-drift:  4s;      /* burn-in nudge: long enough that a 12px step is never seen moving */
+
   /* The home column is a fixed budget: 100vh has to hold 8 widgets with nothing clipped.
      Sizes below were measured off real 1600x2560 screenshots — if you grow one card,
      take the height back out of another.
@@ -73,7 +115,15 @@ button {
 /* ---------- press feedback ----------
    Every tappable element dims-in on pointerdown. The class is set from JS because
    :active is unreliable inside WebView scroll containers. */
-.tappable { transition: background-color .12s ease, transform .12s ease, opacity .12s ease; }
+/* Every tappable thing in the app gets the same response on the same clock: it lights and
+   it gives a little under the finger. Deliberately NOT extended to border-color — half the
+   controls here carry a meaningful border (an accent outline is what "selected" means on a
+   chip or a segment), and a press must not read as a state change. */
+.tappable {
+  transition: background-color var(--dur-press) var(--ease),
+              transform var(--dur-press) var(--ease),
+              opacity var(--dur-press) var(--ease);
+}
 .tappable.is-press { background-color: var(--press); transform: scale(.985); }
 
 /* ============================================================================
@@ -91,7 +141,7 @@ button {
   display: flex;
   flex-direction: column;
   padding: 0.95vh 3vw;
-  transition: transform 4s ease-in-out;
+  transition: transform var(--dur-drift) ease-in-out;
 }
 
 #topbar {
@@ -103,7 +153,7 @@ button {
   height: 4.2vh;
 }
 .status {
-  font-size: 1.75vh;
+  font-size: var(--fs-note);
   color: var(--dimmer);
   white-space: nowrap;
   overflow: hidden;
@@ -117,7 +167,7 @@ button {
      measures 118 device px — above the 88 device px minimum touch target. */
   width: 4.6vh;
   height: 4.6vh;
-  font-size: 2.6vh;
+  font-size: var(--fs-title-sm);
   line-height: 1;
   border: 1px solid var(--card-line);
   border-radius: 50%;
@@ -154,9 +204,9 @@ button {
   padding: 0 6vw;
 }
 .empty[hidden] { display: none; }
-.empty-icon { font-size: 9vh; line-height: 1; color: var(--dim); }
-.empty-t { font-size: 3.2vh; font-weight: 300; margin-top: 1.4vh; }
-.empty-s { font-size: 2vh; color: var(--dim); line-height: 1.5; margin: 1.2vh 0 3vh; }
+.empty-icon { font-size: var(--fs-display); line-height: 1; color: var(--dim); }
+.empty-t { font-size: var(--fs-title); font-weight: 300; margin-top: 1.4vh; }
+.empty-s { font-size: var(--fs-body); color: var(--dim); line-height: 1.5; margin: 1.2vh 0 3vh; }
 .empty .wide-btn { max-width: 60vw; margin: 0 auto; }
 
 .card {
@@ -172,22 +222,41 @@ button {
   min-width: 0;
 }
 
+/* ---------- the one label recipe ----------
+   Every letter-spaced small-caps label in the app is drawn from here, so UNITS in Settings,
+   AIR in Conditions, BATTERY in Device and NOW on the home card are the same object seen in
+   different places. Previously each was authored separately and they drifted to five sizes
+   (1.5 / 1.6 / 1.65 / 1.7 vh), four trackings (0.06 / 0.08 / 0.1 / 0.2 em) and two weights.
+
+   Exactly two tiers, and the difference between them IS the hierarchy:
+     .psec-t   a panel's section heading — one ramp step up, one shade brighter
+     the rest   a field or card label — smaller, dimmer, subordinate to its own value
+   Before this, a section heading and the field label under it were 1.7vh and 1.6vh of the
+   same colour, which is not a hierarchy, it is a rounding error. */
+.psec-t,
+.card-label, .mini-head, .stat-k, .fc-name, .hr-t, .wc-city, .sensor-label, .daybar-t {
+  font-size: var(--fs-label);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--dimmer);
+}
+.psec-t { font-size: var(--fs-note); color: var(--dim); }
+/* The two dense grids run their labels a step down: five HA tiles across a 711px viewport
+   and 24 hour-bars across a panel simply do not have the width, and an ellipsised label is
+   worse than a small one. Same weight, same tracking, same colour — same object. */
+.sensor-label, .daybar-t { font-size: var(--fs-caption); letter-spacing: 0.08em; }
+
 .card-head {
   display: flex;
   align-items: center;
   gap: 1.6vw;
   margin-bottom: 0.5vh;
 }
-.card-label {
-  font-size: 1.65vh;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--dimmer);
-}
-.chev { margin-left: auto; color: var(--dimmer); font-size: 2.6vh; line-height: 1; }
+.chev { margin-left: auto; color: var(--dimmer); font-size: var(--fs-title-sm); line-height: 1; }
 .link-btn {
   margin-left: auto;
-  font-size: 1.7vh;
+  font-size: var(--fs-note);
   color: var(--accent);
   padding: 0.75vh 1.6vw;   /* ~3.9vh tall = 89 device px */
   border-radius: 0.9vh;
@@ -195,12 +264,14 @@ button {
 }
 
 .badge {
-  font-size: 1.4vh;
+  font-size: var(--fs-caption);
+  font-weight: var(--label-weight);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   padding: 0.45vh 1.1vw;
   border-radius: 0.7vh;
   border: 1px solid currentColor;
+  transition: color var(--dur-ui) var(--ease), border-color var(--dur-ui) var(--ease);
 }
 .badge-demo  { color: var(--warn); }
 .badge-live  { color: var(--ok); }
@@ -210,7 +281,7 @@ button {
 .card-clock, .card[data-widget="clock"] { border: none; padding-left: 0; }
 .clock-row { display: flex; align-items: baseline; }
 .time {
-  font-size: 7.6vh;
+  font-size: var(--fs-display);
   font-weight: 200;
   line-height: 0.92;
   letter-spacing: -0.03em;
@@ -234,32 +305,32 @@ button {
 .clock-side { display: flex; flex-direction: row; align-items: baseline; }
 .ampm:empty, .secs:empty { display: none; }
 .ampm {
-  font-size: 2.6vh;
+  font-size: var(--fs-title-sm);
   font-weight: 300;
   color: var(--dim);
   letter-spacing: 0.12em;
   margin-left: 1.6vw;
 }
 .secs {
-  font-size: 2.6vh;
+  font-size: var(--fs-title-sm);
   font-weight: 300;
   color: var(--dimmer);
   font-variant-numeric: tabular-nums;
   margin-left: 0.25vw;
 }
-.date { font-size: 2.35vh; font-weight: 300; color: var(--dim); margin-top: 0.4vh; }
+.date { font-size: var(--fs-body-lg); font-weight: 300; color: var(--dim); margin-top: 0.4vh; }
 
 /* ---------- 3. weather now ---------- */
 .wx-main { display: flex; align-items: center; gap: 2.4vw; }
-.wx-icon { font-size: 5.2vh; line-height: 1; flex: 0 0 auto; }
+.wx-icon { font-size: var(--fs-hero); line-height: 1; flex: 0 0 auto; }
 .wx-block { flex: 0 0 auto; }
 .wx-temp {
-  font-size: 5.2vh;
+  font-size: var(--fs-hero);
   font-weight: 200;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.wx-desc { font-size: 1.9vh; color: var(--dim); margin-top: 0.3vh; }
+.wx-desc { font-size: var(--fs-note); color: var(--dim); margin-top: 0.3vh; }
 .wx-quick {
   margin-left: auto;
   display: flex;
@@ -267,10 +338,10 @@ button {
   gap: 0.2vh;
   text-align: right;
 }
-.wxq { font-size: 1.8vh; }
+.wxq { font-size: var(--fs-note); }
 .wxq-k { color: var(--dimmer); margin-right: 0.8vw; }
 .wxq-v { color: var(--fg); font-variant-numeric: tabular-nums; }
-.wx-meta { font-size: 1.65vh; color: var(--dimmer); margin-top: 0.6vh; }
+.wx-meta { font-size: var(--fs-label); letter-spacing: 0.02em; color: var(--dimmer); margin-top: 0.6vh; }
 
 /* ---------- 4. hourly strip ---------- */
 .hstrip {
@@ -294,10 +365,9 @@ button {
   border: 1px solid transparent;
 }
 .hr.now { border-color: var(--card-line2); background: rgba(109, 179, 242, 0.07); }
-.hr-t { font-size: 1.5vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: .06em; }
-.hr-i { font-size: 2.4vh; line-height: 1.1; }
-.hr-d { font-size: 2.1vh; font-variant-numeric: tabular-nums; }
-.hr-p { font-size: 1.4vh; color: var(--dimmer); font-variant-numeric: tabular-nums; }
+.hr-i { font-size: var(--fs-body-lg); line-height: 1.1; }
+.hr-d { font-size: var(--fs-body); font-variant-numeric: tabular-nums; }
+.hr-p { font-size: var(--fs-caption); color: var(--dimmer); font-variant-numeric: tabular-nums; }
 .hr-p.wet { color: var(--accent); }
 
 /* ---------- 5. daily forecast ---------- */
@@ -312,10 +382,9 @@ button {
   padding: 0.6vh 0.3vw;
   border-radius: 1vh;
 }
-.fc-name { font-size: 1.5vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: .08em; }
-.fc-icon { font-size: 2.6vh; line-height: 1.1; }
-.fc-hi   { font-size: 2.2vh; font-variant-numeric: tabular-nums; }
-.fc-lo   { font-size: 1.8vh; color: var(--dim); font-variant-numeric: tabular-nums; }
+.fc-icon { font-size: var(--fs-body-lg); line-height: 1.1; }
+.fc-hi   { font-size: var(--fs-body); font-variant-numeric: tabular-nums; }
+.fc-lo   { font-size: var(--fs-note); color: var(--dim); font-variant-numeric: tabular-nums; }
 
 /* ---------- 6. Home Assistant sensors ----------
    Five across so nine entities land in two rows; the card cannot afford a third. */
@@ -341,10 +410,7 @@ button {
    ascent+descent metrics were inflating the line box, which multiplied across two rows
    of tiles and helped push the bottom of the home column off the frame. */
 .sensor-label {
-  font-size: 1.4vh;
   line-height: 1.15;
-  color: var(--dimmer);
-  letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -352,13 +418,25 @@ button {
 /* keep the label clear of the switch pill parked in the tile's top-right corner */
 .sensor.has-sw .sensor-label { padding-right: 3.8vw; }
 .sensor-value {
-  font-size: 2.5vh;
+  font-size: var(--fs-body-lg);
   font-weight: 200;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transition: color var(--dur-ui) var(--ease);
 }
-.sensor-unit { font-size: 1.4vh; color: var(--dim); margin-left: 0.3vw; }
+.sensor-unit { font-size: var(--fs-caption); color: var(--dim); margin-left: 0.3vw; }
+
+/* ---------- a Home Assistant reading that is no longer being refreshed ----------
+   An expired token 401s every poll and the app kept painting the last-good numbers, so an
+   overnight expiry left a wall of plausible-but-wrong values with nothing to say so. The
+   tile keeps the number (blanking it would be worse — you lose the last thing that WAS
+   true) and drops it to the label's own brightness, which reads across a room as "this is
+   not live" without inventing a second colour. The card-level `stale` badge beside HOME is
+   the part you see first; it is the same badge the weather card has used all along. */
+.sensor.stale { border-color: rgba(242, 180, 109, 0.35); }
+.sensor.stale .sensor-value,
+.sensor.stale .sensor-unit { color: var(--dimmer); }
 .sensor-sw {
   position: absolute;
   top: 0.5vh; right: 0.8vw;
@@ -372,7 +450,7 @@ button {
   margin: 0.1vh;
   border-radius: 50%;
   background: var(--dim);
-  transition: transform .16s ease, background-color .16s ease;
+  transition: transform var(--dur-ui) var(--ease), background-color var(--dur-ui) var(--ease);
 }
 .sensor.on .sensor-sw { background: rgba(125, 224, 141, 0.25); }
 .sensor.on .sensor-sw span { background: var(--ok); transform: translateX(calc(3vw - 1.6vh)); }
@@ -380,21 +458,26 @@ button {
 /* ---------- 7/2/8. mini tiles ---------- */
 .row3 { flex: 0 0 auto; display: flex; gap: 2vw; }
 .card.mini { flex: 1 1 0; padding: 0.9vh 1.4vw; align-items: flex-start; }
-.mini-head {
-  font-size: 1.5vh;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--dimmer);
-}
+.mini-head { line-height: 1.2; }
+/* D8 — the three tiles are one object repeated, so their three lines are pinned rather than
+   left to whatever each happens to contain. The value line carries a percentage, a clock and
+   a gear glyph, and a glyph's ink box is nothing like a digit's: the LINE BOX is fixed here
+   (so the sub-line underneath sits on one baseline across all three tiles regardless), and
+   the glyph is separately given the ~12% it needs to match a digit's cap height optically.
+   Without the fixed box the settings tile's third line drifted whenever the gear's font
+   fell back to a different family. */
 .mini-big {
-  font-size: 3vh;
+  font-size: var(--fs-title-sm);
   font-weight: 200;
-  line-height: 1.15;
+  height: calc(var(--fs-title-sm) * 1.15);
+  display: flex;
+  align-items: center;
   font-variant-numeric: tabular-nums;
 }
+.mini-big.glyph { font-size: calc(var(--fs-title-sm) * 1.12); line-height: 1; }
 .mini-big.alert { color: var(--danger); animation: pulse 1s infinite; }
 .mini-sub {
-  font-size: 1.45vh;
+  font-size: var(--fs-caption);
   color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
@@ -416,7 +499,7 @@ button {
   inset: 0;
   pointer-events: none;
   z-index: 50;
-  transition: transform 4s ease-in-out;
+  transition: transform var(--dur-drift) ease-in-out;
 }
 
 .panel {
@@ -429,7 +512,7 @@ button {
   visibility: hidden;
   pointer-events: none;
   transform: translateY(2.4vh);
-  transition: opacity .2s ease, transform .2s ease;
+  transition: opacity var(--dur-ui) var(--ease), transform var(--dur-ui) var(--ease);
 }
 /* is-mounted is the 240ms window in which the panel is still painted; is-open is the window
    in which it is the thing you are looking at. pointer-events belongs on the second, not the
@@ -448,8 +531,8 @@ button {
   padding: 1.8vh 3vw 1.4vh;
   border-bottom: 1px solid var(--card-line);
 }
-.panel-title { font-size: 3.4vh; font-weight: 300; letter-spacing: -0.01em; }
-.panel-sub { font-size: 1.8vh; color: var(--dimmer); margin-top: 0.3vh; }
+.panel-title { font-size: var(--fs-title); font-weight: 300; letter-spacing: -0.01em; }
+.panel-sub { font-size: var(--fs-note); color: var(--dimmer); margin-top: 0.3vh; }
 
 .close-btn {
   flex: 0 0 auto;
@@ -458,7 +541,7 @@ button {
   border-radius: 50%;
   border: 1px solid var(--card-line2);
   color: var(--fg);
-  font-size: 3.2vh;
+  font-size: var(--fs-title);
   line-height: 1;
   display: flex;
   align-items: center;
@@ -495,42 +578,65 @@ button {
   width: 100%;
   padding: 1.8vh 0;
   text-align: center;
-  font-size: 2.3vh;
+  font-size: var(--fs-body-lg);
   color: var(--accent);
   border: 1px solid var(--card-line2);
   border-radius: 1.3vh;
 }
 
 /* ---------- panel content blocks ---------- */
-.psec { margin-top: 2vh; }
-.psec-t {
-  font-size: 1.7vh;
-  font-weight: 400;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--dimmer);
-  margin-bottom: 1vh;
-}
+/* 1.6vh, not 2: with the hero laid out as a row and the grids running three across, the
+   Conditions panel came to within about one stat row of fitting its screen. This is the
+   last 1.6vh x 4 sections that closes it, and it costs nothing anywhere else — the gap
+   between a section's last value and the next section's heading is still ~2.6vh once the
+   stat cell's own bottom padding is counted. */
+.psec { margin-top: 1.6vh; }
+.psec-t { margin-bottom: 1vh; }   /* size/weight/tracking/colour: see the label recipe */
 
+/* ---------- the one hero block ----------
+   Every panel opens with the same object: a glyph, the one number the screen is about, and
+   a line of context. Two layouts, and which one a panel gets is decided by whether it has a
+   glyph at all, not by taste:
+
+     .hero      glyph BESIDE the number (weather, hourly, daily, HA, device). The stacked
+                version spent ~8vh on a line that carries no information the words below it
+                do not, and Conditions was overflowing its screen by roughly that much. It
+                also matches the home Now card, which has always put the two side by side.
+     plain      no glyph: the number is the whole hero (timer). */
 .big-readout {
   text-align: center;
   padding: 1.4vh 0 1.8vh;
   border-bottom: 1px solid var(--card-line);
 }
-.big-icon { font-size: 8vh; line-height: 1; }
+.big-readout.hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4vw;
+  text-align: left;
+  padding: 1vh 0 1.4vh;
+}
+.big-readout.hero .big-icon { flex: 0 0 auto; font-size: var(--fs-hero); }
+.big-readout.hero .big-time { font-size: var(--fs-display); }
+.hero-text { min-width: 0; }
+
+.big-icon { font-size: var(--fs-display); line-height: 1; }
 .big-time {
-  font-size: 8.5vh;
+  font-size: var(--fs-display);
   font-weight: 200;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 .big-time.mono { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
-.big-sub { font-size: 2.2vh; color: var(--dim); margin-top: 0.6vh; }
+.big-sub { font-size: var(--fs-body); color: var(--dim); margin-top: 0.6vh; }
 .dim { color: var(--dim); }
-.muted { font-size: 1.9vh; color: var(--dimmer); line-height: 1.5; margin-top: 0.8vh; }
+.muted { font-size: var(--fs-note); color: var(--dimmer); line-height: 1.5; margin-top: 0.8vh; }
+/* One-line notice for a panel that is not showing live data — the demo simulator, or a
+   Home Assistant feed that has stopped answering. Sized as a note, not as body copy: it
+   explains a state, it is not something to read. */
 .demo-note {
-  font-size: 1.8vh;
+  font-size: var(--fs-note);
   color: var(--warn);
   line-height: 1.45;
   border: 1px solid rgba(242, 180, 109, 0.3);
@@ -540,20 +646,19 @@ button {
 }
 
 .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.1vh 3vw; }
+/* Three across for the panels whose values are short (a percentage, a temperature, a wind
+   speed). Two columns made Conditions 111vh of an 100vh screen; three fits it in one
+   screenful with the same type, the same rhythm and no scrolling. Panels with long values
+   — a timezone, an entity id, a storage figure — stay on two. */
+.stat-grid.cols3 { grid-template-columns: repeat(3, 1fr); gap: 1.1vh 2.2vw; }
 .stat { border-bottom: 1px solid var(--card-line); padding-bottom: 0.8vh; min-width: 0; }
-.stat-k {
-  font-size: 1.6vh;
-  color: var(--dimmer);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
 .stat-v {
-  font-size: 2.9vh;
+  font-size: var(--fs-title-sm);
   font-weight: 300;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.stat-x { font-size: 1.6vh; color: var(--dim); }
+.stat-x { font-size: var(--fs-label); letter-spacing: 0.02em; color: var(--dim); }
 
 .wind-arrow { display: inline-block; }
 
@@ -564,7 +669,7 @@ button {
   overflow: hidden;
   margin: 1vh 0;
 }
-.bar-fill { height: 100%; background: var(--dim); transition: width .3s ease; }
+.bar-fill { height: 100%; background: var(--dim); transition: width var(--dur-fill) var(--ease); }
 .bar-fill.accent { background: var(--accent); }
 .bar-fill.danger { background: var(--danger); }
 
@@ -574,7 +679,7 @@ button {
   min-width: 18vw;
   padding: 1.9vh 1.6vw;
   text-align: center;
-  font-size: 2.2vh;
+  font-size: var(--fs-body-lg);
   border: 1px solid var(--card-line2);
   border-radius: 1.3vh;
   color: var(--fg);
@@ -586,8 +691,11 @@ button {
 .chip-row { display: flex; flex-wrap: wrap; gap: 1.2vw 1.2vw; }
 .chip {
   flex: 0 0 auto;
-  padding: 1.4vh 2.2vw;
-  font-size: 2vh;
+  /* 1.9vw of side padding, not 2.2: the ramp moved chips a step up in size, and the nine
+     Home Assistant entity chips spilled onto a third row. Height is untouched — the row is
+     5.4vh ≈ 138 device px, comfortably over the 88 px minimum. */
+  padding: 1.4vh 1.9vw;
+  font-size: var(--fs-body);
   border: 1px solid var(--card-line2);
   border-radius: 1.2vh;
   color: var(--dim);
@@ -595,20 +703,27 @@ button {
 }
 .chip.on { color: var(--fg); border-color: var(--accent); background: rgba(109, 179, 242, 0.1); }
 
+/* Segmented control — the ONLY paired-button idiom left in the app, and it is reserved for
+   a genuine either/or with two named values (°F/°C, 12-hour/24-hour). Anything that is
+   merely on or off is a .switch row instead; see D1 in the design notes. Two idioms for one
+   concept, 20 cm apart on the same screen, was the worst thing on the Settings panel. */
 .seg { display: flex; gap: 1.2vw; }
 .seg-b {
   flex: 1 1 0;
   padding: 1.8vh 1vw;
   text-align: center;
-  font-size: 2.1vh;
+  font-size: var(--fs-body-lg);
   color: var(--dim);
   border: 1px solid var(--card-line2);
   border-radius: 1.3vh;
 }
 .seg-b.on { color: var(--fg); border-color: var(--accent); background: rgba(109, 179, 242, 0.12); }
-.gap { height: 1.2vh; }
 
-/* settings rows with a real-looking switch */
+/* ---------- switch rows ----------
+   The single idiom for every on/off in the app: seconds, screen drift, and each widget's
+   visibility. Full-row target (>= 88 device px tall), label on the left, knob on the right,
+   and the knob SLIDES rather than snapping — a switch that teleports reads as a redraw, not
+   as something you did. */
 .srows { display: flex; flex-direction: column; }
 .srow {
   display: flex;
@@ -618,8 +733,15 @@ button {
   padding: 1.7vh 1vw;
   border-bottom: 1px solid var(--card-line);
   border-radius: 0.8vh;
+  width: 100%;
 }
-.srow-k { font-size: 2.2vh; }
+.srow-t { display: flex; flex-direction: column; min-width: 0; }
+.srow-k { font-size: var(--fs-body-lg); }
+/* Where a switch needs a reason, it gets ONE line here rather than a paragraph underneath.
+   The burn-in control used to carry five lines of body copy explaining AMOLED ghosting on a
+   settings screen; the full version lives in INTERACTIVE.md, where somebody who wants it
+   will be. */
+.srow-x { font-size: var(--fs-note); color: var(--dimmer); margin-top: 0.2vh; line-height: 1.3; }
 .switch {
   flex: 0 0 auto;
   width: 10vw;
@@ -628,19 +750,42 @@ button {
   background: #202020;
   border: 1px solid var(--card-line2);
   padding: 0.25vh;
-  transition: background-color .16s ease;
+  transition: background-color var(--dur-ui) var(--ease),
+              border-color var(--dur-ui) var(--ease);
 }
 .switch span {
   display: block;
   width: 2.7vh; height: 2.7vh;
   border-radius: 50%;
   background: var(--dimmer);
-  transition: transform .16s ease, background-color .16s ease;
+  transition: transform var(--dur-ui) var(--ease), background-color var(--dur-ui) var(--ease);
 }
 .switch.on { background: rgba(109, 179, 242, 0.25); border-color: var(--accent); }
 .switch.on span { background: var(--accent); transform: translateX(calc(10vw - 3.6vh)); }
 
-/* stopwatch laps */
+/* ---------- stopwatch / timer panel ----------
+   D2: this screen was ~55% empty black below "Tap Lap while running to split.", while
+   Conditions two taps away was overflowing. Both were the same failure — no panel had a
+   declared vertical strategy — so this one now has an explicit one:
+
+     the readout is the largest type in the app (--fs-display-xl). It is the entire point of
+       the screen and it used to be optically SMALLER than the home clock, because 00:00.0 is
+       seven glyphs where 12:25 is five;
+     the pinned control cluster keeps its intrinsic height;
+     the lap list takes everything that is left, and when there are no laps its one line of
+       guidance is centred in that space instead of hugging the top of a black rectangle.
+
+   The body is a flex column for the third point. position:sticky on .stick still pins,
+   because the scroll container is unchanged — only the layout of its children is. */
+.panel[data-panel="timer"] .panel-body { display: flex; flex-direction: column; }
+.panel[data-panel="timer"] .stick { flex: 0 0 auto; }
+.laps-sec { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.laps-sec .laps { flex: 0 0 auto; }
+/* the no-laps hint, centred in whatever the list is not using */
+.laps-hint { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; }
+.laps-hint .muted { margin-top: 0; text-align: center; }
+#tmr-disp { font-size: var(--fs-display-xl); }
+
 .laps { display: flex; flex-direction: column; }
 .lap {
   display: flex;
@@ -648,7 +793,7 @@ button {
   gap: 3vw;
   padding: 1.2vh 0.5vw;
   border-bottom: 1px solid var(--card-line);
-  font-size: 2.2vh;
+  font-size: var(--fs-body-lg);
 }
 .lap-n { color: var(--dimmer); }
 .lap-d { color: var(--dim); }
@@ -665,12 +810,12 @@ button {
   border-radius: 0.8vh;
 }
 .hrow.sel { background: rgba(109, 179, 242, 0.1); }
-.hrow-t { flex: 0 0 12vw; font-size: 2vh; color: var(--dim); font-variant-numeric: tabular-nums; }
-.hrow-i { flex: 0 0 auto; font-size: 2.6vh; }
+.hrow-t { flex: 0 0 12vw; font-size: var(--fs-body); color: var(--dim); font-variant-numeric: tabular-nums; }
+.hrow-i { flex: 0 0 auto; font-size: var(--fs-title-sm); }
 .hrow-bar { flex: 1 1 auto; height: 0.9vh; background: #151515; border-radius: 0.5vh; overflow: hidden; }
 .hrow-bar span { display: block; height: 100%; background: var(--accent); opacity: .55; }
-.hrow-d { flex: 0 0 11vw; text-align: right; font-size: 2.3vh; font-variant-numeric: tabular-nums; }
-.hrow-p { flex: 0 0 10vw; text-align: right; font-size: 1.8vh; color: var(--dimmer); }
+.hrow-d { flex: 0 0 11vw; text-align: right; font-size: var(--fs-body-lg); font-variant-numeric: tabular-nums; }
+.hrow-p { flex: 0 0 10vw; text-align: right; font-size: var(--fs-note); color: var(--dimmer); }
 .hrow-p.wet { color: var(--accent); }
 
 /* daily panel hour bars */
@@ -682,23 +827,22 @@ button {
   overflow-x: auto;
 }
 .daybar { flex: 1 0 3.4vw; display: flex; flex-direction: column; height: 100%; }
-.daybar-v { font-size: 1.4vh; color: var(--dim); text-align: center; height: 2vh; }
+.daybar-v { font-size: var(--fs-caption); color: var(--dim); text-align: center; height: 2vh; }
 .daybar-c { flex: 1 1 auto; display: flex; align-items: flex-end; }
 .daybar-c div { width: 100%; background: var(--accent); opacity: .5; border-radius: 0.4vh 0.4vh 0 0; }
-.daybar-t { font-size: 1.3vh; color: var(--dimmer); text-align: center; height: 2vh; }
+.daybar-t { text-align: center; height: 2vh; }
 
 /* world clocks */
 .wc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2vh 2vw; }
 .wc { border-bottom: 1px solid var(--card-line); padding-bottom: 0.8vh; }
-.wc-city { font-size: 1.6vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: .08em; }
-.wc-time { font-size: 3vh; font-weight: 300; font-variant-numeric: tabular-nums; }
-.wc-day { font-size: 1.5vh; color: var(--dim); }
+.wc-time { font-size: var(--fs-title-sm); font-weight: 300; font-variant-numeric: tabular-nums; }
+.wc-day { font-size: var(--fs-caption); color: var(--dim); }
 
 /* sparkline */
 .spark { width: 100%; height: 10vh; display: block; }
 .spark-line { fill: none; stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
 .spark-fill { fill: rgba(109, 179, 242, 0.13); stroke: none; }
-.spark-empty { font-size: 1.8vh; color: var(--dimmer); padding: 2vh 0; }
+.spark-empty { font-size: var(--fs-note); color: var(--dimmer); padding: 2vh 0; }
 
 /* ---------- toast ----------
    Both screens are full layouts with no spare band, so a floating toast is always over
@@ -723,7 +867,7 @@ button {
   border: 1px solid var(--card-line2);
   border-radius: 1.2vh;
   padding: 1.05vh 3vw;
-  font-size: 2vh;
+  font-size: var(--fs-body);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -731,7 +875,7 @@ button {
   color: var(--fg);
   opacity: 0;
   pointer-events: none;
-  transition: opacity .2s ease, transform .2s ease;
+  transition: opacity var(--dur-ui) var(--ease), transform var(--dur-ui) var(--ease);
   z-index: 90;
 }
 body.panel-open .toast { top: 6vh; }
@@ -740,7 +884,7 @@ body.panel-open .toast { top: 6vh; }
    vanishes instantly (transition: none) and only fades back afterwards: if it faded out over
    the same 200ms the toast fades in, every frame in between would show one legible through
    the other — which is the collision this position exists to avoid. */
-#status, .panel-sub { transition: opacity .25s ease .15s; }
+#status, .panel-sub { transition: opacity var(--dur-ui) var(--ease) var(--dur-press); }
 body.toasting #status,
 body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 
@@ -762,17 +906,17 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   /* transform is the burn-in drift: this layer is on the same cycle as the dashboard and
      the panels, because an alarm has 60s of unattended life before the idle unwind takes
      it down and a bright red title should not spend that on fixed pixels */
-  transition: opacity .2s ease, transform 4s ease-in-out;
+  transition: opacity var(--dur-ui) var(--ease), transform var(--dur-drift) ease-in-out;
 }
 .alarm.show { opacity: 1; visibility: visible; }
 .alarm-inner { text-align: center; padding: 0 8vw; width: 100%; }
 .alarm-title {
-  font-size: 6vh;
+  font-size: var(--fs-hero);
   font-weight: 300;
   color: var(--danger);
   animation: pulse 1s infinite;
 }
-.alarm-sub { font-size: 2.4vh; color: var(--dim); margin: 1.4vh 0 3vh; }
+.alarm-sub { font-size: var(--fs-body-lg); color: var(--dim); margin: 1.4vh 0 3vh; }
 .alarm-flash { animation: pulse 1s infinite; }
 
 /* ============================================================================
@@ -781,6 +925,24 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
    look broken: two columns, shorter type, same touch targets.
    ============================================================================ */
 @media (orientation: landscape) {
+  /* A vh is worth roughly half as much across the short axis, so the ramp is restated once
+     here rather than re-declaring twenty font-sizes. Same nine steps, same ratios, ~1.75x —
+     which is what the hand-tuned landscape sizes were already approximating, inconsistently
+     (.time was 2.2x, .wx-temp 2.1x, .big-icon 1.5x). One multiplier, one ramp, both
+     orientations. */
+  :root {
+    --fs-caption:    2.45vh;
+    --fs-label:      2.8vh;
+    --fs-note:       3.25vh;
+    --fs-body:       3.75vh;
+    --fs-body-lg:    4.3vh;
+    --fs-title-sm:   5.1vh;
+    --fs-title:      5.95vh;
+    --fs-hero:       9.1vh;
+    --fs-display:    13.3vh;
+    --fs-display-xl: 18.4vh;
+  }
+
   #home {
     display: grid;
     grid-template-columns: 1.1fr 1fr;
@@ -792,18 +954,11 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   .card[data-widget="sensors"] { grid-column: 1 / -1; }
   .row3 { grid-column: 1 / -1; }
 
-  .time { font-size: 17vh; }
-  .date { font-size: 4vh; }
-  .ampm { font-size: 4vh; }
-  .wx-icon, .wx-temp { font-size: 11vh; }
-  .wx-desc { font-size: 3vh; }
   .hr { min-width: 7vw; }
   .sensors { grid-template-columns: repeat(5, 1fr); }
-  .sensor-value { font-size: 5vh; }
   .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid.cols3 { grid-template-columns: repeat(6, 1fr); }
   .wc-grid { grid-template-columns: repeat(5, 1fr); }
-  .big-time { font-size: 13vh; }
-  .big-icon { font-size: 12vh; }
   .switch { width: 6vw; }
   .switch.on span { transform: translateX(calc(6vw - 3.6vh)); }
   .sensor-sw { width: 2.6vw; }

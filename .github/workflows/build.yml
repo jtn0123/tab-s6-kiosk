@@ -134,8 +134,15 @@ jobs:
         run: |
           set -o pipefail
           node --test --experimental-test-coverage "test/**/*.test.js" 2>&1 | tee coverage.txt
-          grep -q 'app.js' coverage.txt || (echo "coverage report does not mention app.js" && exit 1)
-          grep -q 'widgets.js' coverage.txt || (echo "coverage report does not mention widgets.js" && exit 1)
+          # Every shipped source must appear. Derived from the directory rather than a list
+          # kept here, so a widget added tomorrow is covered by this check on the same day —
+          # and so a widget file that is never loaded cannot hide behind a stale list.
+          missing=0
+          for f in assets/app.js assets/wx-*.js; do
+            b=$(basename "$f")
+            grep -q "$b" coverage.txt || { echo "coverage report does not mention $b"; missing=1; }
+          done
+          test "$missing" = 0
 
   build-apk:
     name: build apk (windows)
@@ -273,9 +280,24 @@ jobs:
               throw "asset is not flat: $n"
             }
           }
-          foreach ($want in @('assets/index.html','assets/app.js','assets/widgets.js','assets/config.js','assets/style.css')) {
-            if ($names -notcontains $want) { throw "missing from the apk: $want" }
+          # The widget layer is one flat file per widget, so a hard-coded list here would go
+          # stale the first time one is added and this check would pass over a missing file.
+          # Take the list from the page itself: every <script src> index.html loads, plus the
+          # stylesheet it links, must be inside the APK. Fails closed — if the regex matches
+          # nothing, there is nothing to check and that is an error, not a pass.
+          $indexHtml = Get-Content 'inky-oled\assets\index.html' -Raw
+          $wanted = [regex]::Matches($indexHtml, '<script src="([^"]+)"') |
+                    ForEach-Object { $_.Groups[1].Value }
+          $wanted += [regex]::Matches($indexHtml, 'href="([^"]+\.css)"') |
+                     ForEach-Object { $_.Groups[1].Value }
+          if ($wanted.Count -lt 5) {
+            throw "could not read the asset list out of index.html (found $($wanted.Count)) - refusing to conclude the apk is complete"
           }
+          $wanted += 'index.html'
+          foreach ($want in ($wanted | Sort-Object -Unique)) {
+            if ($names -notcontains "assets/$want") { throw "missing from the apk: assets/$want" }
+          }
+          Write-Host "ok: all $($wanted.Count) files index.html references are packaged"
           if ($names | Where-Object { $_ -match '\.test\.' }) { throw "test code was packaged into the apk" }
           Write-Host "ok: assets flat and complete"
 

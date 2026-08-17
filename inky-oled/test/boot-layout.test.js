@@ -188,9 +188,11 @@ test("the page has no inline handlers and loads no remote script", function () {
   var srcs = (html.match(/src="([^"]+)"/g) || []).map(function (s) {
     return s.slice(5, -1);
   });
-  assert.deepEqual(srcs, ["config.js", "app.js", "widgets.js"]);
+  assert.ok(srcs.length >= 3, "index.html loads no scripts at all");
   srcs.forEach(function (s) {
     assert.equal(/^https?:|^\/\//.test(s), false, "remote script: " + s);
+    assert.equal(/^[a-z0-9.-]+\.js$/.test(s), true,
+      "a script src that is not a flat local file: " + s);
   });
   assert.equal(/https?:\/\//.test(html), false, "index.html references a remote origin");
 });

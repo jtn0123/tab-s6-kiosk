@@ -79,7 +79,9 @@ npm test                              # or: node --test "test/**/*.test.js"
 node's built-in `node:test` / `node:assert` (node 22+; developed on 26). `package.json` exists
 only so `npm test` works.
 
-The tests load the real `assets/index.html`, `app.js` and `widgets.js` unmodified, into a small
+The tests load the real `assets/index.html`, `app.js` and every `assets/wx-*.js` unmodified
+(in the order `index.html` lists them, parsed out of the page so the harness cannot hold a
+stale copy of that list), into a small
 DOM stub with a virtual clock (`test/lib/minidom.js`, `test/lib/harness.js`), and drive them by
 dispatching real pointer events at real elements — so a control's label and the action behind
 it cannot drift apart without something failing. Nothing in `assets/` is exported or
@@ -115,10 +117,12 @@ and its degradation, the monochrome-glyph rule, the CSP meta, and the poll caden
 node --test --experimental-test-coverage "test/**/*.test.js"
 ```
 
-Currently **app.js 98% of lines / 88% of branches, widgets.js 97% / 81%**. The numbers only
-exist because `harness.js` hands `vm.runInContext` an *absolute* filename under `assets/`; with
-a bare `"app.js"` node attributed the sources to nothing and printed a 100%-of-empty report. CI
-runs this and asserts both files appear in it, for exactly that reason.
+Currently **app.js ~98% of lines / ~88% of branches**, and the widget layer ~97% / ~81%. The
+numbers only exist because `harness.js` hands `vm.runInContext` an *absolute* filename under
+`assets/`; with a bare `"app.js"` node attributed the sources to nothing and printed a
+100%-of-empty report. CI runs this and asserts that `app.js` and **every** `wx-*.js` appears in
+the report — derived from the directory, not from a list in the workflow — for exactly that
+reason.
 
 Coverage is measured, not gated. A line being executed is not the same as its behaviour being
 asserted, and this suite has been mutation-tested precisely because the percentage does not
@@ -380,6 +384,16 @@ Tuned deliberately for an **AMOLED wall panel**:
   countdown's alarm clears itself after 60 s. Drift protects the pixels; this makes sure the
   dashboard is what is actually on them.
 
+And deliberately as **one design system** rather than eight panels that each look fine alone:
+a ten-step type ramp in `vh` that every size comes off (`--fs-caption` … `--fs-display-xl`, no
+literal font sizes anywhere), one recipe for every small-caps label, one hero block, one on/off
+idiom (a switch row — segmented buttons are reserved for a genuine choice between two *named*
+values), and four motion durations. Each panel has a declared vertical strategy, so none reads
+as unfinished and none reads as content that failed to load. The tokens live in `style.css`,
+the builders in `wx-ui.js`, the rationale in
+[INTERACTIVE.md § The design system](INTERACTIVE.md#the-design-system), and
+`test/design-system.test.js` fails when any of it starts to drift.
+
 ## Dogfooding notes (fixes already made)
 
 Testing at real resolution caught things that looked fine on a small screen:
@@ -400,12 +414,17 @@ Testing at real resolution caught things that looked fine on a small screen:
 ## Adding a plugin
 
 `assets/app.js` holds the shared plumbing (settings, panel stack, touch delegation, bridge,
-formatting); the widgets themselves live in `assets/widgets.js`. Each is an object with
-`init()`, and optionally `onOpen(panel, arg)` / `onClose()` for its detail panel.
+formatting) and `assets/wx-ui.js` the shared panel builders (`WP.ui.statGrid`, `section`,
+`hero`, `bar`, `btn`, `segmented`, `switchRow`). Each widget is one flat file,
+`assets/wx-<name>.js`, holding an object with `init()` and optionally
+`onOpen(panel, arg)` / `onClose()` for its detail panel.
 
 1. Add `<section class="card tappable" data-widget="yourname" data-open="yourname">` to
    `index.html`, plus a `<section class="panel" data-panel="yourname">` shell in the panel layer
-2. Add the object in `widgets.js` and `WP.register()` it
+2. Add `assets/wx-yourname.js` with the object and `WP.register()` it, and a `<script src>`
+   for it in `index.html` (after `wx-ui.js`; assets stay flat, so it is a sibling not a
+   subdirectory). Build its panel out of `WP.ui` rather than authoring markup or sizes of
+   your own — that is what keeps the eight panels one design system
 3. Add `"yourname"` to `WIDGETS` / `WIDGET_LABELS` in `app.js` so Settings can show and hide it
 
 Controls inside a panel are markup, not listeners: `data-act="verb"` (with `data-arg` /

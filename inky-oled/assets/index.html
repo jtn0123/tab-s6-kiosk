@@ -41,8 +41,12 @@
      ============================================================================ -->
 <div id="drift">
 
+  <!-- The status line is the app's one running commentary ("Updated 3:41 PM", "Home
+       Assistant refused the token"). aria-live=polite so a change is announced when it
+       happens without interrupting; role=status gives it that meaning even where the
+       live-region mapping is patchy. -->
   <header id="topbar">
-    <span id="status" class="status">Starting&hellip;</span>
+    <span id="status" class="status" role="status" aria-live="polite">Starting&hellip;</span>
     <button class="icon-btn tappable" data-open="settings" aria-label="Settings">&#9881;</button>
   </header>
 
@@ -69,10 +73,11 @@
       <div class="card-head">
         <span class="card-label">Now</span>
         <span id="wx-badge" class="badge badge-stale" hidden>stale</span>
-        <span class="chev">&rsaquo;</span>
+        <span class="chev" aria-hidden="true">&rsaquo;</span>
       </div>
       <div class="wx-main">
-        <div id="wx-icon" class="wx-icon">&middot;</div>
+        <!-- decorative: wx-desc immediately below spells the same condition out in words -->
+        <div id="wx-icon" class="wx-icon" aria-hidden="true">&middot;</div>
         <div class="wx-block">
           <div id="wx-temp" class="wx-temp">--&deg;</div>
           <div id="wx-desc" class="wx-desc">&nbsp;</div>
@@ -86,7 +91,8 @@
     <section class="card" data-widget="hourly">
       <div class="card-head">
         <span class="card-label">Next 24 hours</span>
-        <button class="link-btn tappable" data-open="hourly">Details &rsaquo;</button>
+        <button class="link-btn tappable" data-open="hourly"
+                aria-label="Hourly forecast details">Details &rsaquo;</button>
       </div>
       <div id="hourly" class="hstrip"></div>
     </section>
@@ -95,7 +101,8 @@
     <section class="card" data-widget="daily">
       <div class="card-head">
         <span class="card-label">Next days</span>
-        <button class="link-btn tappable" data-open="daily">Details &rsaquo;</button>
+        <button class="link-btn tappable" data-open="daily"
+                aria-label="Daily forecast details">Details &rsaquo;</button>
       </div>
       <div id="forecast" class="forecast"></div>
     </section>
@@ -104,8 +111,13 @@
     <section class="card" data-widget="sensors">
       <div class="card-head">
         <span class="card-label">Home</span>
+        <!-- live / stale / demo. `stale` is the one that matters: a Home Assistant token
+             expires overnight, every poll 401s, and without this the wall keeps showing
+             yesterday's numbers as if they were current. Same badge the weather card has
+             always used for the same reason. -->
         <span id="ha-badge" class="badge badge-demo">demo</span>
-        <button class="link-btn tappable" data-open="sensors">All &rsaquo;</button>
+        <button class="link-btn tappable" data-open="sensors"
+                aria-label="All home readings">All &rsaquo;</button>
       </div>
       <div id="sensors" class="sensors"></div>
     </section>
@@ -124,9 +136,14 @@
         <div id="tmr-sub" class="mini-sub">tap to open</div>
       </section>
 
+      <!-- The value line here is a glyph where its two neighbours hold digits. A glyph's ink
+           box is nothing like a digit's, so it carries `glyph` (see .mini-big.glyph): the
+           line box stays identical across all three tiles — which is what keeps the third
+           line on one baseline — and the gear gets the ~12% it needs to match a digit's cap
+           height optically. It is decorative: "Settings" is already the tile's heading. -->
       <section class="card mini tappable" data-widget="settings" data-open="settings">
         <div class="mini-head">Settings</div>
-        <div class="mini-big">&#9881;</div>
+        <div class="mini-big glyph" aria-hidden="true">&#9881;</div>
         <div id="set-sub" class="mini-sub">&nbsp;</div>
       </section>
     </div>
@@ -134,7 +151,7 @@
     <!-- Shown only when every widget is switched off, so an all-hidden dashboard reads as
          a deliberate state instead of a crashed app. Toggled by WP applyVisibility(). -->
     <div id="empty" class="empty" hidden>
-      <div class="empty-icon">&#9881;</div>
+      <div class="empty-icon" aria-hidden="true">&#9881;</div>
       <div class="empty-t">Every widget is hidden</div>
       <div class="empty-s">Nothing is switched on to display. Open Settings &rarr; Widgets
         and turn back on whatever this panel should show.</div>
@@ -228,7 +245,7 @@
 </div>
 
 <!-- transient confirmation for actions that have no other visible result -->
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <!-- Countdown alarm overlay — full-screen so it is impossible to miss across the room.
      data-act on the overlay itself as well as on the button, for two reasons. First, both
@@ -238,7 +255,8 @@
      underneath and gets nothing should be able to clear it with that same tap rather than
      having to find the button. It also takes itself down after 60s unattended (WP idle
      layer) and leaves a quiet note on the TIMER tile that it fired. -->
-<div id="alarm" class="alarm" data-ns="timer" data-act="alarm-dismiss">
+<div id="alarm" class="alarm" data-ns="timer" data-act="alarm-dismiss"
+     role="alertdialog" aria-label="Timer finished">
   <div class="alarm-inner">
     <div class="alarm-title">Timer finished</div>
     <div id="alarm-sub" class="alarm-sub"></div>
@@ -247,8 +265,31 @@
   </div>
 </div>
 
+<!-- Load order is part of the contract, not incidental:
+
+       config.js   defines window.CONFIG, which app.js reads at parse time
+       app.js      defines window.WP — the registry, the panel stack, the formatters
+       wx-ui.js    hangs the shared panel builders off WP.ui; every widget below reads them
+                   at parse time, so it must precede all of them
+       wx-*.js     one file per widget, each registering itself. wx-weather.js owns the one
+                   Open-Meteo fetch and must come before wx-hourly.js and wx-daily.js, which
+                   resolve WP.registry.weather when their IIFE runs. wx-sensors.js precedes
+                   wx-settings.js for the same reason.
+
+     assets/ is flat by necessity — aapt2 on Windows writes a subdirectory separator as a
+     backslash and file:///android_asset/ cannot resolve it — so "one file per widget" means
+     nine files here rather than a directory. test/assets.test.js pins both the order and
+     the fact that every one of them exists. -->
 <script src="config.js"></script>
 <script src="app.js"></script>
-<script src="widgets.js"></script>
+<script src="wx-ui.js"></script>
+<script src="wx-clock.js"></script>
+<script src="wx-timer.js"></script>
+<script src="wx-weather.js"></script>
+<script src="wx-hourly.js"></script>
+<script src="wx-daily.js"></script>
+<script src="wx-sensors.js"></script>
+<script src="wx-system.js"></script>
+<script src="wx-settings.js"></script>
 </body>
 </html>

@@ -10,8 +10,15 @@ the Android JS bridge, and the two behaviours that exist purely because the devi
 to a wall: burn-in drift and the idle unwind.
 
 Files: `assets/index.html` (panel shells), `assets/app.js` (shared plumbing),
-`assets/widgets.js` (the eight widgets), `assets/style.css`,
-`src/com/justin/inkyoled/MainActivity.java` (kiosk shell + bridge).
+`assets/wx-ui.js` (the shared panel builders) and one `assets/wx-<widget>.js` per widget,
+`assets/style.css`, `src/com/justin/inkyoled/MainActivity.java` (kiosk shell + bridge).
+
+`assets/` is flat by necessity — aapt2 on Windows writes a subdirectory separator as a
+backslash and `file:///android_asset/` cannot resolve it — so "one file per widget" means
+nine files rather than a directory. `index.html` pins their load order and
+`test/assets.test.js` asserts it: `wx-ui.js` before every widget, `wx-weather.js` before
+`wx-hourly.js` / `wx-daily.js` (they read its payload out of `WP.registry`), and
+`wx-sensors.js` before `wx-settings.js`.
 
 ---
 
@@ -72,8 +79,13 @@ line with the configured location name, today's high and low, and the current UV
 
 **Panel:** *Air* (humidity, dew point, pressure, cloud cover, visibility, UV index with its WHO
 band), *Wind* (speed, gusts, compass direction with degrees, an arrow pointing where it is
-blowing), *Sun* (sunrise, sunset, daylight duration, day/night), *Precipitation* (right now,
-chance next hour, today's total, today's maximum chance), and a source note.
+blowing), *Sun* (sunrise, sunset, daylight duration) and *Rain* (right now, chance next hour,
+today's maximum chance, today's total). Location, freshness and the Open-Meteo attribution are
+in the subtitle rather than in a section at the bottom of a screen you had to scroll to reach:
+the panel used to measure ~111vh against an ~81vh scrollport, so two of its five sections were
+always below the fold. It now fits in one screenful — row hero, three-column stat grids, no
+source section — with no data dropped except *Now: Daytime / Night*, which restated the sun or
+moon glyph two lines above it.
 
 ### 4. Hourly forecast — real Open-Meteo
 
@@ -126,17 +138,32 @@ and a front door.
 read-only entities open the panel. On/off entities draw a filled glyph when energised and a
 hollow one when not — legible at 2–4 m in a way a colour shift is not.
 
-**Panel:** entity chips, the demo note, a hero glyph and value, a Turn on / Turn off button for
-switches, *Last 2 hours* as a sparkline with min/max/mean/samples (or time-weighted duty cycle
-and last change for on/off entities), and the entity's id, domain, source and update age.
+**Panel:** entity chips, a one-line note (the simulator, or the reason a live feed has stopped
+answering), a hero glyph and value, a Turn on / Turn off button for switches, *Last 2 hours* as
+a sparkline with min/max/mean/samples (or time-weighted duty cycle and last change for on/off
+entities), and the entity's id, domain, source and update age.
+
+**Freshness (live mode).** A long-lived token expires, an HA box reboots, a LAN moves — and
+every one of those used to leave the last good numbers on the wall with nothing to say they
+were hours old. An overnight token expiry produced a dashboard full of plausible, wrong
+readings that looked exactly like a working one. So the live path now tracks per-entity
+freshness, and the card badge beside HOME has three states rather than two: **demo**, **live**,
+**stale**. On a failure the reading is *kept* — blanking it destroys the last thing that was
+true — and marked instead: the badge flips to `stale`, the failing tiles drop their value to
+label brightness with a warm border, the status line says what happened (a 401 is named as a
+refused token, because that is the failure that happens silently months after setup), and the
+panel dates the last answer. A failed `turn_on` / `turn_off` marks the entity the same way,
+since the tile flipped optimistically and is now showing something untrue. The next successful
+poll clears all of it. Covered by `test/ha-stale.test.js`.
 
 **Switching to a real Home Assistant:** set `homeAssistant.enabled`, `baseUrl`, `token` and
 `entities` in `assets/config.js`, then rebuild. With all three present the widget uses the REST
 API instead — `GET /api/states/<entity_id>` per entity every `refreshSeconds` (default 60,
 floored at 5 so a mistyped `0` cannot become a request loop), and
 `POST /api/services/<domain>/turn_on|turn_off` for toggles — the badge flips to **live**, and
-the panel subtitle shows the base URL. Entity errors are reported on the status line rather than
-silently blanking the card. Create the token in Home Assistant under
+the panel subtitle says how long ago the readings last arrived. Failures badge the card `stale`
+and mark the affected tiles (see *Freshness* above) rather than silently passing off old
+numbers as current. Create the token in Home Assistant under
 **Profile → Security → Long-Lived Access Tokens**; entity ids are under
 **Developer Tools → States**.
 
@@ -322,6 +349,73 @@ If every widget is switched off, an empty state takes over and points back at Se
 rectangle is indistinguishable from a crashed app.
 
 ---
+
+## The design system
+
+Eight panels only read as one app if they are drawn from one vocabulary. All of it lives in
+`assets/style.css` (the tokens) and `assets/wx-ui.js` (the builders that use them); no widget
+file authors a font size, a duration or a piece of markup structure of its own, and
+`test/design-system.test.js` fails if one starts to.
+
+**Type ramp.** Ten steps, `--fs-caption` … `--fs-display-xl`, in `vh` because this panel has
+exactly one viewport and the home column is a height budget. A ~1.16 ratio through the seven
+text tiers, then three larger jumps for the tiers that are read as shapes rather than as text.
+Adding a size means picking the nearest step; there is no eleventh.
+
+| token | vh | used for |
+|---|---|---|
+| `--fs-caption` | 1.4 | units, badges, tile sub-lines, chart ticks |
+| `--fs-label` | 1.6 | letter-spaced small caps: field and card labels |
+| `--fs-note` | 1.85 | section headings, panel subtitles, secondary prose |
+| `--fs-body` | 2.15 | list rows, chips, the toast |
+| `--fs-body-lg` | 2.45 | things a finger aims at: buttons, switch rows |
+| `--fs-title-sm` | 2.9 | stat values, tile glyphs, world-clock times |
+| `--fs-title` | 3.4 | panel titles, tile headline numbers |
+| `--fs-hero` | 5.2 | the home weather hero, the alarm title |
+| `--fs-display` | 7.6 | the clock, and a panel's one big readout |
+| `--fs-display-xl` | 10.5 | the stopwatch — the whole point of its own screen |
+
+Before this there were **30 distinct font sizes** across the eight panels, five of them inside
+0.2vh of each other (1.5 / 1.6 / 1.65 / 1.7 / 1.75), which is a difference of 5 device px: four
+"different" sizes that are really one, and no hierarchy anywhere. Landscape restates the same
+ten tokens at ~1.75x rather than overriding nine elements at nine different multipliers.
+
+**One idiom per concept.** A *segmented control* is reserved for a genuine either/or between
+two named values — °F/°C, 12-hour/24-hour. Anything that is merely on or off is a *switch row*
+(`WP.ui.switchRow`), full width, `role="switch"`, knob animated. Settings used to carry both
+idioms 20 cm apart on one screen: `Hide seconds | Show seconds` and `Drift on | Drift off` as
+paired buttons, then the widget list as switches — all four of them the same boolean.
+
+**Label recipe.** Every letter-spaced small-caps label comes off one rule, so `UNITS` in
+Settings, `AIR` in Conditions, `BATTERY` in Device and `NOW` on the home card are the same
+object. Exactly two tiers, and the difference between them *is* the hierarchy: a section
+heading (`.psec-t`) is one ramp step up and one shade brighter than the field labels under it.
+They were 1.7vh and 1.6vh of the same colour, which is not a hierarchy, it is a rounding error.
+
+**Hero block.** Every panel opens with the same object — glyph, the one number the screen is
+about, a line of context — laid out as a row (`WP.ui.hero`). The stacked version spent ~8vh on
+a line carrying nothing the words underneath did not, and it is the home Now card's layout, so
+a panel reads as a magnification of the card that opened it.
+
+**Vertical strategy.** Each panel has a declared one rather than whatever its content happened
+to measure. Timer: the readout is the largest type in the app and the lap list takes the whole
+remainder, with its empty-state line centred in that space (it used to be ~55% dead black below
+one sentence, with a readout optically *smaller* than the home clock). Conditions: row hero,
+three-column stat grids and no source section, which took it from ~111vh to one screenful.
+
+**Motion.** Four durations and one easing, and nothing animates on a number that is not one of
+them: `--dur-press` 0.12s (finger feedback), `--dur-ui` 0.2s (panels, switch knobs, badges),
+`--dur-fill` 0.3s (a bar sweeping to a new width), `--dur-drift` 4s (the burn-in nudge, slow
+enough never to be seen moving). Two deliberate exceptions, both documented where they occur:
+the line beneath the toast vanishes instantly so the two are never legible through each other,
+and the alarm's pulse never fades below 0.6 so it stays readable in any single frame.
+
+**Accessibility.** Generated controls carry their own names and states: switch rows and HA
+toggle tiles are `role="switch"` with live `aria-checked`, single-choice button rows are
+`role="radiogroup"` / `role="radio"`, icon-only buttons and glyph-carrying chips get an
+`aria-label` that reads as one sentence, and every decorative glyph is `aria-hidden` so it is
+not spoken as a symbol beside the words that already say it. None of it changed a touch target:
+the smallest control in the app is the `Details ›` link at ~95 device px, against a floor of 88.
 
 ## Settings and where they persist
 
@@ -645,12 +739,13 @@ npm test                              # or: node --test "test/**/*.test.js"
 ```
 
 No `npm install` — node's built-in test runner, no dependencies (see
-[README](README.md#tests)). The suite loads the real `index.html`, `app.js` and `widgets.js`
-into a DOM stub with a virtual clock and drives them with real pointer events, so it exercises
-the same delegation path a finger does.
+[README](README.md#tests)). The suite loads the real `index.html`, `app.js` and every
+`wx-*.js` — in the order `index.html` itself lists them, read out of the page rather than
+restated in the harness — into a DOM stub with a virtual clock, and drives them with real
+pointer events, so it exercises the same delegation path a finger does.
 
 Every historical regression named in this document has a test that fails when the bug is put
-back. If you are about to "simplify" something in `widgets.js`, run the suite first and after.
+back. If you are about to "simplify" something in a `wx-*.js`, run the suite first and after.
 
 ### On device
 
