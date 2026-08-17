@@ -20,6 +20,7 @@ corrected.
 
 | Folder | What |
 |---|---|
+| [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) | **What is still broken and where to debug it** — start here |
 | [`patches/`](patches/) | Nine independent patches for the tablet — display, audio, battery, kiosk, burn-in |
 | [`inky-oled/`](inky-oled/) | Standalone Android dashboard app. No Raspberry Pi required |
 | [`research/`](research/) | Emulator experiments behind the HDR patch, with results |
