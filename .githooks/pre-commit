@@ -1,0 +1,30 @@
+#!/bin/sh
+# Blocks a commit if the secret scanner finds anything in the staged changes.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# Bypass deliberately (only if you are certain):
+#     git commit --no-verify
+
+if command -v pwsh >/dev/null 2>&1; then
+    SHELL_CMD=pwsh
+elif command -v powershell >/dev/null 2>&1; then
+    SHELL_CMD=powershell
+else
+    echo "pre-commit: no PowerShell found, skipping secret scan"
+    exit 0
+fi
+
+"$SHELL_CMD" -NoProfile -File "scripts/scan-secrets.ps1" -Staged
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    echo ""
+    echo "pre-commit: secret/PII scan FAILED - commit blocked."
+    echo "Fix the finding, or add a placeholder to the allowlist in scripts/scan-secrets.ps1."
+    echo "To override deliberately: git commit --no-verify"
+    exit 1
+fi
+
+exit 0

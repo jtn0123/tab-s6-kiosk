@@ -124,6 +124,29 @@ What actually breaks on this device, and whether it is recoverable:
 WebView kiosk hardening (auto-start, screen pinning), InkyPi integration, on-device settings UI.
 Ideas are tracked at the end of `PROGRESS.md`.
 
+## Secret scanning
+
+This repo documents work on a real device, so logs and reports can easily pick up serials, account
+emails, LAN addresses and tokens. Three layers guard against publishing any of it:
+
+```bash
+git config core.hooksPath .githooks          # enable the pre-commit hook, once per clone
+powershell -File scripts/scan-secrets.ps1    # scan tracked files on demand
+```
+
+- **`scripts/scan-secrets.ps1`** — no install needed. Detects AWS/GitHub/Google/OpenAI/Anthropic/
+  Slack keys, private key blocks, JWTs, connection strings and password assignments, plus
+  project-specific PII: emails, private LAN IPs, Android serials, local user paths.
+  Placeholders like `<tablet-ip>` are allowlisted. Exit 1 on findings.
+- **`.githooks/pre-commit`** — runs the scanner against staged changes and blocks the commit.
+- **`.github/workflows/secret-scan.yml`** — gitleaks over full history plus the repo scanner, on
+  every push and weekly.
+
+The working log (`PROGRESS.md`) is deliberately **gitignored** — it contains device serials and
+account addresses. This README carries the publishable findings instead.
+
+Verified by planting fake credentials and confirming all of them were caught.
+
 ## Warning
 
 Unlocking this tablet's bootloader **wipes it and permanently trips Knox**. Widevine drops L1 → L3.
