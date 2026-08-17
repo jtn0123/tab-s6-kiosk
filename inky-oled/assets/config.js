@@ -24,7 +24,30 @@ window.CONFIG = {
 
   // ---- PLUGINS --------------------------------------------
   // Turn cards on/off. Order here is the order they render.
+  // Add "sensors" once Home Assistant is configured below.
   plugins: ["clock", "weather", "forecast"],
+
+  // ---- HOME ASSISTANT (optional) --------------------------
+  // Shows your own sensors — e.g. the ESP32 room nodes — instead of only outdoor weather.
+  //
+  // token: create a Long-Lived Access Token in HA under
+  //        Profile -> Security -> Long-Lived Access Tokens.
+  //
+  // !! The token grants full API access to your Home Assistant. It is stored in plain
+  //    text inside the APK. Only sideload this build onto your own device, and never
+  //    commit a real token — the repo's pre-commit scanner will block it anyway.
+  homeAssistant: {
+    enabled: false,
+    baseUrl: "http://homeassistant.local:8123",  // or http://<ha-ip>:8123
+    token: "",                                    // paste your long-lived token
+    refreshSeconds: 60,
+    // Each entry becomes a tile. Find entity ids in HA under Developer Tools -> States.
+    entities: [
+      { id: "sensor.living_room_temperature", label: "Living room", unit: "°F" },
+      { id: "sensor.bedroom_temperature",     label: "Bedroom",     unit: "°F" },
+      { id: "sensor.outside_temperature",     label: "Outside",     unit: "°F" },
+    ],
+  },
 
   // ---- REFRESH --------------------------------------------
   weatherRefreshMinutes: 15,

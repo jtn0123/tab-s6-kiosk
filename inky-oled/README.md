@@ -50,8 +50,58 @@ No Gradle, no Maven, no network. Builds in seconds. Output ~17 KB.
 - **Clock** — large time, AM/PM, full date
 - **Now** — temperature, conditions, feels-like, humidity, location
 - **Next days** — 4-day forecast with highs/lows
+- **Home** *(optional)* — your own Home Assistant sensors
 
 Weather comes from **Open-Meteo — no API key, no account.**
+
+## Home Assistant sensors (optional)
+
+Shows your own room sensors — e.g. ESP32/MQTT nodes — instead of only outdoor weather.
+
+In `assets/config.js`:
+
+```js
+homeAssistant: {
+  enabled: true,
+  baseUrl: "http://homeassistant.local:8123",
+  token: "<long-lived access token>",
+  entities: [
+    { id: "sensor.living_room_temperature", label: "Living room", unit: "°F" },
+  ],
+},
+```
+
+Then add `"sensors"` to `plugins`. Create the token in HA under
+**Profile → Security → Long-Lived Access Tokens**; entity ids are under
+**Developer Tools → States**.
+
+If Home Assistant is not enabled, the card hides itself rather than rendering an empty box.
+
+> **The token grants full API access to your Home Assistant** and is stored in plain text inside
+> the APK. Only sideload this build onto your own device, and never commit a real token — the
+> repo's pre-commit scanner blocks it.
+
+## Auto-start after reboot
+
+A `BootReceiver` relaunches the dashboard on `BOOT_COMPLETED`.
+
+**Caveat that matters:** since Android 10, apps cannot start activities from the background, so
+this is silently dropped unless the app is exempt. Grant the exemption with:
+
+```bash
+adb shell appops set com.justin.inkyoled SYSTEM_ALERT_WINDOW allow
+```
+
+(or Settings → Apps → Inky OLED → Display over other apps).
+
+The always-works alternative is making this the HOME launcher — deliberately not done here, since
+the tablet is also a handheld video player and a launcher with no app drawer gets in the way.
+
+## Screen-on behaviour
+
+The app holds `FLAG_KEEP_SCREEN_ON` while in the foreground and is locked landscape. So the screen
+stays on while the dashboard shows, and normal sleep/rotation return the moment you switch to
+another app. **No global settings needed** — see `patches/D-kiosk-settings/README.md`.
 
 ## Kiosk behaviour
 

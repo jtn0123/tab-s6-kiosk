@@ -124,6 +124,30 @@ html, body {
 .fc-hi   { font-size: 3.6vh; font-variant-numeric: tabular-nums; }
 .fc-lo   { font-size: 2.8vh; color: var(--dim); font-variant-numeric: tabular-nums; }
 
+/* ---------- Home Assistant sensors ---------- */
+.card-sensors { grid-column: 1 / -1; }
+.sensors { display: flex; gap: 2vw; justify-content: flex-start; flex-wrap: wrap; }
+.sensor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vh;
+  min-width: 12vw;
+}
+.sensor-label {
+  font-size: 2.1vh;
+  color: var(--dimmer);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.sensor-value {
+  font-size: 5.4vh;
+  font-weight: 200;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sensor-unit { font-size: 2.6vh; color: var(--dim); margin-left: 0.3vw; }
+.sensor-empty { font-size: 2.2vh; color: var(--dimmer); }
+
 /* ---------- status / errors ---------- */
 .status {
   font-size: 1.9vh;

@@ -148,6 +148,83 @@
     }
   };
 
+  /* ---------------- plugin: Home Assistant sensors ----------------
+     Reads entity states from the HA REST API, so the panel can show your own room
+     sensors (ESP32/MQTT nodes) rather than only outdoor weather. */
+  var sensorsPlugin = {
+    name: "sensors",
+    init: function () {
+      var ha = C.homeAssistant || {};
+      if (!ha.enabled) return;
+      if (!ha.baseUrl || !ha.token) {
+        $("sensors").innerHTML =
+          '<div class="sensor-empty">Set baseUrl and token in config.js</div>';
+        return;
+      }
+      this.fetchAll();
+      setInterval(this.fetchAll.bind(this), (ha.refreshSeconds || 60) * 1000);
+    },
+    fetchAll: function () {
+      var ha = C.homeAssistant;
+      var base = ha.baseUrl.replace(/\/+$/, "");
+      var list = ha.entities || [];
+      var self = this;
+
+      Promise.all(list.map(function (ent) {
+        return fetch(base + "/api/states/" + encodeURIComponent(ent.id), {
+          headers: {
+            "Authorization": "Bearer " + ha.token,
+            "Content-Type": "application/json"
+          },
+          cache: "no-store"
+        })
+          .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+          })
+          .then(function (j) {
+            return { ok: true, cfg: ent, state: j.state, attrs: j.attributes || {} };
+          })
+          .catch(function (e) {
+            return { ok: false, cfg: ent, err: e.message };
+          });
+      })).then(self.render.bind(self));
+    },
+    render: function (results) {
+      var box = $("sensors");
+      if (!box) return;
+      box.innerHTML = "";
+
+      var anyFail = false;
+      results.forEach(function (r) {
+        var el = document.createElement("div");
+        el.className = "sensor";
+
+        var label = r.cfg.label || r.cfg.id;
+        var value, unit = "";
+
+        if (!r.ok) {
+          anyFail = true;
+          value = "--";
+        } else if (r.state === "unavailable" || r.state === "unknown") {
+          value = "--";
+        } else {
+          var n = parseFloat(r.state);
+          value = isNaN(n) ? r.state : Math.round(n * 10) / 10;
+          unit = r.cfg.unit || r.attrs.unit_of_measurement || "";
+        }
+
+        el.innerHTML =
+          '<div class="sensor-label">' + label + "</div>" +
+          '<div class="sensor-value">' + value +
+          '<span class="sensor-unit">' + unit + "</span></div>";
+        box.appendChild(el);
+      });
+
+      if (anyFail) setStatus("Home Assistant unreachable - check baseUrl/token", true);
+    }
+  };
+
   /* ---------------- burn-in drift ----------------
      This panel is AMOLED. A dashboard that never moves will permanently ghost.
      Drift the whole layout on a slow cycle so nothing sits on the same pixels. */
@@ -169,10 +246,14 @@
   }
 
   /* ---------------- boot ---------------- */
-  var REGISTRY = { clock: clockPlugin, weather: weatherPlugin, forecast: null };
-
   function boot() {
-    var wanted = C.plugins || ["clock", "weather", "forecast"];
+    var wanted = (C.plugins || ["clock", "weather", "forecast"]).slice();
+
+    // "sensors" only makes sense with Home Assistant configured — otherwise the card
+    // would render as an empty box. Drop it rather than show nothing.
+    if (wanted.indexOf("sensors") !== -1 && !(C.homeAssistant && C.homeAssistant.enabled)) {
+      wanted.splice(wanted.indexOf("sensors"), 1);
+    }
 
     // hide any card whose plugin is not enabled
     Array.prototype.forEach.call(document.querySelectorAll("[data-plugin]"), function (node) {
@@ -182,6 +263,7 @@
     if (wanted.indexOf("clock") !== -1) clockPlugin.init();
     // forecast is rendered by the weather fetch, so it only needs the weather plugin running
     if (wanted.indexOf("weather") !== -1 || wanted.indexOf("forecast") !== -1) weatherPlugin.init();
+    if (wanted.indexOf("sensors") !== -1) sensorsPlugin.init();
 
     startBurnInDrift();
   }

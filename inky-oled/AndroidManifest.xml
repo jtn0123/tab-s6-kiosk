@@ -31,5 +31,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Relaunch after reboot / power cut.
+             May be blocked by Android 10+ background-activity-start rules unless the app
+             has SYSTEM_ALERT_WINDOW. See BootReceiver for how to grant it. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="1000">
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>
