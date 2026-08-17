@@ -80,6 +80,7 @@ Each uses a different mechanism, so each applies and reverts on its own.
 | K | **Magisk root** | `adb root` kills all transports on this device | n/a | Play Integrity fails |
 | L | Wi-Fi-only cleanup + battery % | permanent "No service"; battery % won't show | yes | none |
 | M | SD card | endless "format this card" prompt | yes | **erases the card** |
+| N | Adaptive brightness (RRO) | GSI hardcodes the feature off | yes | none — **leave off until sensor tested** |
 
 Start with **C** and **J** — both free, and both fix real defects. C includes a fingerprint
 procedure that likely disproves the "fingerprint never works on a GSI" folklore. J covers the AV1
@@ -103,7 +104,8 @@ What actually breaks on this device, and whether it is recoverable:
 | Internal storage not mounting | **Fixed** upstream (codec2 seccomp policy) |
 | Brightness capped far below panel capability | **Fixed** — Treble "extend brightness range" |
 | Colour clamped to sRGB on a P3 panel | **Improved** — vendor vivid mode |
-| UI rendered at 360 dpi on a ~287 dpi panel | **Fixable** — patch A |
+| UI rendered at 360 dpi on a ~287 dpi panel | **Not a defect.** Samsung's own `/vendor/build.prop` sets `ro.sf.lcd_density=360`. The GSI matches stock exactly — see patch A |
+| No adaptive brightness | **Half-fixed** — resource overlay works (patch N), but the light sensor reports 0 lux |
 | HDR pipeline inert (`mMaxDesiredHdrRatio = 1.0`) | **Probably fixable** — patch A, unverified on-device |
 | Speakers thinner than stock | **Not the DSP** — it is loaded and calibrated. Missing Atmos/SoundAlive; use patch E |
 | `adb root` kills USB and wireless until reboot | **Worked around** — Magisk root, patch K |
@@ -141,6 +143,14 @@ What actually breaks on this device, and whether it is recoverable:
   default — so each reformat recreates the fault. Patch M.
 - **Grep matches inside comments.** `handheld_core_hardware.xml` looks like it declares telephony
   until you read it; every hit is commented out. The real declarations were elsewhere.
+- **360 dpi was never a bug.** It looks wrong on a 287 dpi panel, and "correcting" it to 300 is
+  tempting — but Samsung's own `/vendor/build.prop` sets `ro.sf.lcd_density=360`, so the GSI is
+  matching stock precisely. Changing it is a preference (more content, smaller text), not a fix.
+  Check what the vendor partition says before calling something a GSI defect.
+- **A runtime resource overlay is the way to change framework `config_*` values.** A GSI hardcodes
+  booleans it cannot know per-device. An RRO targeting `android`, built with aapt2 alone and
+  dropped into `/product/overlay` by a Magisk module, changes them cleanly — patch N is a working
+  ~20-line template.
 - **A malformed display config bootloops `system_server`** and does *not* fail safe. `initFromFile`
   returns `true` even after a parse error, so the `config.xml` fallback never runs. Recovery is
   TWRP, not adb.

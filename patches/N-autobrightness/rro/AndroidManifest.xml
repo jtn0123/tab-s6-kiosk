@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Runtime resource overlay: re-enables adaptive brightness on the SM-T860.
+
+     The tablet has a working ambient light sensor (veml3328), and the framework
+     already carries a full lux->nits curve, but the GSI ships
+     config_automatic_brightness_available=false, so the controller never runs.
+     Flipping that one boolean is the whole fix. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.tabs6.autobrightness.overlay"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <application android:hasCode="false" />
+
+    <overlay
+        android:targetPackage="android"
+        android:isStatic="true"
+        android:priority="9999" />
+</manifest>

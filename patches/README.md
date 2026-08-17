@@ -26,6 +26,7 @@ Everything here was researched and — where possible — **validated in an Andr
 | **A** | Display config | `/vendor/etc/displayconfig/` | yes | **bootloop if malformed** | **no** |
 | **L** | Wi-Fi-only cleanup + battery % — **applied** | Magisk module + lineagesettings | yes | none | partly (`/data`) |
 | **M** | SD card mounts at last — **applied** | reformat ext4 | yes | **erases the card** | yes |
+| **N** | Adaptive brightness — **overlay works, sensor doubtful** | RRO in `/product/overlay` | yes | none — **leave off until tested** | yes (`/data`) |
 | **F** | Speaker tuning — **closed, no action** | `tinymix` read-only | yes | none (reads only) | n/a |
 
 **Start with C.** It is free, instant, and two of its three items are still untried —
@@ -91,7 +92,23 @@ recreates the bug.
 Fixed by reformatting as **ext4** (no 4 GB file limit, unlike FAT32). The script refuses to run
 unless the card is empty. **It erases the card** — back up first.
 
-## K — Magisk root (prerequisite for A, B, G, H, L, M)
+## N — Adaptive brightness, via a resource overlay
+`N-autobrightness/README.md` · `build.ps1` · `rro/`
+
+The tablet has a working light sensor and the framework already carries the full lux→nits curve.
+The single blocker was `config_automatic_brightness_available=false`, hardcoded in the GSI because
+a generic image cannot assume a sensor exists.
+
+A **runtime resource overlay** flips it. Built with aapt2 alone (~8.5 KB), installed to
+`/product/overlay` by a Magisk module because framework overlays must be preinstalled.
+
+Verified: `mAutoBrightnessAvailable` false→true, and `mBrightnessReason` manual→**automatic**.
+
+⚠️ **But the light sensor reports 0 lux**, so the controller computes ~2.7% brightness. Leave
+adaptive brightness **off** until you run the 15-second torch test in the patch README. The overlay
+is correct either way, and doubles as a template for changing any framework `config_*` value.
+
+## K — Magisk root (prerequisite for A, B, G, H, L, M, N)
 `K-magisk-root/README.md`
 
 **`adb root` is unusable on this device.** It restarts adbd, the vendor USB gadget HAL loses the
@@ -171,8 +188,12 @@ real amplitude ramps from SystemUI touches). Skip unless the default feel is wro
 Two independently removable **sections** in one file — Android loads exactly one display config
 per display, so these cannot be separate files.
 
-- **Density**: 360 -> 300. The panel is ~287 dpi natively; 360 renders larger than 1:1.
-  Emulator-verified working (160 -> 200).
+- **Density**: 360 -> 300. Emulator-verified working (160 -> 200). **But this is a preference, not
+  a fix.** Samsung's own `/vendor/build.prop` sets `ro.sf.lcd_density=360`, so the GSI already
+  matches stock exactly. Lowering it to 300 gives smaller text and more content on screen — a
+  legitimate taste, but it moves *away* from stock, not toward it. It also does not need this
+  patch: `wm density 300` does the same thing from `/data`, survives reboots, reverts with
+  `wm density reset`, and carries no bootloop risk at all.
 - **HDR**: supplies the `sdrHdrRatioMap` the framework currently lacks. Emulator-verified that
   `mHdrBrightnessData` goes null -> populated with `highestHdrSdrRatio 4.0`.
   **Unproven**: whether this tablet's composer actually boosts highlights.
