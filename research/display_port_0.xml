@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- HDR brightness test config.
+     Minimal by design: AOSP's own default_television.xml proves the xsdc parser
+     tolerates a displayConfiguration containing only a subset of elements.
+
+     The five children below are NOT optional in practice - HdrBrightnessData.loadConfig()
+     dereferences each without a null check:
+       getBrightnessMap().getPoint()
+       getBrightnessIncreaseDebounceMillis().longValue()
+       getBrightnessDecreaseDebounceMillis().longValue()
+       getScreenBrightnessRampIncrease().floatValue()
+       getScreenBrightnessRampDecrease().floatValue()
+     Omitting any of them throws NPE, which initFromFile does NOT catch
+     (it catches only IOException | DatatypeConfigurationException | XmlPullParserException),
+     so it would propagate into system_server. -->
+<displayConfiguration>
+    <hdrBrightnessConfig>
+        <!-- ambient lux -> max screen brightness (0..1) allowed while HDR is on -->
+        <brightnessMap>
+            <point>
+                <first>0</first>
+                <second>0.5</second>
+            </point>
+            <point>
+                <first>500</first>
+                <second>0.8</second>
+            </point>
+            <point>
+                <first>1500</first>
+                <second>1.0</second>
+            </point>
+        </brightnessMap>
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+        <allowInLowPowerMode>false</allowInLowPowerMode>
+        <!-- SDR nits -> permitted HDR boost ratio.
+             This is the element that sets mMaxDesiredHdrRatio.
+             With it absent, getFallbackHighestSdrHdrRatio(null) returns 1 -> no HDR headroom. -->
+        <sdrHdrRatioMap>
+            <point>
+                <first>2.0</first>
+                <second>4.0</second>
+            </point>
+            <point>
+                <first>300.0</first>
+                <second>1.8</second>
+            </point>
+            <point>
+                <first>500.0</first>
+                <second>1.1</second>
+            </point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+</displayConfiguration>

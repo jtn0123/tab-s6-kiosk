@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CASE 02: hdrBrightnessConfig alone, all five mandatory children present.
+     CONTROL CASE - already proven to work. Re-run to confirm harness correctness. -->
+<displayConfiguration>
+    <hdrBrightnessConfig>
+        <brightnessMap>
+            <point><first>0</first><second>0.6</second></point>
+            <point><first>500</first><second>0.85</second></point>
+            <point><first>1500</first><second>1.0</second></point>
+        </brightnessMap>
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+        <allowInLowPowerMode>false</allowInLowPowerMode>
+        <sdrHdrRatioMap>
+            <point><first>2.0</first><second>4.0</second></point>
+            <point><first>150.0</first><second>2.5</second></point>
+            <point><first>300.0</first><second>1.8</second></point>
+            <point><first>480.0</first><second>1.15</second></point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+</displayConfiguration>

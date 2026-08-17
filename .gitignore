@@ -1,0 +1,28 @@
+# build output
+inky-oled/build/
+*.idsig
+
+# signing key — never commit
+*.keystore
+debug.keystore
+
+# AOSP sources pulled for research (Apache-2.0, Google copyright).
+# Not vendored here — research/README.md has the exact URLs to re-fetch them.
+research/DisplayDeviceConfig.java
+research/HdrBrightnessData.java
+research/display-device-config.xsd
+
+# Working log — kept local. Contains device serials, account emails and LAN IPs.
+# The README carries the condensed, publishable version of the findings.
+PROGRESS.md
+*-progress.md
+
+# reports generated on-device (contain serials / identifiers)
+*-report.txt
+speaker-report.txt
+battery-report.txt
+patches/D-kiosk-settings/backup.json
+
+# OS noise
+Thumbs.db
+.DS_Store

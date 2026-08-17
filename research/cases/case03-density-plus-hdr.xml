@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CASE 03: densityMapping + hdrBrightnessConfig together.
+     KEY QUESTION: only one display config file is loaded per display, so any patches
+     touching displayconfig MUST coexist in one file. Does combining them work, and does
+     element ORDER matter? Here they are in schema-declared order
+     (densityMapping is declared before hdrBrightnessConfig in the xs:sequence). -->
+<displayConfiguration>
+    <densityMapping>
+        <density>
+            <width>320</width>
+            <height>640</height>
+            <density>200</density>
+        </density>
+        <density>
+            <width>1600</width>
+            <height>2560</height>
+            <density>300</density>
+        </density>
+    </densityMapping>
+    <hdrBrightnessConfig>
+        <brightnessMap>
+            <point><first>0</first><second>0.6</second></point>
+            <point><first>500</first><second>0.85</second></point>
+            <point><first>1500</first><second>1.0</second></point>
+        </brightnessMap>
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+        <allowInLowPowerMode>false</allowInLowPowerMode>
+        <sdrHdrRatioMap>
+            <point><first>2.0</first><second>4.0</second></point>
+            <point><first>150.0</first><second>2.5</second></point>
+            <point><first>300.0</first><second>1.8</second></point>
+            <point><first>480.0</first><second>1.15</second></point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+</displayConfiguration>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Galaxy Tab S6 (SM-T860 / gts6lwifi) — HDR brightness config for LineageOS 23.2 GSI
+  Target path on device:  /vendor/etc/displayconfig/display_port_129.xml
+  (port 129 comes from the tablet's own dumpsys: address {port=129, model=0x40446df8ca940a})
+
+  VALIDATED IN AN ANDROID 16 EMULATOR (android-36-ext19) BEFORE USE:
+    - a displayConfiguration containing ONLY <hdrBrightnessConfig> parses correctly;
+      the ~27 elements the XSD marks required are NOT enforced by the xsdc parser
+      (AOSP's own /system/etc/displayconfig/default_television.xml ships with only
+      <densityMapping>, which is what proved this).
+    - with this structure, mHdrBrightnessData goes from null -> fully populated,
+      and HdrBrightnessModifier actively consumes it.
+
+  !! ALL FIVE OF THE FIRST CHILDREN BELOW ARE MANDATORY IN PRACTICE !!
+  HdrBrightnessData.loadConfig() dereferences each with no null check. Omitting any one
+  throws NullPointerException, which DisplayDeviceConfig.initFromFile does NOT catch
+  (it catches only IOException | DatatypeConfigurationException | XmlPullParserException).
+  The NPE reaches system_server and the device BOOTLOOPS.
+
+  This was confirmed empirically, not assumed — removing <brightnessIncreaseDebounceMillis>
+  in the emulator produced:
+      FATAL EXCEPTION IN SYSTEM PROCESS: android.display
+      java.lang.NullPointerException: ... 'long java.math.BigInteger.longValue()' on a null
+        at HdrBrightnessData.loadConfig(HdrBrightnessData.java:200)
+        at DisplayDeviceConfig.initFromFile(DisplayDeviceConfig.java:1895)
+  and a permanent bootloop. Deleting the file restored normal boot immediately.
+
+  RECOVERY IF IT BOOTLOOPS: boot TWRP (Vol Up + Power) and delete
+      /vendor/etc/displayconfig/display_port_129.xml
+  Do NOT rely on adb for recovery — adb authorization needs system_server, which is the
+  thing crashing. TWRP is the reliable path.
+
+  Panel facts this file is tuned against (from the tablet's own dumpsys):
+      mMaxLuminance        = 564.3 nits
+      mMaxAverageLuminance = 282.46 nits
+      mMinLuminance        = 0.6134 nits
+      supportedHdrTypes    = [2, 3, 4]  (HDR10, HLG, HDR10+)
+-->
+<displayConfiguration>
+    <hdrBrightnessConfig>
+        <!-- ambient lux -> maximum screen brightness (0..1) permitted while HDR is active -->
+        <brightnessMap>
+            <point>
+                <first>0</first>
+                <second>0.6</second>
+            </point>
+            <point>
+                <first>500</first>
+                <second>0.85</second>
+            </point>
+            <point>
+                <first>1500</first>
+                <second>1.0</second>
+            </point>
+        </brightnessMap>
+
+        <!-- MANDATORY (NPE -> bootloop if omitted) -->
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>
+        <!-- MANDATORY -->
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <!-- MANDATORY -->
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <!-- MANDATORY -->
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+
+        <allowInLowPowerMode>false</allowInLowPowerMode>
+
+        <!-- SDR nits -> permitted HDR boost ratio. THIS is what lifts the HDR ceiling.
+             Without it, getFallbackHighestSdrHdrRatio(null) returns 1 => no headroom at all.
+             Tuned conservatively for a 564-nit panel: at typical SDR white (~300 nits)
+             a 1.8x boost lands near 540 nits, inside the panel's real capability.
+             Ratios are deliberately not aggressive — overshooting just clips highlights. -->
+        <sdrHdrRatioMap>
+            <point>
+                <first>2.0</first>
+                <second>4.0</second>
+            </point>
+            <point>
+                <first>150.0</first>
+                <second>2.5</second>
+            </point>
+            <point>
+                <first>300.0</first>
+                <second>1.8</second>
+            </point>
+            <point>
+                <first>480.0</first>
+                <second>1.15</second>
+            </point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+</displayConfiguration>

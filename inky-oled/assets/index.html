@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wall Panel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- everything lives in this wrapper so burn-in drift can move it as one unit -->
+  <div id="drift">
+
+    <main id="grid">
+
+      <section class="card card-clock" data-plugin="clock">
+        <div id="time" class="time">--:--</div>
+        <div id="ampm" class="ampm"></div>
+        <div id="date" class="date">&nbsp;</div>
+      </section>
+
+      <section class="card card-weather" data-plugin="weather">
+        <div class="card-label">Now</div>
+        <div class="wx-main">
+          <div id="wx-icon" class="wx-icon">·</div>
+          <div>
+            <div id="wx-temp" class="wx-temp">--&deg;</div>
+            <div id="wx-desc" class="wx-desc">&nbsp;</div>
+          </div>
+        </div>
+        <div id="wx-meta" class="wx-meta">&nbsp;</div>
+      </section>
+
+      <section class="card card-forecast" data-plugin="forecast">
+        <div class="card-label">Next days</div>
+        <div id="forecast" class="forecast"></div>
+      </section>
+
+    </main>
+
+    <footer id="status" class="status"></footer>
+
+  </div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

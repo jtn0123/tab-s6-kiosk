@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CASE 06: hdrBrightnessConfig WITHOUT <sdrHdrRatioMap>.
+     Per source, getHighestSdrHdrRatio() falls back to getFallbackHighestSdrHdrRatio(hbm),
+     and with no <highBrightnessMode> block that returns 1 => no HDR headroom.
+     Question: does it still boot (i.e. is sdrHdrRatioMap genuinely optional at runtime,
+     not just per the schema), and does highestHdrSdrRatio come back as 1.0?
+     This isolates WHICH element actually supplies the HDR headroom. -->
+<displayConfiguration>
+    <hdrBrightnessConfig>
+        <brightnessMap>
+            <point><first>0</first><second>0.6</second></point>
+            <point><first>1500</first><second>1.0</second></point>
+        </brightnessMap>
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+    </hdrBrightnessConfig>
+</displayConfiguration>

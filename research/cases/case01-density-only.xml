@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CASE 01: densityMapping alone.
+     Question: is density safe to set via displayconfig, and does it take effect?
+     Expectation: SAFE (AOSP ships default_television.xml containing only this). -->
+<displayConfiguration>
+    <densityMapping>
+        <!-- emulator AVD resolution -->
+        <density>
+            <width>320</width>
+            <height>640</height>
+            <density>200</density>
+        </density>
+        <!-- Galaxy Tab S6 native: 1600x2560, true panel density ~287dpi.
+             GSI default is 360 which renders larger than 1:1; Samsung stock ran ~300. -->
+        <density>
+            <width>1600</width>
+            <height>2560</height>
+            <density>300</density>
+        </density>
+    </densityMapping>
+</displayConfiguration>
