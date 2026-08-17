@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tell the framework the fingerprint sensor is under the display, and where.
+         Without this the HIDL shim registers the ET713 as a REAR sensor: Settings
+         shows "locate the sensor on the back of your device", SystemUI never draws
+         the UDFPS target/illumination circle, and an optical sensor photographing
+         an unlit screen can only ever time out.
+
+         Values are {centerX, centerY, radius} in pixels at the panel's natural
+         1600x2560 resolution. Derived from the kernel's own sensor position node
+         /sys/class/fingerprint/fingerprint/position = 11.74,0.00,7.50,7.50,...
+         = 11.74 mm up from the bottom edge, centered, 7.5 mm active area,
+         at 286 dpi (11.28 px/mm):
+           centerX = 1600/2               = 800
+           centerY = 2560 - 11.74*11.28   = 2428
+           radius  = 7.5*11.28/2 ~= 42, rounded up for a slightly forgiving target -->
+    <integer-array name="config_udfps_sensor_props">
+        <item>800</item>
+        <item>2428</item>
+        <item>45</item>
+    </integer-array>
+</resources>

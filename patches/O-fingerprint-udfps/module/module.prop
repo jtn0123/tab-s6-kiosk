@@ -1,0 +1,6 @@
+id=udfps_overlay_t860
+name=UDFPS sensor position (SM-T860)
+version=v1.0
+versionCode=1
+author=tab-s6-kiosk
+description=Declares the ET713 in-display fingerprint sensor position (800,2428 r45) via config_udfps_sensor_props so the framework treats it as UDFPS instead of a rear sensor.

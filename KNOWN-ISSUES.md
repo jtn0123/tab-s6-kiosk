@@ -15,47 +15,7 @@ adb shell "su -c 'sh /data/local/tmp/audit.sh'"     # if still present
 
 # 1. Worth your time — broken, fixable, untried
 
-## 1.1 Fingerprint — never attempted
-
-**Status: the toggle is off. Nobody has tried the actual procedure.**
-
-The hardware and HAL are both present:
-
-```bash
-$ pm list features | grep fingerprint
-feature:android.hardware.fingerprint
-$ ls /vendor/lib64/hw/ | grep -i fingerprint
-fingerprint.default.so
-$ dumpsys fingerprint | grep -i "Fps state"
-Fps state: 0                     # 0 = sensor idle, nothing enrolled
-```
-
-And the Treble toggle that drives it is **off**:
-
-```bash
-$ getprop persist.sys.phh.samsung_fingerprint
- 0
-```
-
-**Where to debug:** `patches/C-treble-toggles/README.md`, section C3. Treble Settings has no
-launcher icon:
-
-```bash
-adb shell am start -n me.phh.treble.app/.TopLevelSettingsActivity
-```
-
-The procedure is order-sensitive — set the mode to **Green**, enroll a finger, *then* switch to
-**White**. Enrolling in the wrong mode is why people conclude "fingerprint never works on a GSI".
-
-Watch it live while you enroll:
-
-```bash
-adb logcat -c && adb logcat | grep -iE "fingerprint|biometric|fps"
-```
-
-**Likely outcome:** unknown. This is the single largest untested item on the device.
-
-## 1.2 Inky OLED is not installed
+## 1.1 Inky OLED is not installed
 
 **Status: built, documented, never put on the tablet.**
 
@@ -80,7 +40,7 @@ adb shell monkey -p com.justin.inkyoled -c android.intent.category.LAUNCHER 1
 ⚠️ **Before installing, change the location** — `inky-oled/assets/config.js` still ships the
 **Seattle placeholder**, so you will get Seattle's weather. Edit lat/lon, then `build.ps1`.
 
-## 1.3 SmartTube will stutter on AV1
+## 1.2 SmartTube will stutter on AV1
 
 **Status: installed, not configured.**
 
@@ -96,13 +56,13 @@ Confirm what a stuttering video is actually using:
 adb shell dumpsys media.player | grep -iE "codec|mime"
 ```
 
-## 1.4 JamesDSP — installed, not onboarded
+## 1.3 JamesDSP — installed, not onboarded
 
 **Status: APK installed with permissions pre-granted; never opened.**
 
 `me.timschneeberger.rootlessjamesdsp` is present. It needs a one-time in-app setup (it captures the
 audio session). This is the **only** route to system-wide EQ on this GSI, and the closest available
-substitute for the Samsung audio layer discussed in §2.2.
+substitute for the Samsung audio layer discussed in §2.3.
 
 **Where to debug:** open the app, complete onboarding, then verify it is capturing:
 
@@ -116,7 +76,43 @@ adb shell dumpsys media.audio_flinger | grep -iE "effect|session" | head
 
 Do not spend time on these. Each was investigated to root cause.
 
-## 2.1 Ambient light sensor — dead, so no adaptive brightness
+## 2.1 Fingerprint — attempted 2026-08-16, unfixable off stock firmware
+
+**Tried, hard, with the C3 procedure and well beyond it. Do not retry.** The full attempt and
+every finding is documented in `patches/O-fingerprint-udfps/README.md`. Summary of how far the
+chain got:
+
+| Layer | State |
+|---|---|
+| Sensor hardware (Egis ET713 optical, `/dev/esfp0`) | present |
+| Samsung TZ service (`bauth_FPBAuthService`) | running, polls `preenroll_flag: 1` |
+| Touch-firmware FOD zone (`/sys/class/sec/tsp/cmd` → `fod_enable`, `set_fod_rect`) | accepts commands, `:OK` |
+| Touch → HAL finger event | **fired exactly once** (`onAcquired(6, 10001)`) |
+| Screen illumination at the sensor (`SDM Fingerprint Indisplay Layer`) | **never arms — this is the wall** |
+
+The ET713 is *optical*: it photographs your fingertip lit by the panel. The bright green/white
+glow you remember from stock **is** the sensor's light source, and the code that produces it is
+Samsung's proprietary One UI system layer — not in the vendor partition, not in any GSI, not
+installable.
+
+Corroboration that this is not a skill issue: the XDA **One UI 6 port for this exact tablet** —
+Samsung's own firmware, rebuilt — is titled *"All hardware working except fingerprint"*, and the
+One UI 7 port says the same. If Samsung-firmware ports can't light this sensor off stock, a GSI
+cannot.
+
+Two traps discovered for anyone who retries anyway:
+
+1. **The AOSP UDFPS route actively breaks the only working path.** An RRO setting
+   `config_udfps_sensor_props` produces a beautiful proper enroll UI — whose
+   `UdfpsControllerOverlay` then *steals the touch input* away from phh's patched Settings
+   (`PHH-Enroll`), which is the only component that ever forwarded a press to the HAL. It also
+   dies at `UdfpsHelper: failed to cast the HIDL to V2_3` — Samsung's blob predates that
+   interface. The overlay is kept, unused, in `patches/O-fingerprint-udfps/`.
+2. **The sensor is not where portrait math says it is.** `installOrientation 3` — the panel is
+   mounted rotated. The kernel's position node (`11.74mm from edge, centered`) is in panel-native
+   space; in portrait that lands on a **side edge at mid-height**, not bottom-center.
+
+## 2.2 Ambient light sensor — dead, so no adaptive brightness
 
 **Proven by physical test**, not inference: a torch was shone directly at the sensor and waved
 around for 20 seconds. Nothing moved.
@@ -148,7 +144,7 @@ which the GSI replaced. The framework side is already solved — `patches/N-auto
 Module removed; brightness left manual. **Do not enable adaptive brightness** — with a dead sensor
 it pins the screen to ~2.7%.
 
-## 2.2 Speakers thinner than stock — but not for the reason everyone says
+## 2.3 Speakers thinner than stock — but not for the reason everyone says
 
 **The popular theory is wrong, and I verified it.** "The four speakers are routed but not tuned" is
 plausible — both community fixes only set ASPRX1 slot positions. Reading the mixer disproves it:
@@ -167,7 +163,7 @@ The CS35L41 protection and tuning DSP **is loaded and calibrated.** What is miss
 ⚠️ **Do not raise amp gain to compensate.** Speaker protection exists because these drivers can be
 physically destroyed by overdriving, and unlike a bad config that is not recoverable in TWRP.
 
-**Best available substitute:** JamesDSP (§1.4).
+**Best available substitute:** JamesDSP (§1.3).
 
 Also note the mixer is running **2-channel**:
 
@@ -178,13 +174,13 @@ Channel mask: 0x00000003 (front-left, front-right)
 
 Expected for stereo content, but worth remembering if you chase 4-speaker behaviour.
 
-## 2.3 Widevine L1 → L3 — permanent
+## 2.4 Widevine L1 → L3 — permanent
 
 Unlocking the bootloader blew the Knox fuse. Netflix/Disney+ are SD-only forever. Nothing to debug.
 
-## 2.4 No AV1 hardware decode — silicon, not software
+## 2.5 No AV1 hardware decode — silicon, not software
 
-Snapdragon 855 predates AV1. Not a GSI bug. Work around it (§1.3).
+Snapdragon 855 predates AV1. Not a GSI bug. Work around it (§1.2).
 
 ---
 
@@ -303,6 +299,9 @@ The device currently runs LineageOS 23.2 (Android 16) with Magisk root, wireless
 5555, an 80% charge cap, a working 512 GB ext4 SD card, no phantom "No service", and battery
 percentage visible.
 
-Highest-value next moves, in order: **fingerprint (§1.1)** — genuinely unknown and possibly a win;
-**install Inky OLED (§1.2)** — the app was built for this device and has never run on it;
-**SmartTube codec (§1.3)** — five minutes, prevents visible stutter.
+Highest-value next moves, in order: **install Inky OLED (§1.1)** — the app was built for this
+device and has never run on it; **SmartTube codec (§1.2)** — five minutes, prevents visible
+stutter; **JamesDSP onboarding (§1.3)** — the only system-wide EQ available here.
+
+Fingerprint is settled: attempted thoroughly on 2026-08-16 and confirmed unfixable off stock
+firmware (§2.1). Do not reopen it.
