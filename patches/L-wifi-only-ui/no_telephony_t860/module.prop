@@ -1,0 +1,6 @@
+id=no_telephony_t860
+name=Disable Telephony (Wi-Fi-only Tab S6)
+version=v1.0
+versionCode=1
+author=tab-s6-kiosk
+description=SM-T860 is Wi-Fi-only but the GSI declares telephony hardware, so the lock screen shows "No service" forever. This neutralises the telephony feature declarations.

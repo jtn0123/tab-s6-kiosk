@@ -78,6 +78,8 @@ Each uses a different mechanism, so each applies and reverts on its own.
 | I | OLED burn-in protection | static UI ghosts the panel | no | none |
 | J | Video playback | **no AV1 hardware decode**; Widevine L3 | no | none |
 | K | **Magisk root** | `adb root` kills all transports on this device | n/a | Play Integrity fails |
+| L | Wi-Fi-only cleanup + battery % | permanent "No service"; battery % won't show | yes | none |
+| M | SD card | endless "format this card" prompt | yes | **erases the card** |
 
 Start with **C** and **J** — both free, and both fix real defects. C includes a fingerprint
 procedure that likely disproves the "fingerprint never works on a GSI" folklore. J covers the AV1
@@ -107,6 +109,9 @@ What actually breaks on this device, and whether it is recoverable:
 | `adb root` kills USB and wireless until reboot | **Worked around** — Magisk root, patch K |
 | Wireless debugging port randomises; UI may not show it | **Fixed** — pinned to 5555, patch H |
 | Battery held at 100% on a 24/7 panel | **Fixed** — capped at 80%, patch G |
+| Permanent "No service" on a Wi-Fi-only tablet | **Fixed** — telephony features removed, patch L |
+| Battery percentage will not display | **Fixed** — it's in LineageOS's own settings provider, patch L |
+| SD card endlessly prompts to be formatted | **Fixed** — vold vs `sdfat` naming; reformat ext4, patch M |
 | Fingerprint not working | **Probably fixable** — patch C3 |
 | **No AV1 hardware decode** (SD855 limitation) | **Not a GSI bug.** Work around it — patch J |
 | **Widevine L1 → L3** | **Permanent.** Knox fuse blown. HD Netflix/Disney+ gone |
@@ -128,6 +133,14 @@ What actually breaks on this device, and whether it is recoverable:
 - **`adb mdns services` fails silently** on networks that filter multicast — an empty list, not an
   error. To find the wireless port, read adbd's own log instead:
   `adb shell "logcat -d | grep 'adbwifi started'"`. No root needed.
+- **LineageOS has a second settings provider.** `settings put system <key>` can succeed, read back
+  correctly, and still do nothing, because the real value lives in `content://lineagesettings/system`
+  under the same key name. Check there before believing a feature is missing — patch L.
+- **Reformatting the SD card cannot fix the SD card.** vold looks for `exfat` in `/proc/filesystems`
+  while Samsung's kernel registers that driver as `sdfat`, and Android formats big cards as exFAT by
+  default — so each reformat recreates the fault. Patch M.
+- **Grep matches inside comments.** `handheld_core_hardware.xml` looks like it declares telephony
+  until you read it; every hit is commented out. The real declarations were elsewhere.
 - **A malformed display config bootloops `system_server`** and does *not* fail safe. `initFromFile`
   returns `true` even after a parse error, so the `config.xml` fallback never runs. Recovery is
   TWRP, not adb.

@@ -24,6 +24,8 @@ Everything here was researched and — where possible — **validated in an Andr
 | **I** | OLED burn-in protection | settings + kiosk design | no | none | yes |
 | **B** | Haptic strength | `/vendor/build.prop` | yes | low | **no** |
 | **A** | Display config | `/vendor/etc/displayconfig/` | yes | **bootloop if malformed** | **no** |
+| **L** | Wi-Fi-only cleanup + battery % — **applied** | Magisk module + lineagesettings | yes | none | partly (`/data`) |
+| **M** | SD card mounts at last — **applied** | reformat ext4 | yes | **erases the card** | yes |
 | **F** | Speaker tuning — **closed, no action** | `tinymix` read-only | yes | none (reads only) | n/a |
 
 **Start with C.** It is free, instant, and two of its three items are still untried —
@@ -63,7 +65,33 @@ real fix is the kiosk app keeping pixels moving.
 
 Directly conflicts with Patch D's `stay_on_while_plugged_in`. Read both before choosing.
 
-## K — Magisk root (prerequisite for A, B, G, H)
+## L — Wi-Fi-only cleanup + battery percentage — **APPLIED**
+`L-wifi-only-ui/README.md` · `no_telephony_t860/`
+
+Two things a GSI gets wrong on a Wi-Fi-only tablet:
+
+**"No service" on the lock screen, permanently.** The T860 has no modem, but the GSI declares
+telephony hardware anyway, so Android asks for service state and renders the answer forever.
+`ro.radio.noril=yes` does *not* fix it — that was already set. A Magisk module empties the three
+permission XMLs that declare the feature. Verified: 8 telephony features before, 0 after.
+
+**Battery percentage that refuses to appear.** `settings put system status_bar_show_battery_percent
+1` is accepted, reads back as `1`, and does nothing — because LineageOS keeps this in its **own
+settings provider**, `content://lineagesettings/system`. Worth remembering generally: when a
+`settings put` is silently ignored on LineageOS, look there before assuming the feature is absent.
+
+## M — SD card that will not stop asking to be formatted — **APPLIED**
+`M-sdcard/README.md` · `format-sdcard.sh`
+
+Reformatting never fixes this, and there is a reason. vold looks for `exfat` in `/proc/filesystems`;
+Samsung's kernel registers the same driver as **`sdfat`**. So the kernel mounts the card fine while
+vold calls it unsupported — and since Android formats large cards as exFAT by default, every format
+recreates the bug.
+
+Fixed by reformatting as **ext4** (no 4 GB file limit, unlike FAT32). The script refuses to run
+unless the card is empty. **It erases the card** — back up first.
+
+## K — Magisk root (prerequisite for A, B, G, H, L, M)
 `K-magisk-root/README.md`
 
 **`adb root` is unusable on this device.** It restarts adbd, the vendor USB gadget HAL loses the
