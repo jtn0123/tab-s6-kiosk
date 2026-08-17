@@ -1,10 +1,14 @@
 # tab-s6-kiosk
 
-Turning a 2019 **Samsung Galaxy Tab S6 (SM-T860)** into a kitchen wall panel: wipe One UI, run a
-clean Android 16 GSI, patch the hardware quirks back, and put a dashboard on it.
+Giving a 2019 **Samsung Galaxy Tab S6 (SM-T860)** a second life on Android 16: wipe One UI, run a
+clean GSI, then patch back the hardware that the GSI breaks.
 
-Everything here was done on real hardware, and the risky parts were validated in an Android 16
-emulator before touching the tablet.
+The tablet does double duty — **a mounted dashboard some of the time, a handheld video player the
+rest.** Those two modes want opposite settings, so the patches here are written as independent
+fixes you choose between, not one opinionated kiosk build.
+
+Everything was done on real hardware, and the risky parts were validated in an Android 16 emulator
+before touching the tablet.
 
 ## Status
 
@@ -61,22 +65,44 @@ It shares no code with InkyPi, only the idea.
 
 Each uses a different mechanism, so each applies and reverts on its own.
 
-| # | Patch | Root? | Risk | Survives GSI update? |
+| # | Patch | Fixes | Root? | Risk |
 |---|---|---|---|---|
-| A | Display config — density + HDR | yes | **bootloop if malformed** | no |
-| B | Haptic strength | yes | low | no |
-| C | Treble toggles — audio, fingerprint, brightness | no | none | yes |
-| D | Kiosk settings | no | none | yes |
-| E | Audio DSP (RootlessJamesDSP) | no | none | yes |
-| F | Speaker tuning — **diagnostic only** | yes | none | n/a |
-| G | Battery longevity — **diagnostic only** | yes | none | n/a |
-| H | Persistent wireless adb | yes | LAN security trade | yes |
-| I | OLED burn-in protection | no | none | yes |
+| A | Display config — density + HDR | HDR headroom missing; UI oversized | yes | **bootloop if malformed** |
+| B | Haptic strength | tuning only | yes | low |
+| C | Treble toggles | brightness cap, fingerprint, audio policy | no | none |
+| D | Usage mode — panel vs tablet | conflicting rotation/sleep settings | no | none |
+| E | Audio DSP (RootlessJamesDSP) | no system EQ on a GSI | no | none |
+| F | Speaker tuning — **diagnostic** | speakers routed but not tuned | yes | none |
+| G | Battery longevity — **diagnostic** | 24/7 charging kills the cell | yes | none |
+| H | Persistent wireless adb | USB drops when adbd restarts | yes | LAN security trade |
+| I | OLED burn-in protection | static UI ghosts the panel | no | none |
+| J | Video playback | **no AV1 hardware decode**; Widevine L3 | no | none |
 
-Recommended order **C → D → E → B → A**. Start with C: free, instant, and it includes a fingerprint
-procedure that likely disproves the "fingerprint never works on a GSI" folklore.
+Start with **C** and **J** — both free, and both fix real defects. C includes a fingerprint
+procedure that likely disproves the "fingerprint never works on a GSI" folklore. J covers the AV1
+decode cliff, which will stutter YouTube if left alone.
+
+**A is the only one that can bootloop the device.** Do it last, and only if you want HDR back.
 
 See [`patches/README.md`](patches/README.md).
+
+## Known defects after flashing a GSI
+
+What actually breaks on this device, and whether it is recoverable:
+
+| Defect | Status |
+|---|---|
+| Only 2 of 4 speakers, wrong stereo on rotation | **Fixed** by the community fixes zip (routing) |
+| No vibration (Android 16 dropped the HIDL vibrator) | **Fixed** — fixes zip ships an AIDL HAL |
+| Internal storage not mounting | **Fixed** upstream (codec2 seccomp policy) |
+| Brightness capped far below panel capability | **Fixed** — Treble "extend brightness range" |
+| Colour clamped to sRGB on a P3 panel | **Improved** — vendor vivid mode |
+| UI rendered at 360 dpi on a ~287 dpi panel | **Fixable** — patch A |
+| HDR pipeline inert (`mMaxDesiredHdrRatio = 1.0`) | **Probably fixable** — patch A, unverified on-device |
+| Speakers routed but **not tuned** (CS35L41 DSP) | **Under investigation** — patch F |
+| Fingerprint not working | **Probably fixable** — patch C3 |
+| **No AV1 hardware decode** (SD855 limitation) | **Not a GSI bug.** Work around it — patch J |
+| **Widevine L1 → L3** | **Permanent.** Knox fuse blown. HD Netflix/Disney+ gone |
 
 ## Things learned the hard way
 

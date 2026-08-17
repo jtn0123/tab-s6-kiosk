@@ -1,7 +1,11 @@
-# Tab S6 kiosk — patch set
+# Tab S6 — patch set
 
-Four **independent** patches for the SM-T860 running LineageOS 23.2 GSI (Android 16).
-Each uses a different mechanism, so each can be applied, skipped, or reverted on its own.
+**Independent** patches for the SM-T860 running LineageOS 23.2 GSI (Android 16). Each uses a
+different mechanism, so each can be applied, skipped, or reverted on its own.
+
+The tablet is used **both as a mounted dashboard and as a handheld video player**. Those modes want
+opposite settings, so nothing here assumes one or the other — patch D takes a `-Mode` switch, and
+the rest are genuine defect fixes that apply either way.
 
 Everything here was researched and — where possible — **validated in an Android 16 emulator
 (`android-36-ext19`) before ever touching the tablet.** Findings are recorded in
