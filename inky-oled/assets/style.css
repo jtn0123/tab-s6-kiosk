@@ -1,22 +1,49 @@
 /* Inky OLED — wall panel dashboard.
-   Target: Galaxy Tab S6, 2560x1600 AMOLED, density 300, landscape, viewed from
-   across a kitchen (2-4 m). Sizes are tuned from real screenshots at that resolution.
+   Target: Galaxy Tab S6 mounted on a wall. The device reports 1600x2560 physical at
+   360 dpi, i.e. a 711 x 1138 CSS-pixel PORTRAIT viewport at devicePixelRatio 2.25.
+   (The manifest asks for landscape; Samsung's large-screen policy ignores fixed
+   orientation requests, so the real render is portrait — sizes below are tuned from
+   actual screenshots at that resolution, and a landscape fallback follows at the end.)
+
+   1 vh = 11.4 CSS px = 25.6 device px, so the spec's 88-device-pixel minimum touch
+   target is 3.5 vh. Nothing tappable here is under 5 vh.
 
    Deliberately dark and low-coverage: on OLED black pixels are OFF, which saves power
    and is the main defence against burn-in. Avoid large bright fills. */
 
+/* Contrast budget (measured against #000, WCAG 2.1):
+     --fg     #f2f2f2  18.8:1   primary readouts
+     --dim    #a2a2a2   8.2:1   supporting text
+     --dimmer #7a7a7a   4.9:1   labels, units, status — passes 4.5:1 body text
+   --dimmer was #4a4a4a (2.37:1), which carried most of the secondary information on a
+   panel meant to be read from 2-4 m and failed even the large-text threshold. */
 :root {
   --bg:        #000000;
   --fg:        #f2f2f2;
-  --dim:       #8a8a8a;
-  --dimmer:    #4a4a4a;
+  --dim:       #a2a2a2;
+  --dimmer:    #7a7a7a;
   --accent:    #6db3f2;
+  --warn:      #f2b46d;
+  --danger:    #f26d6d;
+  --ok:        #7de08d;
   --card-line: #1c1c1c;
+  --card-line2:#2a2a2a;
+  --press:     rgba(255, 255, 255, 0.10);
 
-  --gap: 2.6vh;
+  /* The home column is a fixed budget: 100vh has to hold 8 widgets with nothing clipped.
+     Sizes below were measured off real 1600x2560 screenshots — if you grow one card,
+     take the height back out of another.
+     Measured on device with all 8 visible: natural content 1044 CSS px against a 1068 px
+     column, i.e. ~24 px of slack. That slack is deliberate and must not be spent — a
+     downward burn-in nudge is up to 12 px and eats half of it, and #home is the only
+     thing standing between a nudge and the bottom tile row falling off the frame.
+     Because every card carries flex-grow, the slack is handed back to the cards as extra
+     internal breathing room, so trimming intrinsic padding above costs nothing visually. */
+  --gap: 0.8vh;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+*::-webkit-scrollbar { width: 0; height: 0; }
 
 html, body {
   height: 100%;
@@ -27,142 +54,758 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* stop a deliberate long press from turning into a callout/selection gesture — people
+     press and hold a wall panel, and that gesture used to eat the tap entirely */
+  -webkit-touch-callout: none;
+  overscroll-behavior: none;
 }
 
-/* drift wrapper — nudged by JS for burn-in protection */
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- press feedback ----------
+   Every tappable element dims-in on pointerdown. The class is set from JS because
+   :active is unreliable inside WebView scroll containers. */
+.tappable { transition: background-color .12s ease, transform .12s ease, opacity .12s ease; }
+.tappable.is-press { background-color: var(--press); transform: scale(.985); }
+
+/* ============================================================================
+   HOME VIEW
+   ============================================================================ */
+
+/* drift wrapper for the home view. It is no longer the only layer that drifts: the panel
+   layer (#panels) and the alarm overlay (#alarm) take the identical transform on the same
+   cycle, because a detail panel left open overnight is exactly the scenario that ghosts an
+   AMOLED. They move by the same offset, so nothing is ever out of register. The transition
+   below is what makes a 12px step invisible in use — 4s of ease, not a jump. */
 #drift {
   height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 3vh 4vw;
+  padding: 0.95vh 3vw;
   transition: transform 4s ease-in-out;
 }
 
-#grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  grid-template-rows: auto auto;
-  gap: var(--gap);
-  /* Centre the block and let cards size to content. An earlier `auto 1fr` stretched
-     the forecast card to fill, leaving ~40% of the panel dead with the forecast
-     marooned in a huge empty box. Verified fixed on a 2560x1600 screenshot. */
-  align-content: center;
-  column-gap: 3vw;
+#topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2vw;
+  height: 4.2vh;
+}
+.status {
+  font-size: 1.75vh;
+  color: var(--dimmer);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status.warn { color: var(--warn); }
+
+.icon-btn {
+  flex: 0 0 auto;
+  /* 4.6vh of a 1138 CSS px viewport is 52.4 CSS px, which at this panel's 2.25x ratio
+     measures 118 device px — above the 88 device px minimum touch target. */
+  width: 4.6vh;
+  height: 4.6vh;
+  font-size: 2.6vh;
+  line-height: 1;
+  border: 1px solid var(--card-line);
+  border-radius: 50%;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+/* The column is sized to fit at 1138 CSS px tall; overflow-y is a safety valve so a
+   long locale string can never clip content off the bottom of a wall panel.
+   Hiding a widget must *reflow*, not leave a hole. space-between used to push the
+   reclaimed height into the gaps, which turned one hidden card into two voids of dead
+   black. Handing it to the surviving cards instead (flex-grow below) makes them breathe:
+   nothing moves when all 8 are visible, because then there is no free space to hand out,
+   and when free space is negative flex-grow is inert so the scroll valve still works. */
+#home {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--gap);
+  overflow-y: auto;
+  padding-bottom: 0.25vh;
+}
+/* Direct children only — .card.mini lives inside .row3 and is laid out on the other axis. */
+#home > .card, #home > .row3 { flex-grow: 1; flex-shrink: 0; }
+
+/* ---------- empty state (every widget hidden) ---------- */
+.empty {
+  margin: auto 0;            /* centre in whatever space the hidden cards gave back */
+  text-align: center;
+  padding: 0 6vw;
+}
+.empty[hidden] { display: none; }
+.empty-icon { font-size: 9vh; line-height: 1; color: var(--dim); }
+.empty-t { font-size: 3.2vh; font-weight: 300; margin-top: 1.4vh; }
+.empty-s { font-size: 2vh; color: var(--dim); line-height: 1.5; margin: 1.2vh 0 3vh; }
+.empty .wide-btn { max-width: 60vw; margin: 0 auto; }
+
 .card {
+  flex: 0 0 auto;
   border: 1px solid var(--card-line);
-  border-radius: 1.8vh;
-  padding: 3.4vh 2.6vw;
+  border-radius: 1.5vh;
+  /* intrinsic padding is deliberately tight; flex-grow pads it back out to fill the
+     column, which is what keeps ~24 px of slack in the budget without looking cramped */
+  padding: 0.75vh 2.2vw;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-width: 0;
 }
 
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 1.6vw;
+  margin-bottom: 0.5vh;
+}
 .card-label {
-  font-size: 2vh;
+  font-size: 1.65vh;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--dimmer);
-  margin-bottom: 1.8vh;
+}
+.chev { margin-left: auto; color: var(--dimmer); font-size: 2.6vh; line-height: 1; }
+.link-btn {
+  margin-left: auto;
+  font-size: 1.7vh;
+  color: var(--accent);
+  padding: 0.75vh 1.6vw;   /* ~3.9vh tall = 89 device px */
+  border-radius: 0.9vh;
+  border: 1px solid var(--card-line2);
 }
 
-/* ---------- clock ---------- */
-.card-clock {
-  grid-row: 1 / span 2;
-  border: none;
-  padding-left: 0;
-  justify-content: center;
+.badge {
+  font-size: 1.4vh;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.45vh 1.1vw;
+  border-radius: 0.7vh;
+  border: 1px solid currentColor;
 }
+.badge-demo  { color: var(--warn); }
+.badge-live  { color: var(--ok); }
+.badge-stale { color: var(--warn); }
+
+/* ---------- 1. clock ---------- */
+.card-clock, .card[data-widget="clock"] { border: none; padding-left: 0; }
+.clock-row { display: flex; align-items: baseline; }
 .time {
-  font-size: 27vh;
+  font-size: 7.6vh;
   font-weight: 200;
-  line-height: 0.9;
+  line-height: 0.92;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
-.ampm {
-  font-size: 4.2vh;
-  font-weight: 300;
-  color: var(--dim);
-  margin-top: 1vh;
-  letter-spacing: 0.12em;
-}
-.date {
-  font-size: 4.4vh;
-  font-weight: 300;
-  color: var(--dim);
-  margin-top: 3vh;
-}
+/* AM/PM and the seconds sit on ONE baseline beside the digits, never stacked.
+   Stacking them was a hard layout failure, not a cosmetic one: in 12-hour mode with
+   seconds on, .clock-side became a two-line column (AM above :24) and grew the clock
+   block by ~59 device px. The home column only carries ~58 px of slack, so the third
+   line of the DEVICE / TIMER / SETTINGS tiles fell off the bottom of the frame — and
+   12-hour is the default. Row layout costs zero extra height in all four combinations
+   of 12h/24h x seconds on/off.
+   :empty still matters — whichever of the two is absent must not reserve its gap.
 
-/* ---------- weather now ---------- */
-.wx-main { display: flex; align-items: center; gap: 2.2vw; }
-.wx-icon { font-size: 12vh; line-height: 1; }
+   Horizontal order and spacing matter as much as the baseline: seconds trail the digits
+   directly (a ~2px hair, so "2:33" + ":01" reads as one number) and the meridiem follows
+   after a real gap. Reversed, with the seconds after AM and a 19 device px gap in front of
+   them, the row read as "2:33 AM :01" — a detached fragment rather than a clock. .clock-row
+   therefore carries no gap of its own; whichever of the two side items survives brings its
+   own left margin, so :empty collapsing cannot leave a stray gap. */
+.clock-side { display: flex; flex-direction: row; align-items: baseline; }
+.ampm:empty, .secs:empty { display: none; }
+.ampm {
+  font-size: 2.6vh;
+  font-weight: 300;
+  color: var(--dim);
+  letter-spacing: 0.12em;
+  margin-left: 1.6vw;
+}
+.secs {
+  font-size: 2.6vh;
+  font-weight: 300;
+  color: var(--dimmer);
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.25vw;
+}
+.date { font-size: 2.35vh; font-weight: 300; color: var(--dim); margin-top: 0.4vh; }
+
+/* ---------- 3. weather now ---------- */
+.wx-main { display: flex; align-items: center; gap: 2.4vw; }
+.wx-icon { font-size: 5.2vh; line-height: 1; flex: 0 0 auto; }
+.wx-block { flex: 0 0 auto; }
 .wx-temp {
-  font-size: 11vh;
+  font-size: 5.2vh;
   font-weight: 200;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.wx-desc { font-size: 3.2vh; color: var(--dim); margin-top: 0.8vh; }
-.wx-meta { font-size: 2.5vh; color: var(--dimmer); margin-top: 2.2vh; }
+.wx-desc { font-size: 1.9vh; color: var(--dim); margin-top: 0.3vh; }
+.wx-quick {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2vh;
+  text-align: right;
+}
+.wxq { font-size: 1.8vh; }
+.wxq-k { color: var(--dimmer); margin-right: 0.8vw; }
+.wxq-v { color: var(--fg); font-variant-numeric: tabular-nums; }
+.wx-meta { font-size: 1.65vh; color: var(--dimmer); margin-top: 0.6vh; }
 
-/* ---------- forecast ---------- */
-.forecast { display: flex; gap: 1.4vw; justify-content: space-between; }
+/* ---------- 4. hourly strip ---------- */
+.hstrip {
+  display: flex;
+  gap: 1.1vw;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.4vh;
+}
+.hr {
+  flex: 0 0 auto;
+  min-width: 11.4vw;   /* 81 CSS px = 182 device px wide */
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2vh;
+  padding: 0.6vh 0.5vw;
+  border-radius: 1vh;
+  border: 1px solid transparent;
+}
+.hr.now { border-color: var(--card-line2); background: rgba(109, 179, 242, 0.07); }
+.hr-t { font-size: 1.5vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: .06em; }
+.hr-i { font-size: 2.4vh; line-height: 1.1; }
+.hr-d { font-size: 2.1vh; font-variant-numeric: tabular-nums; }
+.hr-p { font-size: 1.4vh; color: var(--dimmer); font-variant-numeric: tabular-nums; }
+.hr-p.wet { color: var(--accent); }
+
+/* ---------- 5. daily forecast ---------- */
+.forecast { display: flex; gap: 1vw; justify-content: space-between; }
 .fc-day {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 1vh;
+  gap: 0.2vh;
+  padding: 0.6vh 0.3vw;
+  border-radius: 1vh;
 }
-.fc-name { font-size: 2.3vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.1em; }
-.fc-icon { font-size: 5vh; line-height: 1; }
-.fc-hi   { font-size: 3.6vh; font-variant-numeric: tabular-nums; }
-.fc-lo   { font-size: 2.8vh; color: var(--dim); font-variant-numeric: tabular-nums; }
+.fc-name { font-size: 1.5vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: .08em; }
+.fc-icon { font-size: 2.6vh; line-height: 1.1; }
+.fc-hi   { font-size: 2.2vh; font-variant-numeric: tabular-nums; }
+.fc-lo   { font-size: 1.8vh; color: var(--dim); font-variant-numeric: tabular-nums; }
 
-/* ---------- Home Assistant sensors ---------- */
-.card-sensors { grid-column: 1 / -1; }
-.sensors { display: flex; gap: 2vw; justify-content: flex-start; flex-wrap: wrap; }
+/* ---------- 6. Home Assistant sensors ----------
+   Five across so nine entities land in two rows; the card cannot afford a third. */
+.sensors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5vh 1vw;
+}
 .sensor {
   display: flex;
   flex-direction: column;
-  gap: 0.6vh;
-  min-width: 12vw;
+  gap: 0.1vh;
+  padding: 0.5vh 0.8vw;
+  border-radius: 1vh;
+  border: 1px solid transparent;
+  min-width: 0;
+  position: relative;
 }
+.sensor.on { border-color: rgba(125, 224, 141, 0.35); background: rgba(125, 224, 141, 0.07); }
+.sensor.alertish { border-color: rgba(242, 180, 109, 0.4); }
+/* line-height is pinned, not `normal`: these labels lead with symbol-font glyphs
+   (house / moon / sun / umbrella / bolt / circle / diamond / bar) and a fallback font's
+   ascent+descent metrics were inflating the line box, which multiplied across two rows
+   of tiles and helped push the bottom of the home column off the frame. */
 .sensor-label {
-  font-size: 2.1vh;
+  font-size: 1.4vh;
+  line-height: 1.15;
   color: var(--dimmer);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* keep the label clear of the switch pill parked in the tile's top-right corner */
+.sensor.has-sw .sensor-label { padding-right: 3.8vw; }
 .sensor-value {
-  font-size: 5.4vh;
+  font-size: 2.5vh;
   font-weight: 200;
-  line-height: 1;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sensor-unit { font-size: 1.4vh; color: var(--dim); margin-left: 0.3vw; }
+.sensor-sw {
+  position: absolute;
+  top: 0.5vh; right: 0.8vw;
+  width: 3vw; height: 1.6vh;
+  border-radius: 0.8vh;
+  background: #222;
+}
+.sensor-sw span {
+  display: block;
+  width: 1.4vh; height: 1.4vh;
+  margin: 0.1vh;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: transform .16s ease, background-color .16s ease;
+}
+.sensor.on .sensor-sw { background: rgba(125, 224, 141, 0.25); }
+.sensor.on .sensor-sw span { background: var(--ok); transform: translateX(calc(3vw - 1.6vh)); }
+
+/* ---------- 7/2/8. mini tiles ---------- */
+.row3 { flex: 0 0 auto; display: flex; gap: 2vw; }
+.card.mini { flex: 1 1 0; padding: 0.9vh 1.4vw; align-items: flex-start; }
+.mini-head {
+  font-size: 1.5vh;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+}
+.mini-big {
+  font-size: 3vh;
+  font-weight: 200;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
-.sensor-unit { font-size: 2.6vh; color: var(--dim); margin-left: 0.3vw; }
-.sensor-empty { font-size: 2.2vh; color: var(--dimmer); }
-
-/* ---------- status / errors ---------- */
-.status {
-  font-size: 1.9vh;
-  color: var(--dimmer);
-  text-align: right;
-  padding-top: 1.4vh;
-  min-height: 2.6vh;
+.mini-big.alert { color: var(--danger); animation: pulse 1s infinite; }
+.mini-sub {
+  font-size: 1.45vh;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
-.status.warn { color: var(--accent); }
 
-/* portrait fallback — the panel is meant to be landscape but should not look broken */
-@media (orientation: portrait) {
-  #grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
-  .card-clock { grid-row: auto; }
+/* Never fades below 0.6 — the alarm has to stay legible in any single frame, including
+   whatever instant a screenshot happens to catch. */
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* ============================================================================
+   PANEL LAYER — full-screen detail views
+   ============================================================================ */
+/* Drifts with the home view (see #drift). The transform makes this a containing block for
+   its own fixed descendants — there are none; .panel is absolute and inset:0 either way. */
+#panels {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  transition: transform 4s ease-in-out;
+}
+
+.panel {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(2.4vh);
+  transition: opacity .2s ease, transform .2s ease;
+}
+/* is-mounted is the 240ms window in which the panel is still painted; is-open is the window
+   in which it is the thing you are looking at. pointer-events belongs on the second, not the
+   first: while it hung off is-mounted, a panel that had already been closed and faded to
+   invisible went on eating taps for 240ms, so tapping "← Dashboard" and then immediately
+   tapping a card did nothing at all (a 350ms pause worked). */
+.panel.is-mounted { visibility: visible; }
+.panel.is-open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+.panel-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2vw;
+  padding: 1.8vh 3vw 1.4vh;
+  border-bottom: 1px solid var(--card-line);
+}
+.panel-title { font-size: 3.4vh; font-weight: 300; letter-spacing: -0.01em; }
+.panel-sub { font-size: 1.8vh; color: var(--dimmer); margin-top: 0.3vh; }
+
+.close-btn {
+  flex: 0 0 auto;
+  width: 7vh;
+  height: 7vh;
+  border-radius: 50%;
+  border: 1px solid var(--card-line2);
+  color: var(--fg);
+  font-size: 3.2vh;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.6vh 3vw 2vh;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Control block pinned under the panel header while only the list below it scrolls.
+   Past ~9 laps the stopwatch readout and the Lap button used to scroll off the top, so
+   looking at lap 1 cost you both the running time and the button you needed next.
+   The negative margins cancel .panel-body's padding so the opaque background reaches the
+   full width of the scrollport; the matching padding puts the inset back visually.
+   Without that, rows scrolled up through the 1.6vh gap above the pinned block. */
+.stick {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  margin: -1.6vh -3vw 0;
+  padding: 1.6vh 3vw 0.8vh;
+  border-bottom: 1px solid var(--card-line);
+}
+
+.panel-foot { flex: 0 0 auto; padding: 1vh 3vw 1.8vh; border-top: 1px solid var(--card-line); }
+.wide-btn {
+  display: block;
+  width: 100%;
+  padding: 1.8vh 0;
+  text-align: center;
+  font-size: 2.3vh;
+  color: var(--accent);
+  border: 1px solid var(--card-line2);
+  border-radius: 1.3vh;
+}
+
+/* ---------- panel content blocks ---------- */
+.psec { margin-top: 2vh; }
+.psec-t {
+  font-size: 1.7vh;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dimmer);
+  margin-bottom: 1vh;
+}
+
+.big-readout {
+  text-align: center;
+  padding: 1.4vh 0 1.8vh;
+  border-bottom: 1px solid var(--card-line);
+}
+.big-icon { font-size: 8vh; line-height: 1; }
+.big-time {
+  font-size: 8.5vh;
+  font-weight: 200;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.big-time.mono { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.big-sub { font-size: 2.2vh; color: var(--dim); margin-top: 0.6vh; }
+.dim { color: var(--dim); }
+.muted { font-size: 1.9vh; color: var(--dimmer); line-height: 1.5; margin-top: 0.8vh; }
+.demo-note {
+  font-size: 1.8vh;
+  color: var(--warn);
+  line-height: 1.45;
+  border: 1px solid rgba(242, 180, 109, 0.3);
+  border-radius: 1.1vh;
+  padding: 1.2vh 2vw;
+  margin-bottom: 1.4vh;
+}
+
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.1vh 3vw; }
+.stat { border-bottom: 1px solid var(--card-line); padding-bottom: 0.8vh; min-width: 0; }
+.stat-k {
+  font-size: 1.6vh;
+  color: var(--dimmer);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.stat-v {
+  font-size: 2.9vh;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.stat-x { font-size: 1.6vh; color: var(--dim); }
+
+.wind-arrow { display: inline-block; }
+
+.bar {
+  height: 1.6vh;
+  border-radius: 0.8vh;
+  background: #191919;
+  overflow: hidden;
+  margin: 1vh 0;
+}
+.bar-fill { height: 100%; background: var(--dim); transition: width .3s ease; }
+.bar-fill.accent { background: var(--accent); }
+.bar-fill.danger { background: var(--danger); }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 1.4vw; margin-top: 1.6vh; }
+.btn {
+  flex: 1 1 auto;
+  min-width: 18vw;
+  padding: 1.9vh 1.6vw;
+  text-align: center;
+  font-size: 2.2vh;
+  border: 1px solid var(--card-line2);
+  border-radius: 1.3vh;
+  color: var(--fg);
+}
+.btn.primary { color: var(--ok); border-color: rgba(125, 224, 141, 0.45); }
+.btn.danger  { color: var(--danger); border-color: rgba(242, 109, 109, 0.45); }
+.btn.off     { color: var(--dimmer); }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 1.2vw 1.2vw; }
+.chip {
+  flex: 0 0 auto;
+  padding: 1.4vh 2.2vw;
+  font-size: 2vh;
+  border: 1px solid var(--card-line2);
+  border-radius: 1.2vh;
+  color: var(--dim);
+  min-width: 0;
+}
+.chip.on { color: var(--fg); border-color: var(--accent); background: rgba(109, 179, 242, 0.1); }
+
+.seg { display: flex; gap: 1.2vw; }
+.seg-b {
+  flex: 1 1 0;
+  padding: 1.8vh 1vw;
+  text-align: center;
+  font-size: 2.1vh;
+  color: var(--dim);
+  border: 1px solid var(--card-line2);
+  border-radius: 1.3vh;
+}
+.seg-b.on { color: var(--fg); border-color: var(--accent); background: rgba(109, 179, 242, 0.12); }
+.gap { height: 1.2vh; }
+
+/* settings rows with a real-looking switch */
+.srows { display: flex; flex-direction: column; }
+.srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3vw;
+  padding: 1.7vh 1vw;
+  border-bottom: 1px solid var(--card-line);
+  border-radius: 0.8vh;
+}
+.srow-k { font-size: 2.2vh; }
+.switch {
+  flex: 0 0 auto;
+  width: 10vw;
+  height: 3.4vh;
+  border-radius: 1.7vh;
+  background: #202020;
+  border: 1px solid var(--card-line2);
+  padding: 0.25vh;
+  transition: background-color .16s ease;
+}
+.switch span {
+  display: block;
+  width: 2.7vh; height: 2.7vh;
+  border-radius: 50%;
+  background: var(--dimmer);
+  transition: transform .16s ease, background-color .16s ease;
+}
+.switch.on { background: rgba(109, 179, 242, 0.25); border-color: var(--accent); }
+.switch.on span { background: var(--accent); transform: translateX(calc(10vw - 3.6vh)); }
+
+/* stopwatch laps */
+.laps { display: flex; flex-direction: column; }
+.lap {
+  display: flex;
+  justify-content: space-between;
+  gap: 3vw;
+  padding: 1.2vh 0.5vw;
+  border-bottom: 1px solid var(--card-line);
+  font-size: 2.2vh;
+}
+.lap-n { color: var(--dimmer); }
+.lap-d { color: var(--dim); }
+.mono { font-variant-numeric: tabular-nums; }
+
+/* hourly panel list */
+.hrows { display: flex; flex-direction: column; }
+.hrow {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+  padding: 1.25vh 1vw;
+  border-bottom: 1px solid var(--card-line);
+  border-radius: 0.8vh;
+}
+.hrow.sel { background: rgba(109, 179, 242, 0.1); }
+.hrow-t { flex: 0 0 12vw; font-size: 2vh; color: var(--dim); font-variant-numeric: tabular-nums; }
+.hrow-i { flex: 0 0 auto; font-size: 2.6vh; }
+.hrow-bar { flex: 1 1 auto; height: 0.9vh; background: #151515; border-radius: 0.5vh; overflow: hidden; }
+.hrow-bar span { display: block; height: 100%; background: var(--accent); opacity: .55; }
+.hrow-d { flex: 0 0 11vw; text-align: right; font-size: 2.3vh; font-variant-numeric: tabular-nums; }
+.hrow-p { flex: 0 0 10vw; text-align: right; font-size: 1.8vh; color: var(--dimmer); }
+.hrow-p.wet { color: var(--accent); }
+
+/* daily panel hour bars */
+.daybars {
+  display: flex;
+  gap: 0.5vw;
+  align-items: flex-end;
+  height: 22vh;
+  overflow-x: auto;
+}
+.daybar { flex: 1 0 3.4vw; display: flex; flex-direction: column; height: 100%; }
+.daybar-v { font-size: 1.4vh; color: var(--dim); text-align: center; height: 2vh; }
+.daybar-c { flex: 1 1 auto; display: flex; align-items: flex-end; }
+.daybar-c div { width: 100%; background: var(--accent); opacity: .5; border-radius: 0.4vh 0.4vh 0 0; }
+.daybar-t { font-size: 1.3vh; color: var(--dimmer); text-align: center; height: 2vh; }
+
+/* world clocks */
+.wc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2vh 2vw; }
+.wc { border-bottom: 1px solid var(--card-line); padding-bottom: 0.8vh; }
+.wc-city { font-size: 1.6vh; color: var(--dimmer); text-transform: uppercase; letter-spacing: .08em; }
+.wc-time { font-size: 3vh; font-weight: 300; font-variant-numeric: tabular-nums; }
+.wc-day { font-size: 1.5vh; color: var(--dim); }
+
+/* sparkline */
+.spark { width: 100%; height: 10vh; display: block; }
+.spark-line { fill: none; stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.spark-fill { fill: rgba(109, 179, 242, 0.13); stroke: none; }
+.spark-empty { font-size: 1.8vh; color: var(--dimmer); padding: 2vh 0; }
+
+/* ---------- toast ----------
+   Both screens are full layouts with no spare band, so a floating toast is always over
+   something and the only real choice is *what*. Two earlier positions both picked content:
+   5.5vh printed through the panel subtitle, and 11.5vh cleared the header only to land on
+   the first content row instead — in the HA panel, on the entity chip row the user had just
+   tapped, and in Settings across the "WIDGETS" label.
+   So it takes over the one line of throwaway text in whichever context it appears, and that
+   line fades out underneath it: the home status line ("Updated 3:41 PM") when the dashboard
+   is showing, an open panel's subtitle when one is up. Both are re-rendered from state, so
+   nothing is lost by hiding them for 1.8s, and no control or datum is ever covered.
+     home   0.9-5.5vh, entirely inside the 4.2vh topbar band (clock starts at ~5.95vh)
+     panel  6.0-10.6vh, the subtitle line plus the body's top padding (content at ~11.9vh)
+   max-width keeps a long message clear of the gear button and the panel's close button. */
+.toast {
+  position: fixed;
+  left: 50%;
+  top: 0.9vh;
+  transform: translate(-50%, -1.5vh);
+  max-width: 76vw;
+  background: #141414;
+  border: 1px solid var(--card-line2);
+  border-radius: 1.2vh;
+  padding: 1.05vh 3vw;
+  font-size: 2vh;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+  z-index: 90;
+}
+body.panel-open .toast { top: 6vh; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* The line the toast stands on gets out of the way rather than being painted over. It
+   vanishes instantly (transition: none) and only fades back afterwards: if it faded out over
+   the same 200ms the toast fades in, every frame in between would show one legible through
+   the other — which is the collision this position exists to avoid. */
+#status, .panel-sub { transition: opacity .25s ease .15s; }
+body.toasting #status,
+body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
+
+/* ---------- countdown alarm ----------
+   Fully opaque, not rgba(0,0,0,.92): at 92% the whole dashboard stayed legible behind the
+   alarm and the countdown's preset chips read straight through the Dismiss button, so the
+   one thing on screen that has to be unmistakable from across a room was competing with the
+   layout it had covered. Opaque black also costs nothing on OLED — those pixels are off. */
+.alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  opacity: 0;
+  visibility: hidden;
+  /* transform is the burn-in drift: this layer is on the same cycle as the dashboard and
+     the panels, because an alarm has 60s of unattended life before the idle unwind takes
+     it down and a bright red title should not spend that on fixed pixels */
+  transition: opacity .2s ease, transform 4s ease-in-out;
+}
+.alarm.show { opacity: 1; visibility: visible; }
+.alarm-inner { text-align: center; padding: 0 8vw; width: 100%; }
+.alarm-title {
+  font-size: 6vh;
+  font-weight: 300;
+  color: var(--danger);
+  animation: pulse 1s infinite;
+}
+.alarm-sub { font-size: 2.4vh; color: var(--dim); margin: 1.4vh 0 3vh; }
+.alarm-flash { animation: pulse 1s infinite; }
+
+/* ============================================================================
+   LANDSCAPE FALLBACK
+   The device currently renders portrait, but if it is ever rotated the panel must not
+   look broken: two columns, shorter type, same touch targets.
+   ============================================================================ */
+@media (orientation: landscape) {
+  #home {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    grid-auto-rows: min-content;
+    gap: 1.6vh 2.5vw;
+    align-content: start;
+  }
+  .card[data-widget="clock"] { grid-row: span 2; justify-content: center; }
+  .card[data-widget="sensors"] { grid-column: 1 / -1; }
+  .row3 { grid-column: 1 / -1; }
+
   .time { font-size: 17vh; }
-  .wx-icon { font-size: 9vh; }
-  .wx-temp { font-size: 8vh; }
+  .date { font-size: 4vh; }
+  .ampm { font-size: 4vh; }
+  .wx-icon, .wx-temp { font-size: 11vh; }
+  .wx-desc { font-size: 3vh; }
+  .hr { min-width: 7vw; }
+  .sensors { grid-template-columns: repeat(5, 1fr); }
+  .sensor-value { font-size: 5vh; }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .wc-grid { grid-template-columns: repeat(5, 1fr); }
+  .big-time { font-size: 13vh; }
+  .big-icon { font-size: 12vh; }
+  .switch { width: 6vw; }
+  .switch.on span { transform: translateX(calc(6vw - 3.6vh)); }
+  .sensor-sw { width: 2.6vw; }
+  .sensor.on .sensor-sw span { transform: translateX(calc(2.6vw - 2vh)); }
 }

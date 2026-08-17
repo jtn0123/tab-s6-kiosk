@@ -2,6 +2,19 @@
 inky-oled/build/
 *.idsig
 
+# The built dashboard APK. Deliberately NOT tracked: build.ps1 bakes assets/config.js
+# straight into it, so a locally built APK contains the owner's real coordinates. A zipped
+# APK is a binary, and the pre-commit secret scanner only reads text — it cannot see inside
+# one. Build it with inky-oled/build.ps1 instead of committing it.
+inky-oled/inkyoled.apk
+
+# assets/config.js stays TRACKED (it is the placeholder template everyone starts from) but
+# local edits to it are held back with:
+#     git update-index --skip-worktree inky-oled/assets/config.js
+# so a real location never lands in a commit. If you ever need to change the committed
+# template, --no-skip-worktree, edit, verify the diff contains no real coordinates, commit,
+# then re-apply --skip-worktree.
+
 # signing key — never commit
 *.keystore
 debug.keystore

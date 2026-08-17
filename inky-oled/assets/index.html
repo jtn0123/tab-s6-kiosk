@@ -8,46 +8,225 @@
 </head>
 <body>
 
-  <!-- everything lives in this wrapper so burn-in drift can move it as one unit -->
-  <div id="drift">
+<!-- ============================================================================
+     HOME VIEW
+     #drift wraps the home view. Burn-in drift nudges it a few pixels every couple of
+     minutes — and nudges #panels and #alarm by the identical offset on the same cycle,
+     so a detail panel left open overnight is not sitting on static pixels either.
+     Keeping panels in their own layer (rather than inside #drift) is about z-order and
+     scrolling, not about drift. A nudge is skipped while a finger is down, which is what
+     keeps a control from sliding out from under a tap.
+     ============================================================================ -->
+<div id="drift">
 
-    <main id="grid">
+  <header id="topbar">
+    <span id="status" class="status">Starting&hellip;</span>
+    <button class="icon-btn tappable" data-open="settings" aria-label="Settings">&#9881;</button>
+  </header>
 
-      <section class="card card-clock" data-plugin="clock">
+  <main id="home">
+
+    <!-- ---- 1. clock ---- -->
+    <section class="card tappable" data-widget="clock" data-open="clock">
+      <!-- Seconds come BEFORE the meridiem and sit tight against the digits, so the row
+           reads "2:33:01 AM" the way a clock is read. Trailing the meridiem, they read as a
+           detached fragment ("2:33 AM :01"). Both stay on the digits' baseline — stacking
+           them cost ~59 device px of column height, which the budget does not have. -->
+      <div class="clock-row">
         <div id="time" class="time">--:--</div>
-        <div id="ampm" class="ampm"></div>
-        <div id="date" class="date">&nbsp;</div>
-      </section>
-
-      <section class="card card-weather" data-plugin="weather">
-        <div class="card-label">Now</div>
-        <div class="wx-main">
-          <div id="wx-icon" class="wx-icon">·</div>
-          <div>
-            <div id="wx-temp" class="wx-temp">--&deg;</div>
-            <div id="wx-desc" class="wx-desc">&nbsp;</div>
-          </div>
+        <div class="clock-side">
+          <div id="secs" class="secs"></div>
+          <div id="ampm" class="ampm"></div>
         </div>
-        <div id="wx-meta" class="wx-meta">&nbsp;</div>
+      </div>
+      <div id="date" class="date">&nbsp;</div>
+    </section>
+
+    <!-- ---- 3. weather now ---- -->
+    <section class="card tappable" data-widget="weather" data-open="weather">
+      <div class="card-head">
+        <span class="card-label">Now</span>
+        <span id="wx-badge" class="badge badge-stale" hidden>stale</span>
+        <span class="chev">&rsaquo;</span>
+      </div>
+      <div class="wx-main">
+        <div id="wx-icon" class="wx-icon">&middot;</div>
+        <div class="wx-block">
+          <div id="wx-temp" class="wx-temp">--&deg;</div>
+          <div id="wx-desc" class="wx-desc">&nbsp;</div>
+        </div>
+        <div id="wx-quick" class="wx-quick"></div>
+      </div>
+      <div id="wx-meta" class="wx-meta">&nbsp;</div>
+    </section>
+
+    <!-- ---- 4. hourly forecast (horizontally scrollable strip) ---- -->
+    <section class="card" data-widget="hourly">
+      <div class="card-head">
+        <span class="card-label">Next 24 hours</span>
+        <button class="link-btn tappable" data-open="hourly">Details &rsaquo;</button>
+      </div>
+      <div id="hourly" class="hstrip"></div>
+    </section>
+
+    <!-- ---- 5. daily forecast ---- -->
+    <section class="card" data-widget="daily">
+      <div class="card-head">
+        <span class="card-label">Next days</span>
+        <button class="link-btn tappable" data-open="daily">Details &rsaquo;</button>
+      </div>
+      <div id="forecast" class="forecast"></div>
+    </section>
+
+    <!-- ---- 6. Home Assistant sensors ---- -->
+    <section class="card" data-widget="sensors">
+      <div class="card-head">
+        <span class="card-label">Home</span>
+        <span id="ha-badge" class="badge badge-demo">demo</span>
+        <button class="link-btn tappable" data-open="sensors">All &rsaquo;</button>
+      </div>
+      <div id="sensors" class="sensors"></div>
+    </section>
+
+    <!-- ---- 7 / 2 / 8. device, timer, settings ---- -->
+    <div class="row3">
+      <section class="card mini tappable" data-widget="system" data-open="system">
+        <div class="mini-head">Device</div>
+        <div id="sys-big" class="mini-big">--%</div>
+        <div id="sys-sub" class="mini-sub">reading&hellip;</div>
       </section>
 
-      <section class="card card-forecast" data-plugin="forecast">
-        <div class="card-label">Next days</div>
-        <div id="forecast" class="forecast"></div>
+      <section class="card mini tappable" data-widget="timer" data-open="timer">
+        <div class="mini-head">Timer</div>
+        <div id="tmr-big" class="mini-big">00:00</div>
+        <div id="tmr-sub" class="mini-sub">tap to open</div>
       </section>
 
-      <section class="card card-sensors" data-plugin="sensors">
-        <div class="card-label">Home</div>
-        <div id="sensors" class="sensors"></div>
+      <section class="card mini tappable" data-widget="settings" data-open="settings">
+        <div class="mini-head">Settings</div>
+        <div class="mini-big">&#9881;</div>
+        <div id="set-sub" class="mini-sub">&nbsp;</div>
       </section>
+    </div>
 
-    </main>
+    <!-- Shown only when every widget is switched off, so an all-hidden dashboard reads as
+         a deliberate state instead of a crashed app. Toggled by WP applyVisibility(). -->
+    <div id="empty" class="empty" hidden>
+      <div class="empty-icon">&#9881;</div>
+      <div class="empty-t">Every widget is hidden</div>
+      <div class="empty-s">Nothing is switched on to display. Open Settings &rarr; Widgets
+        and turn back on whatever this panel should show.</div>
+      <button class="wide-btn tappable" data-open="settings">Open settings</button>
+    </div>
 
-    <footer id="status" class="status"></footer>
+  </main>
+</div>
 
+<!-- ============================================================================
+     PANEL LAYER
+     One full-screen panel per widget. Shells are authored here (so the markup stays
+     readable); bodies are filled by each plugin's onOpen(). Every panel has two close
+     affordances — the big X in the header and the full-width bar at the bottom —
+     because the Android back button is intentionally dead on this kiosk.
+     ============================================================================ -->
+<div id="panels">
+
+  <section class="panel" data-panel="clock">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Clock</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="timer">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Stopwatch &amp; Timer</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="weather">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Conditions</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="hourly">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Hourly</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="daily">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Daily</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="sensors">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Home Assistant</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="system">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Device</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="settings">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Settings</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+</div>
+
+<!-- transient confirmation for actions that have no other visible result -->
+<div id="toast" class="toast"></div>
+
+<!-- Countdown alarm overlay — full-screen so it is impossible to miss across the room.
+     data-act on the overlay itself as well as on the button, for two reasons. First, both
+     have to be on the pointer delegation: the Dismiss button used to carry its own click
+     listener and was therefore the one control in the app that ignored a press-and-hold.
+     Second, while this is up it covers the whole dashboard, so somebody who taps a tile
+     underneath and gets nothing should be able to clear it with that same tap rather than
+     having to find the button. It also takes itself down after 60s unattended (WP idle
+     layer) and leaves a quiet note on the TIMER tile that it fired. -->
+<div id="alarm" class="alarm" data-ns="timer" data-act="alarm-dismiss">
+  <div class="alarm-inner">
+    <div class="alarm-title">Timer finished</div>
+    <div id="alarm-sub" class="alarm-sub"></div>
+    <button id="alarm-dismiss" class="wide-btn tappable"
+            data-ns="timer" data-act="alarm-dismiss">Dismiss</button>
   </div>
+</div>
 
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="widgets.js"></script>
 </body>
 </html>

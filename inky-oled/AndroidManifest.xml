@@ -8,6 +8,12 @@
 
     <!-- weather lookup only; everything else is bundled locally -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ACCESS_NETWORK_STATE is reused by the Device widget's JS bridge to report the
+         active transport (Wi-Fi / Ethernet / none) and whether it validated. The bridge
+         deliberately does not read SSID/BSSID/signal, which would require a location
+         permission on Android 10+. No other permission is needed: battery comes from the
+         sticky ACTION_BATTERY_CHANGED broadcast, storage from StatFs on our own data
+         directory, memory from ActivityManager, uptime from SystemClock. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- so it can relaunch itself on boot once you enable that -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -17,7 +23,8 @@
         android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         android:hardwareAccelerated="true"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="false">
 
         <activity
             android:name=".MainActivity"
