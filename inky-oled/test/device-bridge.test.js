@@ -41,17 +41,28 @@ test("charging adds the bolt", function () {
 });
 
 test("the panel renders every section from one snapshot", function () {
+  /* CHANGED with the copy sweep. Four battery cells, "Low memory", "Used %" x2, the
+     network interface name and "(API 33)" were removed as jargon or as restatements of
+     something already on the screen — see the comments in wx-system.js. Every field that
+     went is still asserted here, against the element that now carries it, so this test
+     still proves the whole snapshot reaches the panel and not only the part of it that
+     survived a layout change. */
   var app = h.createApp({ bridge: fake.make({}) });
   app.tap(app.qs('[data-open="system"]'));
   var body = app.panelBody("system");
 
+  /* level and status live in the hero, which is where they always visually were */
+  assert.equal(body.querySelector(".big-time").textContent, "74%");
+  assert.equal(body.querySelector(".big-sub").textContent, "Discharging");
+
   var bat = stats(body, "Battery");
-  assert.equal(bat["Level"], "74%");
-  assert.equal(bat["Charging"], "No");
-  assert.equal(bat["Status"], "Discharging");
   assert.equal(bat["Health"], "Good");
   assert.equal(bat["Voltage"], "4.102 V");
   assert.equal(bat["Temperature"], "83.1 °F");
+  assert.equal(bat["Cells"], "Li-ion");
+  assert.deepEqual(Object.keys(bat).filter(function (k) {
+    return k === "Level" || k === "Charging" || k === "Status";
+  }), [], "the battery grid is restating the hero again");
 
   var st = stats(body, "Storage");
   assert.equal(st["Free"], "41 GB");
@@ -61,21 +72,20 @@ test("the panel renders every section from one snapshot", function () {
   var mem = stats(body, "Memory");
   assert.equal(mem["Free"], "2 GB");
   assert.equal(mem["Total"], "6 GB");
-  assert.equal(mem["Low memory"], "No");
+  assert.equal(mem["Used"], "4 GB");
 
   var net = stats(body, "Network");
   assert.equal(net["Transport"], "Wi-Fi");
   assert.equal(net["Internet"], "Working");
   assert.equal(net["Metered"], "No");
-  assert.equal(net["Interface"], "wlan0");
   assert.equal(net["Down"], "144 Mbps");
 
   var dev = stats(body, "Uptime & device");
   assert.equal(dev["Uptime"], "3d 4h 0m");
   assert.equal(dev["Awake"], "2d 0h 0m");
-  assert.equal(dev["Model"], "TEST-PANEL");
-  assert.equal(dev["Android"], "13 (API 33)");
-  assert.equal(dev["Screen"], "1600x2560");
+  assert.equal(dev["Tablet"], "testco TEST-PANEL", "manufacturer and model, one answer");
+  assert.equal(dev["Android"], "13");
+  assert.equal(dev["Screen"], "1600x2560 pixels");
   assert.equal(dev["Brightness"], "50%");
   assert.match(app.qs('[data-panel="system"] [data-sub]').textContent, /TEST-PANEL · Android 13/);
 });
@@ -92,9 +102,27 @@ test("storage and memory percentages come out of the snapshot's own numbers", fu
     bridge: fake.make({ storage: { total: 100, free: 25 }, memory: { total: 8, free: 2 } })
   });
   app.WP.panels.open("system");
-  var s = stats(app.panelBody("system"));
-  assert.equal(s["Used %"], "75.0%", "storage used %");
+  var body = app.panelBody("system");
+  var s = stats(body, "Storage");
   assert.equal(s["Used"], "75 B");
+
+  /* CHANGED with the copy sweep: the percentage used to be a "Used %" cell, which was the
+     fourth cell of a three-across grid and so sat alone on the row the footer cut in half.
+     It was also the bar directly above it, written out. Assert the BAR now — both the
+     width it is drawn at and the percentage it announces — which is a strictly better
+     check, because the bar is the thing on the screen and the cell never was. */
+  function pct(label) {
+    var b = body.querySelectorAll(".bar").filter(function (n) {
+      return (n.getAttribute("aria-label") || "").indexOf(label) === 0;
+    })[0];
+    assert.ok(b, "no " + label + " bar");
+    return { width: b.querySelector(".bar-fill").getAttribute("style"),
+             said: b.getAttribute("aria-label") };
+  }
+  assert.equal(pct("storage used").width, "width:75.0%");
+  assert.equal(pct("storage used").said, "storage used 75 percent");
+  assert.equal(pct("memory used").width, "width:75.0%");
+  assert.equal(pct("memory used").said, "memory used 75 percent");
 });
 
 test("no bridge at all degrades to an explicit message, not a blank card", function () {
@@ -142,10 +170,16 @@ test("a partial snapshot renders what it has and dashes the rest", function () {
   assert.equal(app.text("sys-big"), "--%");
   assert.equal(app.text("sys-sub"), "-- · 5s up · offline");
   app.WP.panels.open("system");
-  var s = stats(app.panelBody("system"));
-  assert.equal(s["Level"], "--%");
-  assert.equal(s["Model"], "--");
+  var body = app.panelBody("system");
+  /* CHANGED with the copy sweep: level moved to the hero and Model/Manufacturer merged
+     into one "Tablet" cell. Same assertion — a missing field must dash, never print
+     "undefined" or vanish — against the elements that carry it now. */
+  assert.equal(body.querySelector(".big-time").textContent, "--%");
+  var s = stats(body);
+  assert.equal(s["Tablet"], "--");
   assert.equal(s["Transport"], "none");
+  assert.equal(/undefined|NaN|null/.test(body.textContent), false,
+    "a missing field leaked a JS value onto the wall");
   assert.deepEqual(app.logs.error, []);
 });
 
@@ -237,11 +271,18 @@ test("an unchanged snapshot writes nothing to the tile", function () {
 });
 
 test("the Settings panel reports whether the bridge is attached", function () {
+  /* CHANGED with the copy sweep: the About block said "device sensors: connected · screen
+     711 × 1138". The screen figure was the CSS viewport rather than the screen and was
+     jargon either way; the rest is now a sentence. Same fact, still asserted both ways
+     round, and the viewport figure is asserted GONE so it cannot come back. */
   var withBridge = h.createApp({ bridge: fake.make({}) });
   withBridge.WP.panels.open("settings");
-  assert.match(withBridge.panelBody("settings").textContent, /device sensors: connected/);
+  var on = withBridge.panelBody("settings").textContent;
+  assert.match(on, /battery and storage are being read/);
+  assert.equal(/\d+ ?[×x] ?\d+/.test(on), false, "the viewport measurement is back");
 
   var without = h.createApp({});
   without.WP.panels.open("settings");
-  assert.match(without.panelBody("settings").textContent, /device sensors: unavailable/);
+  assert.match(without.panelBody("settings").textContent,
+    /battery and storage are not readable right now/);
 });

@@ -315,12 +315,18 @@ test("demo temperatures follow the unit setting", function () {
   assert.equal(s.outUnit(co2), "ppm");
 });
 
-test("the demo badge says demo and the panel says why", function () {
+test("the demo badge says demo and the panel says so exactly once", function () {
+  /* CHANGED with the copy sweep. The panel used to say it twice and the two did not agree:
+     the subtitle said "nothing here is really happening" and an orange banner fifteen
+     centimetres below said "the switches really do change the readings". One notice now,
+     in the subtitle; the banner is reserved for a live feed that has stopped answering, so
+     its colour means something again. */
   var app = boot();
   assert.equal(app.text("ha-badge"), "demo");
   app.WP.panels.open("sensors");
   assert.match(app.qs('[data-panel="sensors"] [data-sub]').textContent, /Demo data/);
-  assert.match(app.panelBody("sensors").textContent, /Simulated home/);
+  assert.equal(app.qsa(".demo-note", app.panelBody("sensors")).length, 0,
+    "a second demo notice is back in the body");
 });
 
 test("live mode is entered only with enabled + baseUrl + token", function () {

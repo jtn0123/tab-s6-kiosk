@@ -74,11 +74,24 @@
     onOpen: function (panel) {
       var self = this;
       var body = WP.qs("[data-body]", panel);
-      var tz = "";
-      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { tz = ""; }
-      /* IANA zone ids are written with underscores. That is a machine detail, and this is a
-         subtitle on a wall — "America/Los Angeles" says the same thing to a person. */
-      var tzText = tz ? tz.replace(/_/g, " ") : "";
+      /* The zone, in the words a person uses for it.
+         This line read "America/Los Angeles" — an IANA database key with its underscores
+         combed out, which is still a machine identifier and still the wrong half of the
+         fact (the continent is not the interesting part; whether we are on daylight time
+         is). Intl already knows the long name — "Pacific Daylight Time" — so ask for that
+         and keep the id only as a fallback for an ICU build that cannot answer. */
+      var tzText = "";
+      try {
+        var parts = new Intl.DateTimeFormat(undefined, {
+          hour: "numeric", timeZoneName: "long" }).formatToParts(new Date());
+        for (var pi = 0; pi < parts.length; pi++) {
+          if (parts[pi].type === "timeZoneName") { tzText = parts[pi].value; break; }
+        }
+      } catch (e) { /* fall through to the id below */ }
+      if (!tzText) {
+        try { tzText = (Intl.DateTimeFormat().resolvedOptions().timeZone || "").replace(/_/g, " "); }
+        catch (e2) { tzText = ""; }
+      }
       WP.qs("[data-sub]", panel).textContent = tzText || "local time";
 
       var zones = [
@@ -117,8 +130,6 @@
         var big = $("clk-big");
         if (!big) { render(); return; }          // panel was rebuilt from under us
         big.textContent = fmt.clock(now, true);
-        var ep = $("clk-epoch");
-        if (ep) ep.textContent = String(Math.floor(now.getTime() / 1000));
       }
 
       function render() {
@@ -141,13 +152,17 @@
           + esc(fmt.clock(now, true)) + "</div>"
           + '<div class="big-sub">' + esc(now.toLocaleDateString(undefined, {
               weekday: "long", year: "numeric", month: "long", day: "numeric" })) + "</div></div>"
-          + section("This device", statGrid([
-              ["Time zone", esc(tzText || "unknown")],
+          /* Four cells, and every one of them is something a person might want off a wall.
+             Two were dropped:
+               "Unix time 1786999387" — a seconds-since-1970 counter, ticking, on a kiosk in
+                 a hallway. Raw developer output; nobody reads it and nothing reads it back.
+               "Time zone America/Los Angeles" — the subtitle four hundred pixels above says
+                 the same thing, better. One fact, one place. */
+          + section("Today", statGrid([
               ["UTC offset", "UTC" + offTxt],
-              ["Day of year", String(doy)],
-              ["ISO week", String(isoWeek)],
-              ["Unix time", '<span id="clk-epoch">' + Math.floor(now.getTime() / 1000) + "</span>"],
-              ["Format", S.get("clockHours") === 24 ? "24-hour" : "12-hour"]
+              ["Day of year", String(doy) + " of " + fmt.daysInYear(now)],
+              ["Week", "Week " + isoWeek],
+              ["Clock", S.get("clockHours") === 24 ? "24-hour" : "12-hour"]
             ]))
           + section("World clocks", '<div class="wc-grid">' + zones.map(function (z) {
               var s = "--:--", day = "";

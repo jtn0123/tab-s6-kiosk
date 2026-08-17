@@ -23,7 +23,19 @@
          config.js and can be any host on the LAN; a static meta tag cannot know it, and
          hard-coding api.open-meteo.com alone would break the HA feed the day somebody
          enables it. Widen no further than this: 'none' everywhere else means an injected
-         string still cannot load code, only talk to a host it cannot get code from. -->
+         string still cannot load code, only talk to a host it cannot get code from.
+
+         Deliberately NOT tightened, and the reason is worth recording. The one way to
+         narrow it is to have build.ps1 rewrite this attribute from the config it is
+         already baking into the APK — emitting the Open-Meteo origin alone when
+         homeAssistant.enabled is false, and adding the configured origin when it is true.
+         That is the right answer and it is a change to the build, not to the app; it was
+         left for a round that can re-verify a build-time string substitution against a
+         real Home Assistant rather than for the last hour of the last one. The exposure
+         it would close is narrow: script-src 'self' already means nothing injected can
+         execute, so the residual risk is exfiltration by a string that got past esc(),
+         and esc() is itself covered by four tests. -->
+
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' http: https:; base-uri 'none'; form-action 'none'">
 <title>Wall Panel</title>
 <link rel="stylesheet" href="style.css">
@@ -70,10 +82,16 @@
 
     <!-- ---- 3. weather now ---- -->
     <section class="card tappable" data-widget="weather" data-open="weather">
+      <!-- Three cards on this screen open a detail panel from their heading, and this one
+           used to do it with a bare grey chevron while Hourly, Daily and Home used a
+           labelled blue "Details >" / "All >". Two idioms for "open me", ten centimetres
+           apart. The whole card stays tappable — a bigger target than the button — but the
+           affordance now matches its neighbours. -->
       <div class="card-head">
         <span class="card-label">Now</span>
         <span id="wx-badge" class="badge badge-stale" hidden>stale</span>
-        <span class="chev" aria-hidden="true">&rsaquo;</span>
+        <button class="link-btn tappable" data-open="weather"
+                aria-label="Current conditions details">Details &rsaquo;</button>
       </div>
       <div class="wx-main">
         <!-- decorative: wx-desc immediately below spells the same condition out in words -->

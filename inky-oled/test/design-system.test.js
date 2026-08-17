@@ -30,56 +30,26 @@ var DEVICE_PX_PER_VH = 25.6;
 var MIN_TARGET_VH = 88 / DEVICE_PX_PER_VH;      // 3.44vh
 
 /* ---------------- helpers over the stylesheet ----------------
-   A real parser is not needed and would be worse: what these read is the AUTHORED text,
-   which is the thing under test. Comments are stripped first so the prose in this
-   stylesheet — which quotes plenty of old font-size values — cannot be mistaken for code. */
+   The reading is done by test/lib/css.js — a flat rule list, a token resolver and a small
+   box model, all over the AUTHORED text, which is the thing under test. It lives in lib
+   rather than here because the box model is what lets the touch-target check derive its
+   subject list from the DOM instead of from a hand-written allowlist. */
 
-function stripComments(css) { return css.replace(/\/\*[\s\S]*?\*\//g, ""); }
-
-/* every "selector { body }" pair, flattened (nested at-rules included) */
-function rules(css) {
-  var out = [];
-  var re = /([^{}]+)\{([^{}]*)\}/g, m;
-  while ((m = re.exec(stripComments(css)))) {
-    out.push({ sel: m[1].trim().replace(/\s+/g, " "), body: m[2] });
-  }
-  return out;
-}
-
-function decl(body, prop) {
-  var m = new RegExp("(?:^|;)\\s*" + prop + "\\s*:\\s*([^;]+)").exec(body);
-  return m ? m[1].trim() : null;
-}
+var css = require("./lib/css.js");
+var stripComments = css.stripComments;
+var decl = css.decl;
+function rules() { return css.rules(); }
+var ramp = css.ramp;
 
 /* The rule for `sel`. A selector legitimately appears more than once — .psec-t takes its
    type from the shared label recipe and its margin from the panel-content block — so when
    a property is named, the rule that actually declares it is the one wanted. */
 function ruleFor(sel, prop) {
-  var r = rules(CSS).filter(function (x) {
+  var r = rules().filter(function (x) {
     return x.sel === sel && (!prop || decl(x.body, prop) != null);
   });
   assert.equal(r.length >= 1, true, "no rule for " + sel + (prop ? " setting " + prop : ""));
   return r[r.length - 1];
-}
-
-/* sum of the vh numbers in a padding shorthand's vertical positions */
-function verticalPadding(body) {
-  var p = decl(body, "padding");
-  if (!p) return 0;
-  var parts = p.split(/\s+/);
-  var top = parts[0], bottom = parts.length >= 3 ? parts[2] : parts[0];
-  function vh(v) { var m = /^(-?[\d.]+)vh$/.exec(v); return m ? parseFloat(m[1]) : 0; }
-  return vh(top) + vh(bottom);
-}
-
-/* ---------------- the ramp ---------------- */
-
-function ramp() {
-  var root = /:root\s*\{([\s\S]*?)\}/.exec(stripComments(CSS));
-  assert.ok(root, "no :root block");
-  var out = {}, re = /--(fs-[a-z-]+)\s*:\s*([\d.]+)vh/g, m;
-  while ((m = re.exec(root[1]))) out[m[1]] = parseFloat(m[2]);
-  return out;
 }
 
 test("the type ramp is declared once, in vh, and is strictly increasing", function () {
@@ -114,7 +84,7 @@ test("the text tiers step by a consistent ratio — no tier is a rounding error"
 test("no font-size anywhere is authored as a literal", function () {
   /* The single rule that keeps the ramp real. Every size must come from a token, so that
      changing a tier changes it everywhere and adding a size means choosing a step. */
-  var offenders = rules(CSS).filter(function (r) {
+  var offenders = rules().filter(function (r) {
     if (/^:root/.test(r.sel)) return false;              // the ramp itself
     var v = decl(r.body, "font-size");
     return v && v.indexOf("var(--fs-") === -1;
@@ -145,13 +115,42 @@ test("landscape restates the whole ramp rather than overriding elements piecemea
     "landscape still overrides a font-size directly");
 });
 
+test("the landscape ramp is a RAMP, not ten restatements of one number", function () {
+  /* The test above only asks that every token is mentioned again, and a mutation that set
+     all ten landscape steps to the same 2.0vh passed it: the hierarchy was gone —
+     the clock, a chip and a caption all the same size — while the suite stayed green.
+     Restating a token is not the property; being a scale is. Both scales are therefore
+     asserted the same way, and the landscape one has to be larger, since the whole reason
+     the block exists is that a landscape viewport is short. */
+  var portrait = ramp(), land = css.landscapeRamp();
+  var order = ["fs-caption", "fs-label", "fs-note", "fs-body", "fs-body-lg",
+               "fs-title-sm", "fs-title", "fs-hero", "fs-display", "fs-display-xl"];
+  order.forEach(function (k) {
+    assert.equal(typeof land[k], "number", "the landscape ramp has no --" + k);
+    assert.ok(land[k] > portrait[k],
+      "--" + k + " is " + land[k] + "vh in landscape and " + portrait[k] + "vh in portrait;"
+      + " a shorter viewport needs a larger vh for the same physical size");
+  });
+  for (var i = 1; i < order.length; i++) {
+    assert.ok(land[order[i]] > land[order[i - 1]],
+      "landscape --" + order[i] + " (" + land[order[i]] + ") is not larger than --"
+      + order[i - 1] + " (" + land[order[i - 1]] + ")");
+  }
+  /* and the text tiers keep the same ~1.16 relationship they have in portrait */
+  for (var j = 1; j < 7; j++) {
+    var ratio = land[order[j]] / land[order[j - 1]];
+    assert.ok(ratio > 1.1 && ratio < 1.25,
+      "landscape " + order[j - 1] + " -> " + order[j] + " is a ratio of " + ratio.toFixed(3));
+  }
+});
+
 /* ---------------- the label recipe (D6) ---------------- */
 
 test("every small-caps label is drawn from one recipe", function () {
   /* UNITS in Settings, AIR in Conditions, BATTERY in Device and NOW on the home card have
      to be the same object. They were authored separately and had drifted to five sizes,
      four letter-spacings and two weights. */
-  var recipe = rules(CSS).filter(function (r) {
+  var recipe = rules().filter(function (r) {
     return r.sel.indexOf(".psec-t,") === 0 && /text-transform/.test(r.body);
   })[0];
   assert.ok(recipe, "the shared label rule is gone");
@@ -162,8 +161,23 @@ test("every small-caps label is drawn from one recipe", function () {
   assert.equal(decl(recipe.body, "font-weight"), "var(--label-weight)");
   assert.equal(decl(recipe.body, "text-transform"), "uppercase");
 
+  /* The tokens' VALUES, not just the fact that they are referenced. A mutation that set
+     --label-track to 0em and --label-weight to 900 survived every assertion above: the
+     recipe was still one recipe, still referenced, still uppercase — and every label in
+     the app had become bold, tightly-set capitals, which is a different design. Ranges
+     rather than exact numbers, because the point is the look and not the digit: tracking
+     is what makes capitals legible at 2-4 m, and a light weight is what stops a wall of
+     small caps shouting. */
+  var root = /:root\s*\{([\s\S]*?)\}/.exec(stripComments(CSS))[1];
+  var track = parseFloat(/--label-track:\s*([\d.]+)em/.exec(root)[1]);
+  var weight = parseInt(/--label-weight:\s*(\d+)/.exec(root)[1], 10);
+  assert.ok(track >= 0.1 && track <= 0.25,
+    "--label-track is " + track + "em; small caps without tracking read as a smudge");
+  assert.ok(weight >= 400 && weight <= 600,
+    "--label-weight is " + weight + "; a label is not meant to outweigh its own value");
+
   /* and nothing re-declares those properties for itself afterwards */
-  var strays = rules(CSS).filter(function (r) {
+  var strays = rules().filter(function (r) {
     if (r.sel === recipe.sel) return false;
     return /(^|,\s*)\.(card-label|mini-head|stat-k|fc-name|hr-t|wc-city)\b/.test(r.sel)
       && (decl(r.body, "letter-spacing") || decl(r.body, "text-transform"));
@@ -257,17 +271,97 @@ test("burn-in protection is explained in one line, not a paragraph", function ()
     "the burn-in paragraph is back");
 });
 
-/* ---------------- developer language (D4) ---------------- */
+/* ---------------- developer language (D4) ----------------
 
-test("no panel subtitle is written for whoever built the app", function () {
+   This used to read [data-sub] and nothing else, which is why it passed for five rounds
+   while the wall itself carried `sensor.living_room_temperature` twice, `UNIX TIME
+   1786999387`, `DOMAIN / SOURCE / SAMPLES`, `screen 711 × 1138` and `Interface wlan0`. A
+   subtitle is one line out of a few hundred; the rest of the panel is what a person reads.
+
+   So it sweeps every rendered string in the home view and in all eight panel bodies.
+
+   Text is collected as individual LEAF TEXT NODES, not as textContent: concatenating a
+   panel gives you "Samples241Entity", which destroys the word boundaries these patterns
+   depend on and hides an offender inside a run of digits.
+
+   Each pattern is something no one standing in front of a wall panel would say. It is
+   deliberately not a list of banned words: a Device panel may legitimately report a screen
+   size and an Android version, so what is banned is naming the MACHINERY (an entity id, a
+   kernel interface name, an epoch counter, a CSS viewport) rather than naming a fact. */
+
+var JARGON = [
+  ["names where a setting is stored", /localStorage|force-stop|\bconfig\.js\b|\bassets\//i],
+  ["a URL, an origin or a credential", /https?:\/\/|baseUrl|API key|\bbearer\b|\btoken\b/i],
+  ["a raw Home Assistant entity id",
+   /\b(sensor|switch|light|fan|binary_sensor|climate|cover|lock|media_player)\.[a-z0-9_]+/],
+  ["the machinery behind a reading",
+   /\bentity[ _]?id\b|\bdomain\b|\bsamples?\b|\bsimulator\b|\bpayload\b|\bendpoint\b/i],
+  ["a clock only a computer reads", /\bunix\b|\bepoch\b|\bISO ?8601\b|\bmillis(econds)?\b/i],
+  ["a rendering detail rather than a fact about the room",
+   /\bviewport\b|\bdpr\b|\bdevice ?pixel|\bcss px\b|\bscreen \d+\s*[×x]\s*\d+/i],
+  ["an internal interface", /\bREST\b|\bJSON\b|\bAPI\b|\bJNI\b|\bbridge\b|\b(wlan|eth)\d\b/i],
+  ["a JavaScript value that escaped onto the wall", /\b(undefined|NaN|\[object)\b/]
+];
+
+/* every leaf string under `root`, trimmed, empties dropped */
+function strings(root) {
+  var out = [];
+  (function walk(n) {
+    (n.children || []).forEach(function (c) {
+      if (c.nodeType === 3) { var s = c.data.trim(); if (s) out.push(s); return; }
+      walk(c);
+    });
+  })(root);
+  return out;
+}
+
+test("nothing the wall says is written for whoever built the app", function () {
   var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
-  var jargon = /localStorage|force-stop|config\.js|REST API|baseUrl|\bbridge\b|viewport|API key|http:\/\/|https:\/\//i;
+  var wx = require("./lib/wx-fixture.js");
+  app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
+  app.registry.weather.publish();
+
+  var offenders = [];
+  function sweep(where, label) {
+    strings(where).forEach(function (s) {
+      JARGON.forEach(function (rule) {
+        if (rule[1].test(s)) offenders.push(label + ": “" + s + "” — " + rule[0]);
+      });
+    });
+  }
+
+  sweep(app.$("home"), "home");
   app.qsa("[data-panel]").forEach(function (p) {
     var name = p.getAttribute("data-panel");
     app.WP.panels.open(name);
-    var sub = p.querySelector("[data-sub]").textContent;
-    assert.equal(jargon.test(sub), false, name + " subtitle: " + sub);
+    sweep(p.querySelector("[data-sub]"), name + " subtitle");
+    sweep(app.panelBody(name), name);
     app.WP.panels.close();
+  });
+  assert.deepEqual(offenders, []);
+});
+
+test("the copy sweep can actually see a panel body", function () {
+  /* The failure this test exists to prevent is the previous one's: a sweep pointed at a
+     node that is empty passes forever. Assert the corpus is real, and that the patterns
+     fire when something bad is genuinely in it. */
+  var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
+  var wx = require("./lib/wx-fixture.js");
+  app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
+  app.registry.weather.publish();
+  app.qsa("[data-panel]").forEach(function (p) {
+    var name = p.getAttribute("data-panel");
+    app.WP.panels.open(name);
+    assert.ok(strings(app.panelBody(name)).length >= 5,
+      name + " panel body yielded almost no text — the sweep is reading the wrong node");
+    app.WP.panels.close();
+  });
+
+  [["sensor.living_room_temperature", 2], ["Unix time", 4], ["Samples", 3],
+   ["screen 711 × 1138", 5], ["Interface wlan0", 6], ["saved to localStorage", 0]
+  ].forEach(function (probe) {
+    assert.equal(JARGON[probe[1]][1].test(probe[0]), true,
+      "the sweep would no longer catch: " + probe[0]);
   });
 });
 
@@ -295,19 +389,29 @@ test("the three home tiles are one object repeated", function () {
 
 /* ---------------- motion (D7) ---------------- */
 
-test("every transition duration comes from the four motion tokens", function () {
+test("every duration in the app comes from a motion token", function () {
+  /* ANIMATION as well as TRANSITION. This read `transition:` only, and the stylesheet had
+     three `animation: pulse 1s infinite` declarations sitting off the token scale — so the
+     comment beside the tokens ("nothing in the app animates on a number that is not one of
+     these") was false, and a mutation moving the alert pulse to 3.7s passed. A duration is
+     a duration whichever property carries it. */
   var offenders = [];
-  rules(CSS).forEach(function (r) {
-    var t = decl(r.body, "transition");
-    if (!t) return;
-    (t.match(/(^|\s)[\d.]+m?s\b/g) || []).forEach(function (lit) {
-      offenders.push(r.sel + " { transition: ..." + lit.trim() + "... }");
+  rules().forEach(function (r) {
+    ["transition", "animation", "animation-duration", "transition-duration"].forEach(function (prop) {
+      var t = decl(r.body, prop);
+      if (!t) return;
+      (t.match(/(^|\s)[\d.]+m?s\b/g) || []).forEach(function (lit) {
+        offenders.push(r.sel + " { " + prop + ": ..." + lit.trim() + "... }");
+      });
     });
   });
   assert.deepEqual(offenders, []);
-  ["--ease", "--dur-press", "--dur-ui", "--dur-fill", "--dur-drift"].forEach(function (k) {
-    assert.match(CSS, new RegExp(k + "\\s*:"), "no " + k + " token");
-  });
+  ["--ease", "--dur-press", "--dur-ui", "--dur-fill", "--dur-drift", "--dur-pulse"]
+    .forEach(function (k) {
+      assert.match(CSS, new RegExp(k + "\\s*:"), "no " + k + " token");
+    });
+  /* and the pulse is still a breath rather than a blink */
+  assert.match(stripComments(CSS), /--dur-pulse:\s*(0\.[6-9]|1(\.[0-5])?)s/);
 });
 
 test("the switch knob slides and the panel fade is unchanged", function () {
@@ -329,30 +433,109 @@ test("every tappable class has a pressed state on the press clock", function () 
   assert.match(decl(ruleFor(".tappable", "transition").body, "transition") || "", /var\(--dur-press\)/);
 });
 
-/* ---------------- touch targets ---------------- */
+/* ---------------- touch targets ----------------
 
-test("no control on the ramp fell below 88 device px", function () {
-  /* The ramp moved several font sizes, and the padding-driven controls take their height
-     from padding + line box. Recomputed here from the authored CSS rather than trusted. */
-  var r = ramp();
-  var LINE = 1.2;                        // the browser's default line-height factor
-  [
-    [".btn", "fs-body-lg"], [".chip", "fs-body"], [".seg-b", "fs-body-lg"],
-    [".srow", "fs-body-lg"], [".wide-btn", "fs-body-lg"], [".link-btn", "fs-note"],
-    [".lap", "fs-body-lg"], [".hrow", "fs-body"]
-  ].forEach(function (pair) {
-    var rule = ruleFor(pair[0], "padding");
-    var declared = decl(rule.body, "font-size");
-    var size = declared ? r[/--(fs-[a-z-]+)/.exec(declared)[1]] : r[pair[1]];
-    var height = verticalPadding(rule.body) + size * LINE;
-    assert.ok(height >= MIN_TARGET_VH,
-      pair[0] + " is " + (height * DEVICE_PX_PER_VH).toFixed(0)
-      + " device px tall, under the 88 px floor");
+   The subject list is taken from the DOM — every distinct class carrying `.tappable`,
+   anywhere in the home view or in any of the eight panels — and not from an allowlist.
+   The allowlist named eight selectors and the app has thirteen kinds of control; the five
+   it did not name included the Home Assistant tile and the hourly chip, and a mutation
+   that drove the tile's padding to zero passed. A list maintained by hand goes stale the
+   first time a widget gains a control; this one cannot. */
+
+/* Boot everything so that every kind of control is on screen at least once: the bridge for
+   the Device panel and a forecast for the strip, the hourly list and the daily row.
+   (`.lap` was on the old allowlist and is not here, correctly — a lap row is a read-only
+   line of text, not something a finger aims at. It takes its padding off the same scale
+   regardless, because it sits in a list among things that are.) */
+function everyTappable() {
+  var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
+  var wx = require("./lib/wx-fixture.js");
+  app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
+  app.registry.weather.publish();
+
+  var found = Object.create(null);
+  function sweep(where, label) {
+    app.qsa(".tappable", where).forEach(function (n) {
+      var kind = (n.getAttribute("class") || "").split(/\s+/)[0];
+      if (kind && !found[kind]) found[kind] = { el: n, where: label };
+    });
+  }
+  sweep(app.doc, "home");
+  app.qsa("[data-panel]").forEach(function (p) {
+    var name = p.getAttribute("data-panel");
+    app.WP.panels.open(name);
+    sweep(p, name);
+    app.WP.panels.close();
+  });
+  return found;
+}
+
+test("no control anywhere in the app is under 88 device px", function () {
+  var found = everyTappable();
+  var kinds = Object.keys(found);
+  assert.ok(kinds.length >= 12,
+    "only " + kinds.length + " kinds of control were found — the sweep is not reaching the "
+    + "panels, and a sweep that finds nothing passes forever");
+  /* the three the old allowlist did not name, and one of which a mutation walked through */
+  ["sensor", "hr", "fc-day", "card"].forEach(function (k) {
+    assert.ok(kinds.indexOf(k) !== -1,
+      "the sweep missed ." + k + "; it found: " + kinds.join(", "));
   });
 
-  /* the two with an explicit height */
-  assert.ok(parseFloat(decl(ruleFor(".icon-btn", "height").body, "height")) >= MIN_TARGET_VH);
-  assert.ok(parseFloat(decl(ruleFor(".close-btn", "height").body, "height")) >= MIN_TARGET_VH);
+  var small = kinds.filter(function (k) {
+    return css.boxVh(found[k].el) < MIN_TARGET_VH;
+  }).map(function (k) {
+    return "." + k + " is " + (css.boxVh(found[k].el) * DEVICE_PX_PER_VH).toFixed(0)
+      + " device px tall (" + found[k].where + ")";
+  });
+  assert.deepEqual(small, []);
+});
+
+test("every control's padding comes off the spacing scale", function () {
+  /* The floor above has roughly 2x slack on most controls, which is why a mutation that
+     cut a settings row's vertical padding by 76% — visibly wrecking the rhythm of the
+     panel — sailed through it: only a padding of exactly zero was ever caught. So the
+     assertion is the same shape as the type ramp's: a control does not author a spacing of
+     its own, it picks a step. That makes "0.4vh" a failure for the reason it is actually
+     wrong (it is not one of the sizes this app draws controls at), rather than waiting for
+     it to breach a minimum it never quite breaches. */
+  var scale = css.tokens();
+  var steps = Object.keys(scale).filter(function (k) { return k.indexOf("pad-") === 0; });
+  assert.ok(steps.length >= 4 && steps.length <= 6,
+    "the spacing scale has " + steps.length + " steps; a scale with one step per control "
+    + "is not a scale: " + steps.join(", "));
+
+  var found = everyTappable();
+  var offenders = [];
+  Object.keys(found).forEach(function (k) {
+    var el = found[k].el;
+    /* a control sized by an explicit height (the two round icon buttons) sets no padding */
+    if (css.vh(css.styleOf(el, "height")) != null) return;
+    var p = css.styleOf(el, "padding");
+    if (!p) return;                                     // inherits its box from a parent
+    var name = css.tokenName(p.split(/\s+/)[0]);
+    if (!name || name.indexOf("pad-") !== 0) {
+      offenders.push("." + k + " { padding: " + p + " } — not a step on the scale");
+    }
+  });
+  assert.deepEqual(offenders, []);
+});
+
+test("the hourly list is a bar chart, so its columns have a fixed origin", function () {
+  /* Measured on device: the sun rows' bars started at x=382, the moon rows' at 356 and the
+     cloud rows' at 391 — a 35 device px swing driven purely by which glyph the weather put
+     in the column, because `.hrow-i` was the one column authored `flex: 0 0 auto` while
+     every sibling had a fixed basis. A bar chart whose baseline moves per row is not a bar
+     chart. No test touched this geometry at all, and two mutations against it survived. */
+  [".hrow-t", ".hrow-i", ".hrow-d", ".hrow-p"].forEach(function (sel) {
+    var flex = decl(ruleFor(sel, "flex").body, "flex");
+    assert.match(flex, /^0 0 [\d.]+v[wh]$/,
+      sel + " is `flex: " + flex + "`; a column with no fixed basis moves the bar beside it");
+  });
+  assert.match(decl(ruleFor(".hrow-bar", "flex").body, "flex"), /^1 1 auto$/,
+    "the bar itself is the only column that may take the remainder");
+  assert.equal(decl(ruleFor(".hrow-i", "text-align").body, "text-align"), "center",
+    "a glyph narrower than its column has to be centred in it or the origin moves again");
 });
 
 /* ---------------- accessible names on generated controls ---------------- */

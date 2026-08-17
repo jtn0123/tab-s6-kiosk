@@ -65,6 +65,7 @@ function Element(tag, doc) {
   this.clientHeight = 0;
   this.clientWidth = 0;
   this.scrollHeight = 0;
+  this.scrollWidth = 0;
   var self = this;
   this.classList = {
     contains: function (c) { return self._classes().indexOf(c) !== -1; },

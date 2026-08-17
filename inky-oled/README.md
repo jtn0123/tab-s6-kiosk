@@ -82,7 +82,8 @@ only so `npm test` works.
 The tests load the real `assets/index.html`, `app.js` and every `assets/wx-*.js` unmodified
 (in the order `index.html` lists them, parsed out of the page so the harness cannot hold a
 stale copy of that list), into a small
-DOM stub with a virtual clock (`test/lib/minidom.js`, `test/lib/harness.js`), and drive them by
+DOM stub with a virtual clock (`test/lib/minidom.js`, `test/lib/harness.js`) — plus a small
+stylesheet reader and box model (`test/lib/css.js`) for the geometry assertions — and drive them by
 dispatching real pointer events at real elements — so a control's label and the action behind
 it cannot drift apart without something failing. Nothing in `assets/` is exported or
 restructured for the tests' benefit; the only two seams added for them are `fmt.dayOfYear` /
@@ -386,13 +387,31 @@ Tuned deliberately for an **AMOLED wall panel**:
 
 And deliberately as **one design system** rather than eight panels that each look fine alone:
 a ten-step type ramp in `vh` that every size comes off (`--fs-caption` … `--fs-display-xl`, no
-literal font sizes anywhere), one recipe for every small-caps label, one hero block, one on/off
-idiom (a switch row — segmented buttons are reserved for a genuine choice between two *named*
-values), and four motion durations. Each panel has a declared vertical strategy, so none reads
-as unfinished and none reads as content that failed to load. The tokens live in `style.css`,
+literal font sizes anywhere), a five-step control-padding scale every `.tappable` picks from
+(`--pad-chip` … `--pad-control`), one recipe for every small-caps label, one hero block, one
+on/off idiom (a switch row — segmented buttons are reserved for a genuine choice between two
+*named* values), one labelled `Details ›` affordance on every card that opens a panel, and
+five motion durations. Each panel has a declared vertical strategy, so none reads as
+unfinished and none reads as content that failed to load. The tokens live in `style.css`,
 the builders in `wx-ui.js`, the rationale in
 [INTERACTIVE.md § The design system](INTERACTIVE.md#the-design-system), and
 `test/design-system.test.js` fails when any of it starts to drift.
+
+Three of those assertions are worth naming, because each replaced a check that could not fail:
+
+- **The copy sweep** reads every rendered string in the home view and in all eight panel
+  bodies, not just the panel subtitles, and rejects the machinery: entity ids, an epoch
+  counter, a CSS viewport measurement, a kernel interface name, `undefined`. Pointed at
+  subtitles alone it had passed for five rounds while the wall carried
+  `sensor.living_room_temperature` twice and `UNIX TIME 1786999387`.
+- **The touch-target floor** takes its subject list from the rendered DOM — every distinct
+  class carrying `.tappable` — and computes each control's height from the authored CSS
+  through a small box model (`test/lib/css.js`). The hand-written eight-selector allowlist it
+  replaced did not name the Home Assistant tile, and a mutation that shrank that tile to
+  nothing passed.
+- **The padding scale** exists because the floor has ~2x slack on most controls: cutting a
+  settings row's padding by 76% wrecks the panel's rhythm without ever breaching 88 px. Being
+  off the scale is the failure, which is a property about the design rather than a minimum.
 
 ## Dogfooding notes (fixes already made)
 

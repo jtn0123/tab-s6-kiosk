@@ -426,7 +426,12 @@
         WP.store.writeJSON(HA_STATE_KEY, saved);
       } else {
         var self = this;
-        fetch(this.base + "/api/services/" + e.domain + "/turn_" + (e.on ? "on" : "off"), {
+        /* encodeURIComponent, like the states fetch at stepLive(). The domain is derived
+           from a config-supplied entity id, so it is not attacker-controlled in any real
+           sense — but it IS the only place in the file that interpolated a config string
+           into a URL raw, and a lone exception is how a rule stops being a rule. */
+        fetch(this.base + "/api/services/" + encodeURIComponent(e.domain)
+              + "/turn_" + (e.on ? "on" : "off"), {
           method: "POST", headers: this.haHeaders(),
           body: JSON.stringify({ entity_id: id })
         })
@@ -556,7 +561,13 @@
        one is a build state, the other is a URL. Neither is what somebody standing in front
        of a wall panel wants to know, which is whether these numbers are true right now. */
     panelSub: function (e) {
-      if (this.mode === "demo") return "Demo data — nothing here is really happening";
+      /* ONE demo notice, not two. This line used to say "nothing here is really happening"
+         while an orange banner fifteen centimetres below it said "the switches really do
+         change the readings" — both true, read together as a contradiction, and the reader
+         has to reconcile them before they can trust either. The banner is now reserved for
+         a genuine alert (a live feed that has stopped answering), and the demo state is
+         stated once, here, in a sentence that does not argue with itself. */
+      if (this.mode === "demo") return "Demo data — simulated readings you can still switch";
       if (this.stale) {
         var at = (e && e.okAt) || this.lastOkAt;
         return at ? "Not updating — last answered " + fmt.ago(at) : "Not updating";
@@ -573,7 +584,9 @@
 
       WP.qs("[data-sub]", panel).textContent = this.panelSub(e);
 
-      var chips = '<div class="chip-row" role="radiogroup" aria-label="Entity">'
+      /* cols3: nine entities on a wrapping row broke 4 + 4 + 1, leaving one chip alone
+         under a row of four. Three rows of three. */
+      var chips = '<div class="chip-row cols3" role="radiogroup" aria-label="Reading">'
         + this.ents.map(function (x) {
           var on = x.id === e.id;
           return '<button class="chip tappable' + (on ? " on" : "") + '"'
@@ -606,41 +619,42 @@
           + "</div>";
       }
 
-      /* One line, not a paragraph. The old note ran four lines of body copy ending in
-         "Set homeAssistant.enabled + token in assets/config.js" — a config recipe printed
-         on a wall. The same warm-bordered block now carries whichever of the two things is
-         true: this is a simulation, or this is real and it has stopped answering. */
+      /* The warm-bordered block is an ALERT, and only an alert: this feed is real and it
+         has stopped answering. It used to carry a permanent demo notice as well, which
+         both trained the eye to ignore the colour and argued with the subtitle (see
+         panelSub). In demo mode there is now nothing here. */
       var note = "";
-      if (this.mode === "demo") {
-        note = '<div class="demo-note">Simulated home &mdash; the switches really do '
-          + "change the readings.</div>";
-      } else if (e.err) {
+      if (e.err) {
         note = '<div class="demo-note">' + esc(this.entityNote(e))
           + (e.okAt ? ". It last answered " + esc(fmt.ago(e.okAt)) : "") + ".</div>";
       }
 
+      var freshAt = e.hist.length ? e.hist[e.hist.length - 1].t : 0;
+
       WP.repaint(body, chips + note
+        /* The line under the number used to be "Living room · sensor.living_room_temperature"
+           — the entity id, printed on a wall, and printed a second time in an ENTITY grid
+           below it where `overflow-wrap: anywhere` snapped it mid-word as
+           "sensor.living_room_te / mperature". An id is how the app finds the reading, not
+           anything the reader can use. It says how fresh the number is instead. */
         + hero(this.glyph(e),
                esc(this.display(e)) + ' <span class="dim">' + esc(unit) + "</span>",
-               esc(e.label) + " · " + esc(e.id),
+               esc(e.label) + (freshAt ? " · updated " + esc(fmt.ago(freshAt)) : ""),
                this.isOffish(e) ? "dim" : "")
         + control
+        /* "Samples 241" went with the ENTITY grid: it is the length of an internal array,
+           and it moves when the poll interval is reconfigured without anything in the room
+           having changed. Min / max / mean is the whole of what two hours of a number has
+           to say. */
         + section("Last 2 hours", WP.sparkline(vals, spark)
-            + statGrid(binary
-                ? [["State now", esc(this.display(e))],
-                   ["On", duty == null ? "--" : Math.round(duty * 100) + "% of window"],
-                   ["Off", duty == null ? "--" : Math.round((1 - duty) * 100) + "% of window"],
-                   ["Last change", changed ? esc(fmt.ago(changed)) : "over 2 h ago"]]
-                : [["Min", r(min) + " " + esc(unit)],
-                   ["Max", r(max) + " " + esc(unit)],
-                   ["Mean", r(avg) + " " + esc(unit)],
-                   ["Samples", String(e.hist.length)]]))
-        + section("Entity", statGrid([
-            ["Entity id", esc(e.id)],
-            ["Domain", esc(e.domain || String(e.id).split(".")[0])],
-            ["Source", this.mode === "demo" ? "simulator" : "Home Assistant"],
-            ["Updated", esc(fmt.ago(e.hist.length ? e.hist[e.hist.length - 1].t : Date.now()))]
-          ])));
+            + (binary
+                ? statGrid([["State now", esc(this.display(e))],
+                    ["On", duty == null ? "--" : Math.round(duty * 100) + "% of window"],
+                    ["Off", duty == null ? "--" : Math.round((1 - duty) * 100) + "% of window"],
+                    ["Last change", changed ? esc(fmt.ago(changed)) : "over 2 h ago"]])
+                : statGrid([["Lowest", r(min) + " " + esc(unit)],
+                    ["Highest", r(max) + " " + esc(unit)],
+                    ["Average", r(avg) + " " + esc(unit)]], 3))));
     }
   };
 

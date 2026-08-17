@@ -67,8 +67,18 @@ function liveApp(f) {
 }
 
 /* stepLive resolves on the host microtask queue, two thens deep behind a Promise.all. */
+/* The live path is Promise.all over one fetch per entity, and each of those resolves
+   through two `.then` hops before the widget repaints — so "settled" is several macrotask
+   turns away, not one. Two flushes was enough on an idle machine and was observed failing
+   once on a loaded one (`Not updating` had not yet replaced `Live` in the subtitle), which
+   is a flaky test rather than a flaky app. Four turns costs microseconds and removes the
+   race; it is still a bounded wait, not a sleep, so a genuinely stuck promise still fails
+   the assertion rather than hanging the suite. */
 function settle(app) {
-  return app.flush().then(function () { return app.flush(); });
+  return app.flush()
+    .then(function () { return app.flush(); })
+    .then(function () { return app.flush(); })
+    .then(function () { return app.flush(); });
 }
 
 function badge(app) { return app.$("ha-badge"); }

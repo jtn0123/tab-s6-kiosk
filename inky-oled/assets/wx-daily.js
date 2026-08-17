@@ -95,7 +95,25 @@
 
       var sunrise = new Date(day.sunrise[i]), sunset = new Date(day.sunset[i]);
 
-      /* hour-by-hour temperature bars for the selected day, straight from hourly[] */
+      /* hour-by-hour temperature bars for the selected day, straight from hourly[].
+
+         Rebuilt, because the old version was the worst-reading element in the app:
+
+           * It labelled a TIME axis with TEMPERATURES, one every three bars. Two adjacent
+             ticks both read 90° while the bar between them was visibly taller than either
+             — the labels were describing the bars they sat above, but they were positioned
+             like axis ticks, so they read as a scale that contradicted the chart.
+           * It had no time axis at all. There was markup for one, but the chart sat flush
+             against the panel footer and the hour row was clipped away underneath it.
+           * The bars were a solid accent fill covering ~6% of the screen — 54x the home
+             view, and the largest bright area in an app whose own stylesheet says to avoid
+             large bright fills on an OLED panel.
+
+         Now: the axis along the bottom is TIME, every three hours, and it is the only
+         repeating label. Temperature appears exactly twice, on the warmest and coldest
+         bars, where a number is an annotation of that bar rather than a scale. The fill is
+         dim with a bright cap (see .daybar-c in style.css), so the shape still reads from
+         across a room at a fraction of the lit area. */
       var barsHtml = '<div class="muted">no hourly detail for this day</div>';
       if (d.hourly && d.hourly.time) {
         var iso = day.time[i];
@@ -107,15 +125,18 @@
           var temps = idx.map(function (k) { return d.hourly.temperature_2m[k]; });
           var lo = Math.min.apply(null, temps), hi = Math.max.apply(null, temps);
           var span = (hi - lo) || 1;
+          var iHot = temps.indexOf(hi), iCold = temps.indexOf(lo);
           barsHtml = '<div class="daybars" role="img" aria-label="'
-            + esc("hourly temperature, " + fmt.deg(lo) + " to " + fmt.deg(hi)) + '">'
+            + esc("hourly temperature through the day, " + fmt.deg(lo) + " to " + fmt.deg(hi))
+            + '">'
             + idx.map(function (k, n) {
             var h = 14 + ((d.hourly.temperature_2m[k] - lo) / span) * 86;
-            var showLabel = (n % 3 === 0);
-            return '<div class="daybar">'
-              + '<div class="daybar-v">' + (showLabel ? fmt.deg(d.hourly.temperature_2m[k]) : "") + "</div>"
+            var peak = (n === iHot || n === iCold);
+            return '<div class="daybar' + (peak ? " peak" : "") + '">'
+              + '<div class="daybar-v">'
+                + (peak ? fmt.deg(d.hourly.temperature_2m[k]) : "") + "</div>"
               + '<div class="daybar-c"><div style="height:' + h.toFixed(1) + '%"></div></div>'
-              + '<div class="daybar-t">' + (showLabel
+              + '<div class="daybar-t">' + (n % 3 === 0
                   ? esc(fmt.hourLabel(new Date(d.hourly.time[k]))) : "") + "</div></div>";
           }).join("") + "</div>";
         }
@@ -127,6 +148,10 @@
                  + ' <span class="dim">/ ' + fmt.deg(day.temperature_2m_min[i]) + "</span>",
                esc(info.text))
 
+        /* Nine cells, three full rows. It was ten, which in a three-across grid left SUNSET
+           alone on a fourth row under a hairline stopping at a third of the width. Wind and
+           gusts are one fact about one day, so the gust figure moved onto the wind cell's
+           second line beside the direction it blows from. */
         + section("Day", statGrid([
             ["Feels high", fmt.deg(day.apparent_temperature_max[i])],
             ["Feels low", fmt.deg(day.apparent_temperature_min[i])],
@@ -134,8 +159,8 @@
             ["Precip total", (Math.round((day.precipitation_sum[i] || 0) * 100) / 100)
               + " " + fmt.precipUnit()],
             ["Max wind", Math.round(day.wind_speed_10m_max[i]) + " " + fmt.speedUnit(),
-              fmt.compass(day.wind_direction_10m_dominant[i])],
-            ["Max gusts", Math.round(day.wind_gusts_10m_max[i]) + " " + fmt.speedUnit()],
+              fmt.compass(day.wind_direction_10m_dominant[i]) + " · gusts "
+                + Math.round(day.wind_gusts_10m_max[i]) + " " + fmt.speedUnit()],
             ["UV max", String(fmt.uv(day.uv_index_max[i]).n), fmt.uv(day.uv_index_max[i]).label],
             ["Daylight", esc(fmt.duration(day.daylight_duration[i] * 1000))],
             ["Sunrise", esc(fmt.clock(sunrise, false))],

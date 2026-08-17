@@ -128,16 +128,21 @@ test("the open clock panel rebuilds once a minute and ticks its readout every se
 
 test("the clock panel's per-second work does not touch the world clocks", function () {
   /* Guards the split itself: if tickLight ever starts calling render() every second the
-     rebuild count above is the only thing standing between us and the old behaviour. */
+     rebuild count above is the only thing standing between us and the old behaviour.
+     CHANGED with the copy sweep: the per-second element used to be the epoch counter
+     ("Unix time 1786999387", removed as raw developer output). The big readout shows
+     seconds and is therefore the remaining thing that must move every second — which is a
+     better probe anyway, since it is the one a person is actually looking at. */
   var app = h.createApp({ now: Date.parse("2025-06-10T09:30:05") });
   app.WP.panels.open("clock");
   var body = app.panelBody("clock");
-  var epochBefore = app.$("clk-epoch").textContent;
+  assert.equal(app.qs("#clk-epoch"), null, "the epoch counter is back on the wall");
+  var bigBefore = app.$("clk-big").textContent;
   var rebuilds = countWrites([body], "innerHTML");
 
   app.advance(4000);
   assert.equal(rebuilds(), 0);
-  assert.notEqual(app.$("clk-epoch").textContent, epochBefore, "the epoch counter froze");
+  assert.notEqual(app.$("clk-big").textContent, bigBefore, "the seconds froze");
   app.WP.panels.closeAll();
 });
 

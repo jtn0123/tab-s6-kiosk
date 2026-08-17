@@ -177,7 +177,12 @@
 
       /* Scroll-preserving: tapping a row in the list must not throw the list back to the
          top, which is the whole reason picking an hour does not re-scroll. */
-      WP.repaint(body, readout + section("Next 24 hours — tap to inspect",
+      /* "Next 24 hours", not "Next 24 hours — tap to inspect". Every other small-caps
+         heading in the app names its section; this one was the only one carrying an
+         instruction, which made it read as a different KIND of thing at a glance and put
+         a sentence into a row of labels. The rows are buttons with a pressed state and a
+         selected row already highlighted — the affordance is the control, not a caption. */
+      WP.repaint(body, readout + section("Next 24 hours",
         '<div class="hrows">' + rows + "</div>"));
 
       /* Opening on hour 21 of 24 used to highlight a row 21 rows below the fold. Put the

@@ -351,7 +351,12 @@
         var pct = this.cd.duration ? (r / this.cd.duration) * 100 : 0;
         html += '<div class="big-readout' + (this.ringing ? " alarm-flash" : "") + '" id="tmr-box">'
           + '<div class="big-time mono" id="tmr-disp">' + fmt.countdown(r) + "</div>"
-          + '<div class="bar" role="img" aria-label="time remaining"><div class="bar-fill accent"'
+          /* A full accent bar on an untouched timer read as "finished", not as "ready":
+             a progress bar at 100% means done everywhere else on a screen. It stays full —
+             all the time IS remaining — but it is only lit once the countdown has actually
+             been started, so full-and-grey is armed and full-and-blue is running. */
+          + '<div class="bar" role="img" aria-label="time remaining"><div class="bar-fill'
+          + (this.cd.running || r < this.cd.duration ? " accent" : "") + '"'
           + ' id="tmr-bar" style="width:' + pct.toFixed(1) + '%"></div></div></div>'
           + '<div class="btn-row">'
           + btn("cd-toggle", this.cd.running ? "Pause" : "Start",
@@ -363,7 +368,8 @@
           /* Chips, not buttons: a preset is a *choice*, so the one currently loaded is
              highlighted the same way every other segmented control in the app is.
              +1/-1 min moves the duration off every preset, and then none is lit. */
-          + section("Presets", '<div class="chip-row">'
+          /* cols4: eight presets on a wrapping row broke 6 + 2. Two rows of four. */
+          + section("Presets", '<div class="chip-row cols4">'
               + [1, 3, 5, 10, 15, 20, 30, 60].map(function (m) {
                   var on = self.cd.duration === m * 60000;
                   return '<button class="chip tappable' + (on ? " on" : "") + '"'

@@ -264,8 +264,15 @@ window.WP = (function () {
       - (kids[kids.length - 1].getBoundingClientRect().bottom
          - hv.getBoundingClientRect().top));
     kids.forEach(function (n) { n.style.flexGrow = ""; });
+    /* Both axes. The vertical one was measured from the first round because the column is
+       a height budget; the horizontal one went unchecked for five, and in 24-hour mode the
+       hourly strip was clipping an eighth chip through the middle of a glyph at the card's
+       right edge — "20:00" rendered as a sheared "2". Anything that leaves the frame
+       sideways is as broken as anything that leaves it downwards, and #home never scrolls
+       horizontally (the strip has its own scroller), so this must be 0. */
     return { el: hv, kids: kids, nat: nat, slack: slack,
-             overflow: hv.scrollHeight - hv.clientHeight };
+             overflow: hv.scrollHeight - hv.clientHeight,
+             overflowX: hv.scrollWidth - hv.clientWidth };
   }
 
   /* Until the cards have their content, their intrinsic height is not their real one, and a
@@ -828,6 +835,13 @@ window.WP = (function () {
       var today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       return Math.round((today0 - soy) / 86400000) + 1;
     },
+    /* Only ever used to give dayOfYear a denominator — "161 of 365" is a fact, "161" on
+       its own is a number nobody can place. Same calendar-not-clock arithmetic as above:
+       counted in whole days, never in milliseconds, so a DST boundary cannot move it. */
+    daysInYear: function (d) {
+      var y = d.getFullYear();
+      return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 366 : 365;
+    },
     /* ISO-8601 week: Thursday of this week decides which year's week 1 we are counting from. */
     isoWeek: function (d) {
       var t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -921,6 +935,7 @@ window.WP = (function () {
       var m = homeMetrics();
       if (!m) return;
       console.log("[inky] layout: home overflow=" + m.overflow
+        + " overflowX=" + m.overflowX
         + " slack=" + m.slack + "px cards=" + m.kids.length);
       layoutReady = true;
       relayoutHome();
@@ -935,9 +950,11 @@ window.WP = (function () {
       setTimeout(function () {
         var m = homeMetrics();
         if (!m) return;
-        var line = "[inky] layout: home overflow=" + m.overflow + " slack=" + m.slack
+        var line = "[inky] layout: home overflow=" + m.overflow
+          + " overflowX=" + m.overflowX + " slack=" + m.slack
           + "px cards=" + m.kids.length;
         if (m.overflow > 0) console.warn(line + " — OVERFLOW, bottom row is clipped");
+        else if (m.overflowX > 0) console.warn(line + " — OVERFLOW, content runs off the right");
         else console.log(line);
         relayoutHome();
       }, 1500);

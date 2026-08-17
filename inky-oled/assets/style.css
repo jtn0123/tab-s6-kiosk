@@ -55,9 +55,33 @@
   --fs-display-xl: 10.5vh;   /* the stopwatch — the entire point of its own screen */
 
   /* One recipe for every letter-spaced small-caps label, so a section heading looks the
-     same in Conditions as it does in Settings (see the label block further down). */
+     same in Conditions as it does in Settings (see the label block further down).
+     These two are the whole small-caps look. A mutation that set the tracking to 0 and the
+     weight to 900 survived the test suite: the recipe test asserted that .psec-t and
+     friends REFERENCE var(--label-track), never what the token contains, so every label in
+     the app could turn into bold squashed capitals with the suite still green. The values
+     are pinned as ranges in design-system.test.js now. */
   --label-track:  0.16em;
   --label-weight: 500;
+
+  /* ---------------- control padding ----------------
+     The type ramp's counterpart for the things a finger aims at. Five steps, and every
+     `.tappable` in the app takes its vertical padding from one of them.
+
+     Why a scale and not per-control values: the touch-target test can only enforce a
+     FLOOR, and the floor has about 2x slack on most controls — a mutation that cut a
+     settings row's padding by 76% (1.7vh -> 0.4vh), wrecking the rhythm of the whole
+     panel, still cleared 88 device px and passed. A control that is off the scale is now
+     the failure, which is a property about the design rather than about the minimum.
+
+     The steps are named for the ROLE, because that is what decides the value: a chip in a
+     gapped grid is separated by the gap and needs little of its own; a row in a flush,
+     hairline-divided list has nothing but its padding between it and the next target. */
+  --pad-chip:    0.5vh;   /* .hr, .fc-day, .sensor — gapped strips and grids */
+  --pad-inline:  0.75vh;  /* .link-btn, .card — a control inside another control's line */
+  --pad-tile:    0.9vh;   /* .card.mini — the three home tiles */
+  --pad-row:     1.3vh;   /* .hrow, .lap, .chip — a row in a flush list */
+  --pad-control: 1.8vh;   /* .btn, .seg-b, .srow, .wide-btn — a control on its own line */
 
   /* ---------------- motion ----------------
      Three durations, one easing. Nothing in the app animates on a number that is not one
@@ -71,14 +95,26 @@
   --dur-ui:     0.2s;    /* panels, switch knobs, badges, bars */
   --dur-fill:   0.3s;    /* a progress bar sweeping to a new width reads better slightly slower */
   --dur-drift:  4s;      /* burn-in nudge: long enough that a 12px step is never seen moving */
+  /* The one repeating animation in the app: the slow breath on an alert. It was authored
+     as a literal `1s` in three places, and the motion test only ever read `transition:`
+     declarations — so the sentence three lines above ("nothing in the app animates on a
+     number that is not one of these") was simply false, and a mutation that moved it to
+     3.7s passed. It is a token now and the test reads `animation:` too. */
+  --dur-pulse:  1s;      /* the alert breath — slow enough to read as breathing, not blinking */
 
   /* The home column is a fixed budget: 100vh has to hold 8 widgets with nothing clipped.
      Sizes below were measured off real 1600x2560 screenshots — if you grow one card,
      take the height back out of another.
-     Measured on device with all 8 visible: natural content 1044 CSS px against a 1068 px
-     column, i.e. ~24 px of slack. That slack is deliberate and must not be spent — a
-     downward burn-in nudge is up to 12 px and eats half of it, and #home is the only
-     thing standing between a nudge and the bottom tile row falling off the frame.
+     Measured on device with all 8 visible: overflow=0 overflowX=0 slack=17 device px,
+     identical across all four 12h/24h x seconds combinations (the boot log carries the
+     numbers; see homeMetrics in app.js). It was 34 px before the Now card's bare grey
+     chevron became the same labelled "Details >" button its three neighbours use — that
+     button is a touch target and so is 0.8vh taller than the glyph it replaced, and the
+     consistency is worth the pixels. That slack is deliberate and must not be spent — a
+     downward burn-in nudge is up to 12 px, and #home is the only thing standing between a
+     nudge and the bottom tile row falling off the frame. Verified on device across five
+     drift samples: the ink block translates rigidly and the lowest ink sat at y=2525 of a
+     2560 px frame at its lowest.
      Because every card carries flex-grow, the slack is handed back to the cards as extra
      internal breathing room, so trimming intrinsic padding above costs nothing visually. */
   --gap: 0.8vh;
@@ -215,7 +251,7 @@ button {
   border-radius: 1.5vh;
   /* intrinsic padding is deliberately tight; flex-grow pads it back out to fill the
      column, which is what keeps ~24 px of slack in the budget without looking cramped */
-  padding: 0.75vh 2.2vw;
+  padding: var(--pad-inline) 2.2vw;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -253,12 +289,11 @@ button {
   gap: 1.6vw;
   margin-bottom: 0.5vh;
 }
-.chev { margin-left: auto; color: var(--dimmer); font-size: var(--fs-title-sm); line-height: 1; }
 .link-btn {
   margin-left: auto;
   font-size: var(--fs-note);
   color: var(--accent);
-  padding: 0.75vh 1.6vw;   /* ~3.9vh tall = 89 device px */
+  padding: var(--pad-inline) 1.6vw;   /* ~3.9vh tall = 95 device px */
   border-radius: 0.9vh;
   border: 1px solid var(--card-line2);
 }
@@ -322,7 +357,18 @@ button {
 
 /* ---------- 3. weather now ---------- */
 .wx-main { display: flex; align-items: center; gap: 2.4vw; }
-.wx-icon { font-size: var(--fs-hero); line-height: 1; flex: 0 0 auto; }
+/* The glyph is vertically centred against the whole TEXT BLOCK — the big temperature plus
+   the condition line under it — which is geometrically right and optically wrong: the eye
+   pairs the glyph with the number, and it was measured sitting 19 device px below the
+   digits' optical centre. Nudged back onto the digits with a transform, so nothing about
+   the row's layout or its height budget changes. Same correction, same amount, on the
+   panel heroes (.big-readout.hero .big-icon), because they are the same object magnified. */
+.wx-icon {
+  font-size: var(--fs-hero);
+  line-height: 1;
+  flex: 0 0 auto;
+  transform: translateY(-0.75vh);
+}
 .wx-block { flex: 0 0 auto; }
 .wx-temp {
   font-size: var(--fs-hero);
@@ -343,7 +389,15 @@ button {
 .wxq-v { color: var(--fg); font-variant-numeric: tabular-nums; }
 .wx-meta { font-size: var(--fs-label); letter-spacing: 0.02em; color: var(--dimmer); margin-top: 0.6vh; }
 
-/* ---------- 4. hourly strip ---------- */
+/* ---------- 4. hourly strip ----------
+   A horizontal scroller always cuts its last chip somewhere; the only question is whether
+   the cut reads as "there is more this way" or as "this is broken". It read as broken: in
+   24-hour mode the eighth chip was sliced through the middle of a digit at the card's
+   right edge, so 20:00 rendered as a sheared "2" hard against the border. (12-hour mode
+   happened to land cleanly on "7 P" and so hid it.) The mask dissolves the last 4vw
+   instead of guillotining it, which is the whole convention for "this list continues".
+   A mask rather than the gradient overlay used on the panel edges, because a chip may be
+   mid-scroll under it and the .hr.now background is not --bg. */
 .hstrip {
   display: flex;
   gap: 1.1vw;
@@ -351,6 +405,8 @@ button {
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 0.4vh;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 4vw), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 4vw), transparent 100%);
 }
 .hr {
   flex: 0 0 auto;
@@ -360,7 +416,7 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 0.2vh;
-  padding: 0.6vh 0.5vw;
+  padding: var(--pad-chip) 0.5vw;
   border-radius: 1vh;
   border: 1px solid transparent;
 }
@@ -379,7 +435,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.2vh;
-  padding: 0.6vh 0.3vw;
+  padding: var(--pad-chip) 0.3vw;
   border-radius: 1vh;
 }
 .fc-icon { font-size: var(--fs-body-lg); line-height: 1.1; }
@@ -397,7 +453,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 0.1vh;
-  padding: 0.5vh 0.8vw;
+  padding: var(--pad-chip) 0.8vw;
   border-radius: 1vh;
   border: 1px solid transparent;
   min-width: 0;
@@ -457,7 +513,7 @@ button {
 
 /* ---------- 7/2/8. mini tiles ---------- */
 .row3 { flex: 0 0 auto; display: flex; gap: 2vw; }
-.card.mini { flex: 1 1 0; padding: 0.9vh 1.4vw; align-items: flex-start; }
+.card.mini { flex: 1 1 0; padding: var(--pad-tile) 1.4vw; align-items: flex-start; }
 .mini-head { line-height: 1.2; }
 /* D8 — the three tiles are one object repeated, so their three lines are pinned rather than
    left to whatever each happens to contain. The value line carries a percentage, a clock and
@@ -475,7 +531,7 @@ button {
   font-variant-numeric: tabular-nums;
 }
 .mini-big.glyph { font-size: calc(var(--fs-title-sm) * 1.12); line-height: 1; }
-.mini-big.alert { color: var(--danger); animation: pulse 1s infinite; }
+.mini-big.alert { color: var(--danger); animation: pulse var(--dur-pulse) infinite; }
 .mini-sub {
   font-size: var(--fs-caption);
   color: var(--dim);
@@ -548,13 +604,40 @@ button {
   justify-content: center;
 }
 
+/* The scrollport sits between two hairline dividers and its content passes under both.
+   Untreated, a row caught mid-scroll is chopped straight through the glyphs by an
+   unrelated 1px line, and content cut off mid-glyph reads as broken rather than as
+   scrolled. Two measured cases: the hourly list shearing under the header, and the Device
+   panel opening with a row of stat values bisected by the footer.
+
+   The bottom padding is a whole line taller than the top, so the last row of a panel that
+   only just fits stops short of the footer instead of sitting on it. The fades themselves
+   are on the head and foot below — as overlays rather than as a mask on this element,
+   because a mask here would also wash out the timer's sticky control block. */
 .panel-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 1.6vh 3vw 2vh;
+  padding: 1.6vh 3vw 3.4vh;
   -webkit-overflow-scrolling: touch;
 }
+
+/* Black-to-transparent overlays hanging off each divider, so whatever crosses it
+   dissolves. This works as a mask would ONLY because the background is a true #000 —
+   which it is, deliberately, on an OLED panel — so it is written against --bg rather than
+   against a literal, and a lightened theme would need a real mask instead.
+   pointer-events:none: these sit over the scrollport and must not eat a drag. */
+.panel-head, .panel-foot { position: relative; z-index: 4; }
+.panel-head::after, .panel-foot::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2vh;
+  pointer-events: none;
+}
+.panel-head::after { top: 100%; background: linear-gradient(to bottom, var(--bg), transparent); }
+.panel-foot::before { bottom: 100%; background: linear-gradient(to top, var(--bg), transparent); }
 
 /* Control block pinned under the panel header while only the list below it scrolls.
    Past ~9 laps the stopwatch readout and the Lap button used to scroll off the top, so
@@ -576,7 +659,7 @@ button {
 .wide-btn {
   display: block;
   width: 100%;
-  padding: 1.8vh 0;
+  padding: var(--pad-control) 0;
   text-align: center;
   font-size: var(--fs-body-lg);
   color: var(--accent);
@@ -616,7 +699,11 @@ button {
   text-align: left;
   padding: 1vh 0 1.4vh;
 }
-.big-readout.hero .big-icon { flex: 0 0 auto; font-size: var(--fs-hero); }
+.big-readout.hero .big-icon {
+  flex: 0 0 auto;
+  font-size: var(--fs-hero);
+  transform: translateY(-0.75vh);   /* see .wx-icon — optical, not geometric, centring */
+}
 .big-readout.hero .big-time { font-size: var(--fs-display); }
 .hero-text { min-width: 0; }
 
@@ -677,7 +764,7 @@ button {
 .btn {
   flex: 1 1 auto;
   min-width: 18vw;
-  padding: 1.9vh 1.6vw;
+  padding: var(--pad-control) 1.6vw;
   text-align: center;
   font-size: var(--fs-body-lg);
   border: 1px solid var(--card-line2);
@@ -689,12 +776,27 @@ button {
 .btn.off     { color: var(--dimmer); }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 1.2vw 1.2vw; }
+/* A wrapping flex row breaks wherever the text happens to run out, which for the nine
+   Home Assistant entities meant 4 + 4 + 1 and for the eight timer presets 6 + 2 — a last
+   row holding one or two items under a row of eight reads as something that failed to
+   finish rather than as a deliberate grid. Where the count is known and fixed, the row
+   becomes a grid and the break is chosen instead of discovered. */
+.chip-row.cols3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+.chip-row.cols4 { display: grid; grid-template-columns: repeat(4, 1fr); }
+.chip-row.cols3 .chip, .chip-row.cols4 .chip {
+  flex: initial;
+  min-width: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .chip {
   flex: 0 0 auto;
   /* 1.9vw of side padding, not 2.2: the ramp moved chips a step up in size, and the nine
      Home Assistant entity chips spilled onto a third row. Height is untouched — the row is
      5.4vh ≈ 138 device px, comfortably over the 88 px minimum. */
-  padding: 1.4vh 1.9vw;
+  padding: var(--pad-row) 1.9vw;
   font-size: var(--fs-body);
   border: 1px solid var(--card-line2);
   border-radius: 1.2vh;
@@ -710,7 +812,7 @@ button {
 .seg { display: flex; gap: 1.2vw; }
 .seg-b {
   flex: 1 1 0;
-  padding: 1.8vh 1vw;
+  padding: var(--pad-control) 1vw;
   text-align: center;
   font-size: var(--fs-body-lg);
   color: var(--dim);
@@ -730,7 +832,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 3vw;
-  padding: 1.7vh 1vw;
+  padding: var(--pad-control) 1vw;
   border-bottom: 1px solid var(--card-line);
   border-radius: 0.8vh;
   width: 100%;
@@ -791,7 +893,7 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 3vw;
-  padding: 1.2vh 0.5vw;
+  padding: var(--pad-row) 0.5vw;
   border-bottom: 1px solid var(--card-line);
   font-size: var(--fs-body-lg);
 }
@@ -805,31 +907,66 @@ button {
   display: flex;
   align-items: center;
   gap: 2vw;
-  padding: 1.25vh 1vw;
+  padding: var(--pad-row) 1vw;
   border-bottom: 1px solid var(--card-line);
   border-radius: 0.8vh;
 }
 .hrow.sel { background: rgba(109, 179, 242, 0.1); }
 .hrow-t { flex: 0 0 12vw; font-size: var(--fs-body); color: var(--dim); font-variant-numeric: tabular-nums; }
-.hrow-i { flex: 0 0 auto; font-size: var(--fs-title-sm); }
+/* A FIXED basis, like every other column in this row. It was `flex: 0 0 auto`, so the
+   glyph column was as wide as whatever glyph happened to be in it — and a sun, a moon and
+   a cloud are not the same width. The bars beside them therefore started at three
+   different x positions (measured: 356 / 382 / 391 device px, a 35 px swing) purely
+   according to the weather. A bar chart's baseline cannot move per row: that is the one
+   thing a bar chart is. Centred, because the glyph no longer fills its column. */
+.hrow-i {
+  flex: 0 0 7vw;
+  text-align: center;
+  font-size: var(--fs-title-sm);
+}
 .hrow-bar { flex: 1 1 auto; height: 0.9vh; background: #151515; border-radius: 0.5vh; overflow: hidden; }
 .hrow-bar span { display: block; height: 100%; background: var(--accent); opacity: .55; }
 .hrow-d { flex: 0 0 11vw; text-align: right; font-size: var(--fs-body-lg); font-variant-numeric: tabular-nums; }
 .hrow-p { flex: 0 0 10vw; text-align: right; font-size: var(--fs-note); color: var(--dimmer); }
 .hrow-p.wet { color: var(--accent); }
 
-/* daily panel hour bars */
+/* daily panel hour bars — see the block comment in wx-daily.js paintPanel().
+   The chart's two jobs on a wall are "when is it warm" and "how warm"; it does not need to
+   be lit to do either. A 24-column solid accent fill measured 5.97% accent coverage, 54x
+   the home screen and the largest bright area anywhere in the app, on an OLED panel whose
+   stylesheet header says in as many words to avoid large bright fills. Same silhouette,
+   roughly a tenth of the lit pixels: a dim column with a bright 0.35vh cap, which is what
+   the eye traces anyway. */
 .daybars {
   display: flex;
   gap: 0.5vw;
   align-items: flex-end;
   height: 22vh;
   overflow-x: auto;
+  /* the bottom row is the TIME AXIS and it is the point of the chart; the panel body's
+     own bottom padding is what stops the footer cutting through it */
+  padding-bottom: 0.2vh;
 }
 .daybar { flex: 1 0 3.4vw; display: flex; flex-direction: column; height: 100%; }
-.daybar-v { font-size: var(--fs-caption); color: var(--dim); text-align: center; height: 2vh; }
+.daybar-v {
+  font-size: var(--fs-caption);
+  color: var(--dim);
+  text-align: center;
+  height: 2vh;
+  font-variant-numeric: tabular-nums;
+}
 .daybar-c { flex: 1 1 auto; display: flex; align-items: flex-end; }
-.daybar-c div { width: 100%; background: var(--accent); opacity: .5; border-radius: 0.4vh 0.4vh 0 0; }
+.daybar-c div {
+  width: 100%;
+  background: linear-gradient(to bottom,
+    var(--accent) 0, var(--accent) 0.35vh, rgba(109, 179, 242, 0.16) 0.35vh);
+  border-radius: 0.4vh 0.4vh 0 0;
+}
+/* the warmest and coldest hours carry their number, and their cap is at full strength so
+   the annotation and the bar it belongs to are obviously the same object */
+.daybar.peak .daybar-v { color: var(--fg); }
+.daybar.peak .daybar-c div { background: linear-gradient(to bottom,
+    var(--accent) 0, var(--accent) 0.35vh, rgba(109, 179, 242, 0.3) 0.35vh); }
 .daybar-t { text-align: center; height: 2vh; }
 
 /* world clocks */
@@ -840,6 +977,28 @@ button {
 
 /* sparkline */
 .spark { width: 100%; height: 10vh; display: block; }
+
+/* The Home Assistant panel's whole subject is one reading and how it has moved, and the
+   ENTITY grid that used to fill its lower third was the entity id printed a second time
+   beside its domain and a sample count — machine text, now gone (see the copy sweep).
+   Removing it left about a third of the panel empty, and at 2-4 m a large dead region
+   reads as "this failed to load", which is exactly the fault D2 called out on the Timer.
+   So the trace the panel exists for takes the space instead: the last section grows, and
+   the sparkline grows inside it. preserveAspectRatio="none" on the SVG means it simply
+   stretches. A toggle entity carries an extra button row and a four-cell grid, and the
+   min-height is what keeps its chart honest when there is less room to give away. */
+.panel[data-panel="sensors"] .panel-body { display: flex; flex-direction: column; }
+.panel[data-panel="sensors"] .psec:last-child {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.panel[data-panel="sensors"] .psec:last-child .spark {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 10vh;
+}
 .spark-line { fill: none; stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
 .spark-fill { fill: rgba(109, 179, 242, 0.13); stroke: none; }
 .spark-empty { font-size: var(--fs-note); color: var(--dimmer); padding: 2vh 0; }
@@ -914,10 +1073,10 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   font-size: var(--fs-hero);
   font-weight: 300;
   color: var(--danger);
-  animation: pulse 1s infinite;
+  animation: pulse var(--dur-pulse) infinite;
 }
 .alarm-sub { font-size: var(--fs-body-lg); color: var(--dim); margin: 1.4vh 0 3vh; }
-.alarm-flash { animation: pulse 1s infinite; }
+.alarm-flash { animation: pulse var(--dur-pulse) infinite; }
 
 /* ============================================================================
    LANDSCAPE FALLBACK

@@ -14,13 +14,17 @@ var h = require("./lib/harness.js");
 var CARD_H = 150;
 var VIEW_H = 1000;
 
+var VIEW_W = 800;
+
 /* Give #home and its children a believable layout. */
 function layout(app, opts) {
   opts = opts || {};
   var home = app.$("home");
   home.clientHeight = VIEW_H;
   home.scrollHeight = opts.scrollHeight == null ? VIEW_H : opts.scrollHeight;
-  home.setRect({ left: 0, top: 0, right: 800, bottom: VIEW_H });
+  home.clientWidth = VIEW_W;
+  home.scrollWidth = opts.scrollWidth == null ? VIEW_W : opts.scrollWidth;
+  home.setRect({ left: 0, top: 0, right: VIEW_W, bottom: VIEW_H });
 
   var kids = app.qsa("#home > *").filter(function (n) { return n.id !== "empty"; });
   var y = 0;
@@ -66,7 +70,7 @@ test("the layout report is logged once the cards have their content", function (
   app.advance(12500);                       // the deferred boot measurement
   var line = app.logs.log.filter(function (l) { return l.indexOf("[inky] layout:") === 0; })[0];
   assert.ok(line, "no layout line was logged");
-  assert.match(line, /home overflow=0 slack=100px cards=6/);
+  assert.match(line, /home overflow=0 overflowX=0 slack=100px cards=6/);
 });
 
 test("overflow is escalated to a warning, not logged as if it were fine", function () {
@@ -79,6 +83,31 @@ test("overflow is escalated to a warning, not logged as if it were fine", functi
   var warn = app.logs.warn.filter(function (l) { return l.indexOf("[inky] layout:") === 0; })[0];
   assert.ok(warn, "an overflowing column was not warned about");
   assert.match(warn, /overflow=40 .*OVERFLOW, bottom row is clipped/);
+});
+
+test("the report measures the horizontal axis too, and warns on it", function () {
+  /* The assertion covered the vertical axis only for five rounds, and for five rounds the
+     hourly strip clipped a chip through the middle of a glyph at the card's right edge in
+     24-hour mode. #home itself must never scroll sideways: a card that runs off the right
+     is as clipped as one that runs off the bottom, and there is no scrollbar and nobody
+     standing there to swipe it. */
+  var app = h.createApp({});
+  layout(app, { scrollWidth: VIEW_W + 17 });
+  app.WP.settings.set("clockHours", 24);
+  app.advance(2000);
+  var warn = app.logs.warn.filter(function (l) { return l.indexOf("[inky] layout:") === 0; })[0];
+  assert.ok(warn, "content running off the right edge was not warned about");
+  assert.match(warn, /overflowX=17 .*OVERFLOW, content runs off the right/);
+
+  /* and a clean frame stays clean in the same mode */
+  var ok = h.createApp({});
+  layout(ok);
+  ok.WP.settings.set("clockHours", 24);
+  ok.advance(2000);
+  assert.deepEqual(ok.logs.warn, []);
+  assert.match(ok.logs.log.filter(function (l) {
+    return l.indexOf("[inky] layout:") === 0;
+  }).pop(), /overflow=0 overflowX=0/);
 });
 
 test("a surviving card may grow to at most 1.3x its intrinsic height", function () {

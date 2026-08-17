@@ -89,11 +89,17 @@ test("the clock panel renders the same day-of-year the formatter computes", func
   var vals = body.querySelectorAll(".stat-v").map(function (n) { return n.textContent; });
   var i = keys.indexOf("Day of year");
   assert.ok(i >= 0, "clock panel has no Day of year stat");
-  assert.equal(vals[i], "229");
+  /* CHANGED with the copy sweep: the cell is "229 of 366" rather than a bare "229". A
+     day-of-year with no denominator is a number nobody can place, and the denominator is
+     itself worth pinning — 2024 is a leap year, so a daysInYear() that ignored the leap
+     rule would say 365 here. */
+  assert.equal(vals[i], "229 of 366");
   /* A literal, like the day-of-year above it. Asserting against fmt.isoWeek(...) — the very
      function that produced the number on screen — only proved the panel called something;
      it agreed with itself no matter how wrong isoWeek got. 2024-08-16 is a Friday in ISO
-     week 33 (that week runs Mon 12th to Sun 18th August 2024). */
-  assert.equal(vals[keys.indexOf("ISO week")], "33");
+     week 33 (that week runs Mon 12th to Sun 18th August 2024).
+     The label lost the "ISO": the standard's name is for whoever implements the arithmetic,
+     not for whoever reads the wall. */
+  assert.equal(vals[keys.indexOf("Week")], "Week 33");
   app.WP.panels.closeAll();
 });

@@ -78,14 +78,68 @@ test("the 24-hour strip window starts at the current hour and never runs off the
   assert.equal(short[short.length - 1], 13);
 });
 
-/* ---------------- the Now / NOW desync ---------------- */
+/* ---------------- the Now / NOW desync ----------------
+
+   Two causes, both live at once, and only the first was ever fixed:
+
+     1. STALENESS. The strip re-anchors on the hour off its own 15 s tick while the card
+        waited for the next scheduled fetch, so for up to 15 minutes the card held the
+        previous hour. Fixed by checkRollover(), covered below.
+     2. SOURCE OF TRUTH. Open-Meteo's `current` is interpolated to the minute; hourly[i] is
+        the top of the hour. They legitimately differ, so no refetch cadence can reconcile
+        a card fed from one with a strip fed from the other. Fixed by making hourly[] the
+        panel's single source — see the block comment on weather.nowReading().
+
+   The old test could only ever see (1), because the fixture handed `current` the hourly
+   bucket's own value. wx-fixture now skews them apart the way the API does. */
+
+/* The fixture's premise, asserted rather than assumed. If somebody ever pins `current`
+   back to its hourly bucket, every agreement test below becomes a tautology again and
+   this is the line that says so. */
+test("the fixture's `current` block really does disagree with its hourly bucket", function () {
+  var now = at(2025, 5, 10, 9, 30);
+  var d = wx.build({ now: now });
+  assert.notEqual(d.current.temperature_2m, d.hourly.temperature_2m[9],
+    "current === hourly[now] makes every Now/NOW assertion unfalsifiable");
+  assert.notEqual(d.current.apparent_temperature, d.hourly.apparent_temperature[9]);
+  assert.equal(d.current.temperature_2m, wx.tempAt(9) + wx.CURRENT_SKEW);
+});
+
+test("REGRESSION: every 'now' number on the wall is drawn from hourly[nowIndex]", function () {
+  /* The invariant, stated as a value and not as an equality between two readouts: the
+     card, the strip chip, the panel hero and both "feels" readouts must all be the HOURLY
+     bucket. Asserting only card===chip would still pass if both were switched to
+     `current`; asserting the value is what pins the decision. */
+  var now = at(2025, 5, 10, 9, 30);
+  var app = h.createApp({ now: now, fetch: wx.serve() });
+
+  return app.flush().then(function () {
+    var hourly = wx.tempAt(9) + "°", feels = wx.feelsAt(9) + "°";
+    var interpolated = (wx.tempAt(9) + wx.CURRENT_SKEW) + "°";
+    assert.notEqual(hourly, interpolated, "the fixture stopped skewing the two apart");
+
+    assert.equal(app.text("wx-temp"), hourly, "the Now card is reading `current`");
+    assert.equal(nowChip(app), hourly, "the NOW chip is not the hourly bucket");
+    assert.equal(quick(app, "Feels"), feels, "the card's Feels is reading `current`");
+
+    /* the Conditions panel is the magnification of that card */
+    app.WP.panels.open("weather");
+    var body = app.panelBody("weather");
+    assert.equal(body.querySelector(".big-time").textContent, hourly);
+    assert.match(body.querySelector(".big-sub").textContent, /feels 67°$/);
+    assert.equal(body.querySelector(".big-sub").textContent.slice(-feels.length), feels,
+      "the panel's feels-like is reading `current`");
+    app.WP.panels.close();
+
+    /* and the hourly panel's own hero, for the same hour */
+    app.WP.panels.open("hourly");
+    assert.equal(app.panelBody("hourly").querySelector(".big-time").textContent, hourly);
+    app.WP.panels.close();
+  });
+});
 
 test("REGRESSION: the Now card and the NOW chip agree across an hour rollover", function () {
-  /* Observed live: "65°" on the Now card beside "NOW 66°" in the strip. The strip
-     re-anchors itself the moment the wall clock crosses into a new hour (its own 15 s tick
-     watches nowIndex), but the big Now temperature only changes when a fetch lands, so
-     between a rollover and the next scheduled fetch — up to 15 minutes — the two cards
-     showed two different current temperatures for the same instant. */
+  /* Cause (1). Observed live: "65°" on the Now card beside "NOW 66°" in the strip. */
   var start = at(2025, 5, 10, 6, 59, 30) + 30000;   // 06:59:30
   var app = h.createApp({ now: start, fetch: wx.serve() });
 
@@ -100,7 +154,25 @@ test("REGRESSION: the Now card and the NOW chip agree across an hour rollover", 
       assert.equal(nowChip(app), wx.tempAt(7) + "°", "the strip did not re-anchor");
       assert.equal(app.text("wx-temp"), nowChip(app),
         "the Now card is still showing the previous hour's temperature");
+      assert.equal(quick(app, "Feels"), wx.feelsAt(7) + "°",
+        "the feels-like readout did not follow the rollover");
     });
+  });
+});
+
+test("an offline panel still agrees with itself", function () {
+  /* The case a refetch cannot reach at all: no network, a cached payload from an hour ago,
+     so `current` is an hour old while hourly[] still covers the hour we are inside. This
+     is where sourcing the card from `current` was guaranteed to disagree with the strip,
+     every time, for as long as the wifi stayed down. */
+  var now = at(2025, 5, 10, 9, 30);
+  var cached = { t: now - 3600000, u: "fahrenheit", d: wx.build({ now: now - 3600000 }) };
+  var app = h.createApp({ now: now, storage: { "inky.wx.v2": JSON.stringify(cached) } });
+  return app.flush().then(function () {
+    assert.equal(app.$("wx-badge").hidden, false, "an offline panel must badge its data");
+    assert.equal(app.text("wx-temp"), nowChip(app));
+    assert.equal(app.text("wx-temp"), wx.tempAt(9) + "°",
+      "the hour we are inside, from the payload we have");
   });
 });
 
@@ -109,6 +181,15 @@ function nowChip(app) {
   assert.ok(chip, "the strip has no NOW chip");
   assert.equal(chip.querySelector(".hr-t").textContent, "Now");
   return chip.querySelector(".hr-d").textContent;
+}
+
+/* the value beside a key in the home card's three-line quick block */
+function quick(app, key) {
+  var hit = app.qsa("#wx-quick .wxq").filter(function (n) {
+    return n.querySelector(".wxq-k").textContent === key;
+  })[0];
+  assert.ok(hit, "the Now card has no " + key + " readout");
+  return hit.querySelector(".wxq-v").textContent;
 }
 
 test("checkRollover refetches once per hour and never on the boot pass", function () {
@@ -172,7 +253,13 @@ test("a failed fetch keeps the last reading on screen and badges it", function (
   });
   return app.flush().then(function () {
     assert.equal(app.$("wx-badge").hidden, false, "an offline panel must badge its data");
-    assert.equal(app.text("wx-temp"), wx.tempAt(8) + "°", "the cached reading stays up");
+    /* CHANGED with the source-of-truth decision (see nowReading): this used to assert
+       tempAt(8) — the hour the cached payload was FETCHED in, because the card read
+       `current`. That is precisely the desync: the strip's NOW chip was already showing
+       hourly[9] beside it. The cached payload covers hour 9 too, so the card now shows
+       hour 9 and the two agree. The stale badge is what says the data is old; two
+       different temperatures for one instant is not. */
+    assert.equal(app.text("wx-temp"), wx.tempAt(9) + "°", "the cached reading stays up");
     assert.match(app.text("status"), /Offline/);
     assert.deepEqual(app.logs.error, []);
   });

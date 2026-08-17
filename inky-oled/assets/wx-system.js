@@ -128,52 +128,61 @@
              esc(b.status || "") + (b.plugged ? " · " + esc(b.plugged) : ""))
         + bar(b.level || 0, b.charging ? "accent" : (b.level < 20 ? "danger" : ""), "battery")
 
+        /* Four cells, down from eight. The four that went were all the hero again in other
+           words: LEVEL restated the 74% two lines up, CHARGING: No restated
+           STATUS: Discharging, and PLUGGED: not plugged restated both. A grid whose first
+           row tells you nothing you have not already read is a grid nobody reads. What is
+           left is the four things the hero cannot say, and where the battery is plugged in
+           when it actually is. */
         + section("Battery", statGrid([
-            ["Level", (b.level != null ? b.level : "--") + "%"],
-            ["Charging", b.charging ? "Yes" : "No"],
-            ["Status", esc(b.status || "--")],
-            ["Plugged", esc(b.plugged || "not plugged")],
             ["Temperature", b.tempC != null
               ? (S.isMetric() ? (Math.round(b.tempC * 10) / 10) + " °C"
                               : (Math.round((b.tempC * 9 / 5 + 32) * 10) / 10) + " °F") : "--"],
             ["Voltage", b.voltageMv != null ? (b.voltageMv / 1000).toFixed(3) + " V" : "--"],
             ["Health", esc(b.health || "--")],
-            ["Technology", esc(b.technology || "--")]
-          ], 3))
+            ["Cells", esc(b.technology || "--")]
+          ], 2))
 
+        /* Three across, exactly one row. Four cells in a three-across grid left USED %
+           alone on a second row — which on first open was the row the footer cut in half,
+           so the panel opened showing the top of a line of glyphs. The bar directly above
+           already IS the percentage. */
         + section("Storage", bar(stPct, "", "storage used") + statGrid([
             ["Free", fmt.bytes(st.free)],
             ["Used", fmt.bytes(stUsed)],
-            ["Total", fmt.bytes(st.total)],
-            ["Used %", stPct.toFixed(1) + "%"]
+            ["Total", fmt.bytes(st.total)]
           ], 3))
 
         + section("Memory", bar(memPct, "", "memory used") + statGrid([
             ["Free", fmt.bytes(mem.free)],
-            ["Total", fmt.bytes(mem.total)],
-            ["Low memory", mem.low ? "Yes" : "No"],
-            ["Used %", memPct.toFixed(1) + "%"]
+            ["Used", fmt.bytes(memUsed)],
+            ["Total", fmt.bytes(mem.total)]
           ], 3))
 
+        /* "Interface wlan0" is the kernel's name for the radio. Dropped — TRANSPORT above
+           it already says Wi-Fi, which is the same fact in a word people use. */
         + section("Network", statGrid([
             ["Transport", esc(net.type || "none")],
             ["Internet", net.validated ? "Working" : "No connection"],
             ["Metered", net.metered ? "Yes" : "No"],
-            ["Interface", esc(net.iface || "--")],
             ["Down", net.downKbps ? Math.round(net.downKbps / 1000) + " Mbps" : "--"],
             ["Up", net.upKbps ? Math.round(net.upKbps / 1000) + " Mbps" : "--"]
           ], 3))
 
+        /* Six cells, two full rows. Manufacturer and model were two cells holding one
+           answer to "what is this thing", so they are one cell now — which is also what
+           takes the grid off a seven-cell 3+3+1. */
         + section("Uptime & device", statGrid([
             ["Uptime", esc(fmt.duration(i.uptimeMs || 0))],
             ["Awake", esc(fmt.duration(i.awakeMs || 0))],
-            ["Model", esc((i.device || {}).model || "--")],
-            ["Manufacturer", esc((i.device || {}).manufacturer || "--")],
-            ["Android", esc((i.device || {}).android || "--") + " (API "
-              + esc((i.device || {}).sdk || "?") + ")"],
-            ["Screen", esc((i.device || {}).screen || "--")],
-            ["Density", esc(String((i.device || {}).density || "--")) + " dpi"],
-            ["Brightness", i.brightness != null ? Math.round(i.brightness / 255 * 100) + "%" : "--"]
+            ["Tablet", esc([(i.device || {}).manufacturer, (i.device || {}).model]
+              .filter(Boolean).join(" ") || "--")],
+            /* "(API 33)" was a build number for whoever writes the app, beside a version
+               number for whoever owns the tablet. */
+            ["Android", esc((i.device || {}).android || "--")],
+            ["Screen", esc((i.device || {}).screen || "--") + " pixels"],
+            ["Brightness", i.brightness != null
+              ? Math.round(i.brightness / 255 * 100) + "%" : "--"]
           ], 3)));
     }
   };

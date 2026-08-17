@@ -141,13 +141,17 @@
                   + "widgets are shown. Tap anything else to cancel.</div>"
                 : ""))
 
-        /* Diagnostics, named as such and worded for whoever is standing in front of it
-           rather than for whoever wrote it ("Bridge: attached · Viewport: 711×1138 @2.25x"). */
-        + section("About", '<div class="muted">Home readings: ' + esc(WP.registry.sensors.mode)
-            + " &middot; device sensors: "
-            + (WP.bridge.present() ? "connected" : "unavailable")
-            + " &middot; screen " + window.innerWidth + " &times; " + window.innerHeight
-            + "</div>"));
+        /* Two sentences about what this dashboard is currently connected to, which is the
+           only thing an About section on a wall panel can usefully say.
+           "screen 711 × 1138" is gone: it was the CSS-pixel viewport, so it was a rendering
+           detail rather than a fact about the room, AND it was not the screen — the panel
+           is 1600 × 2560. A number that is jargon and also wrong is the easiest kind to
+           delete. */
+        + section("About", '<div class="muted">Home readings are '
+            + (WP.registry.sensors.mode === "demo" ? "simulated" : "live from Home Assistant")
+            + ". This tablet's own battery and storage are "
+            + (WP.bridge.present() ? "being read" : "not readable right now")
+            + ".</div>"));
     }
   };
 

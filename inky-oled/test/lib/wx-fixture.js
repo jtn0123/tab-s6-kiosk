@@ -1,12 +1,24 @@
 /* A synthetic Open-Meteo payload, in the exact shape the real API returns with
    timezone=auto (local ISO stamps, no offset suffix).
 
-   The one deliberate property: current.temperature_2m is the same number as the hourly
-   bucket the payload was built for. Real Open-Meteo is close but not identical; pinning
-   them equal is what lets a test say "the Now card and the NOW chip must agree" and mean it.
+   THE ONE DELIBERATE PROPERTY: current.temperature_2m is NOT the hourly bucket.
+
+   This fixture used to build `current.temperature_2m = temp[idx]` — literally the hourly
+   value — "so that a test can say the Now card and the NOW chip must agree and mean it".
+   It meant the exact opposite. With the two pinned equal, the card and the chip agree no
+   matter WHICH array the card reads, so the invariant could not fail and did not: the
+   desync was live on the wall (91° card, 90° chip) with the test green.
+
+   The real API is not like that. `current` is interpolated to the minute the request was
+   made; `hourly[i]` is the value at the top of the hour. They differ by a degree or two,
+   always, for every request. CURRENT_SKEW reproduces that, so a card sourced from the
+   wrong array now shows a different number from the strip and the test says so.
    Everything else is arbitrary but plausible and deterministic. */
 
 "use strict";
+
+/* how far `current` sits from its own hourly bucket — see above */
+var CURRENT_SKEW = 3;
 
 function pad(n) { return ("0" + n).slice(-2); }
 
@@ -74,11 +86,14 @@ function build(opts) {
   }
 
   var idx = Math.floor((now - start.getTime()) / 3600000);
+  var base = temp[idx] == null ? temp[0] : temp[idx];
   var cur = {
     time: localIso(new Date(now)),
-    temperature_2m: temp[idx] == null ? temp[0] : temp[idx],
+    /* + CURRENT_SKEW: the minute-interpolated reading, deliberately not the hourly
+       bucket. See the header — this is what makes the Now/NOW invariant falsifiable. */
+    temperature_2m: base + CURRENT_SKEW,
     relative_humidity_2m: 48,
-    apparent_temperature: (temp[idx] == null ? temp[0] : temp[idx]) - 2,
+    apparent_temperature: base - 2 + CURRENT_SKEW,
     is_day: isDay[idx] == null ? 1 : isDay[idx],
     precipitation: 0,
     weather_code: code[idx] == null ? 0 : code[idx],
@@ -130,4 +145,10 @@ function serve(opts) {
   return impl;
 }
 
-module.exports = { build: build, serve: serve, tempAt: tempAt, localIso: localIso };
+/* what the *hourly* bucket says for a given hour — the wall panel's source of truth */
+function feelsAt(hourIndex) { return tempAt(hourIndex) - 2; }
+
+module.exports = {
+  build: build, serve: serve, tempAt: tempAt, feelsAt: feelsAt, localIso: localIso,
+  CURRENT_SKEW: CURRENT_SKEW
+};

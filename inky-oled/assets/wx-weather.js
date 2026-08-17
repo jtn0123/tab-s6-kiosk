@@ -20,8 +20,6 @@
 
   var WX_CACHE = "inky.wx.v2";
 
-  var WX_CACHE = "inky.wx.v2";
-
   var weather = {
     name: "weather",
     data: null,
@@ -186,10 +184,60 @@
       return 0;
     },
 
+    /* ---------------- SOURCE OF TRUTH for "right now" ----------------
+
+       Open-Meteo answers with two different "now"s and they legitimately disagree.
+       `current` is INTERPOLATED TO THE MINUTE the request was made; `hourly[i]` is the
+       value AT THE TOP OF THE HOUR. Both are correct, they are simply not the same
+       measurement — which is why the Now card read 91° beside a NOW chip reading 90° on
+       the wall, and why the rollover refetch above (a real fix, for a real second cause)
+       could never finish the job. Refetching cannot make two different quantities equal.
+
+       THE DECISION: hourly[nowIndex()] is this wall panel's truth.
+
+         * Everything else on the screen already comes out of hourly[]. The 24-chip strip,
+           the hourly panel's list and hero, the daily panel's hour bars — 50-odd numbers.
+           Sourcing the ONE big number from `current` made one number disagree with all
+           the rest; sourcing it from hourly[] makes the whole wall one payload, one hour,
+           one reading.
+         * `current` moves between fetches while hourly[] does not, so a card fed from it
+           can drift away from the strip at ANY moment, not only across a rollover. There
+           is no cadence that fixes that; there is only picking one array.
+         * The cost is honest and small: the big number is the hour's value rather than
+           this minute's, on a panel read from 2-4 m that also shows the next 24 hours.
+
+       Fields hourly[] does not carry (pressure, gusts) still come from `current` — they
+       have nothing on screen to disagree with. `current` is also the whole fallback when
+       there is no usable hourly slot. */
+    nowReading: function () {
+      var d = this.data;
+      if (!d || !d.current) return null;
+      var cur = d.current, h = d.hourly, i = this.nowIndex();
+      function pick(key) {
+        return (h && h[key] && i >= 0 && h[key][i] != null) ? h[key][i] : cur[key];
+      }
+      return {
+        index: i,
+        temperature_2m: pick("temperature_2m"),
+        apparent_temperature: pick("apparent_temperature"),
+        relative_humidity_2m: pick("relative_humidity_2m"),
+        cloud_cover: pick("cloud_cover"),
+        precipitation: pick("precipitation"),
+        weather_code: pick("weather_code"),
+        is_day: pick("is_day"),
+        wind_speed_10m: pick("wind_speed_10m"),
+        wind_direction_10m: pick("wind_direction_10m"),
+        /* hourly[] carries none of these three */
+        wind_gusts_10m: cur.wind_gusts_10m,
+        pressure_msl: cur.pressure_msl,
+        surface_pressure: cur.surface_pressure
+      };
+    },
+
     render: function () {
       var d = this.data;
       if (!d || !d.current) return;
-      var cur = d.current;
+      var cur = this.nowReading();
       var info = WP.wmo(cur.weather_code, cur.is_day === 0);
 
       $("wx-icon").textContent = info.icon;
@@ -202,7 +250,7 @@
           + fmt.deg(cur.apparent_temperature) + "</span></div>"
         + '<div class="wxq"><span class="wxq-k">Wind</span><span class="wxq-v">'
           + Math.round(cur.wind_speed_10m) + " " + fmt.speedUnit() + "</span></div>"
-        + '<div class="wxq"><span class="wxq-k">Hum</span><span class="wxq-v">'
+        + '<div class="wxq"><span class="wxq-k">Humidity</span><span class="wxq-v">'
           + Math.round(cur.relative_humidity_2m) + "%</span></div>";
 
       var i = this.nowIndex();
@@ -245,7 +293,10 @@
         return;
       }
 
-      var cur = d.current, i = this.nowIndex(), h = d.hourly, day = d.daily;
+      /* Same reading the home card is drawn from — see nowReading(). This panel is the
+         magnification of that card, so "91° / feels 99°" up here and "90° / feels 98°"
+         down on the strip was the same defect seen twice. */
+      var cur = this.nowReading(), i = this.nowIndex(), h = d.hourly, day = d.daily;
       var info = WP.wmo(cur.weather_code, cur.is_day === 0);
       var uv = fmt.uv(h && h.uv_index && i >= 0 ? h.uv_index[i] : (day ? day.uv_index_max[0] : null));
 
@@ -281,11 +332,14 @@
             /* The arrow belongs with Direction, not in a cell of its own labelled "Arrow" —
                that labelled a decoration as if it were a measurement, and sat next to the
                Direction cell already carrying the same fact. It points where the wind is
-               blowing toward, i.e. bearing + 180. */
+               blowing toward, i.e. bearing + 180.
+               The line under it used to read "250° · blowing toward" — a preposition with
+               nothing after it. A bearing is read as where the wind comes FROM, which is
+               also what the compass letters above it say, so that is what it now says. */
             ["Direction", fmt.compass(cur.wind_direction_10m)
               + ' <span class="wind-arrow" aria-hidden="true" style="transform:rotate('
               + Math.round(cur.wind_direction_10m + 180) + 'deg)">&uarr;</span>',
-              Math.round(cur.wind_direction_10m) + "° · blowing toward"]
+              "from " + Math.round(cur.wind_direction_10m) + "°"]
           ], 3))
 
         + section("Sun", statGrid([
@@ -294,14 +348,18 @@
             ["Daylight", esc(dayLen)]
           ], 3))
 
+        /* Three cells, not four. Four in a three-across grid left one cell alone on a
+           second row with a hairline stopping at a third of the width, which reads as a
+           section that failed to finish. The two "today" facts are one thought, so they
+           are one cell: the total on the value line, the chance on the line under it. */
         + section("Rain", statGrid([
             ["Right now", (cur.precipitation || 0) + " " + fmt.precipUnit()],
             ["Next hour", h && h.precipitation_probability && i >= 0
               ? Math.round(h.precipitation_probability[i]) + "%" : "--"],
-            ["Today's chance", day && day.precipitation_probability_max
-              ? Math.round(day.precipitation_probability_max[0]) + "%" : "--"],
-            ["Today's total", day ? (Math.round(day.precipitation_sum[0] * 100) / 100)
-              + " " + fmt.precipUnit() : "--"]
+            ["Today", day ? (Math.round(day.precipitation_sum[0] * 100) / 100)
+              + " " + fmt.precipUnit() : "--",
+              day && day.precipitation_probability_max
+                ? Math.round(day.precipitation_probability_max[0]) + "% chance" : ""]
           ], 3));
     }
   };
