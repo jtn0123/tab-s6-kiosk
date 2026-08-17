@@ -15,48 +15,29 @@ adb shell "su -c 'sh /data/local/tmp/audit.sh'"     # if still present
 
 # 1. Worth your time — broken, fixable, untried
 
-## 1.1 Inky OLED is not installed
+## 1.1 Inky OLED — RESOLVED 2026-08-16
 
-**Status: built, documented, never put on the tablet.**
+Installed, launched, verified rendering clock + live local weather + forecast on the device.
+The committed `config.js` keeps the Seattle placeholder deliberately — the repo is public, and
+the real location stays local-only (`git update-index --skip-worktree` on `config.js` and the
+built `inkyoled.apk`). If you clone fresh, set your own lat/lon and rebuild.
 
-```bash
-$ pm list packages -3
-package:org.smarttube.stable
-package:me.timschneeberger.rootlessjamesdsp
-package:com.topjohnwu.magisk
-package:com.brave.browser
-```
+## 1.2 SmartTube AV1 stutter — RESOLVED 2026-08-16
 
-No `com.justin.inkyoled`. The whole dashboard app exists in `inky-oled/` and has never run on the
-device it was written for.
-
-**Where to debug:**
-
-```bash
-adb install -r inky-oled/inkyoled.apk
-adb shell monkey -p com.justin.inkyoled -c android.intent.category.LAUNCHER 1
-```
-
-⚠️ **Before installing, change the location** — `inky-oled/assets/config.js` still ships the
-**Seattle placeholder**, so you will get Seattle's weather. Edit lat/lon, then `build.ps1`.
-
-## 1.2 SmartTube will stutter on AV1
-
-**Status: installed, not configured.**
-
-The Snapdragon 855 has **no AV1 hardware decoder**. YouTube serves AV1 by default now, so it falls
-back to software decode and drops frames.
-
-**Where to debug:** SmartTube → Settings → General → **Preferred video codec → VP9**, and cap at
-**1080p60**. Detail in `patches/J-video/README.md`.
-
-Confirm what a stuttering video is actually using:
+Video preset pinned to **1080p 60fps vp9** (Settings → Player → Video presets). The Snapdragon
+855 has no AV1 hardware decoder; this keeps YouTube on the hardware VP9 path. If a video still
+stutters, confirm what it is actually decoding:
 
 ```bash
 adb shell dumpsys media.player | grep -iE "codec|mime"
 ```
 
-## 1.3 JamesDSP — installed, not onboarded
+## 1.3 JamesDSP — installed, not onboarded (owner chose to skip)
+
+On first launch it shows an Android 15+ screen-capture restriction notice: system-audio capture
+now redacts protected content unless "Disable screen share protections" is enabled in developer
+settings. The owner declined the setup 2026-08-16 — reasonable; it is a workaround stacked on a
+workaround. Revisit only if system-wide EQ becomes worth that trade.
 
 **Status: APK installed with permissions pre-granted; never opened.**
 
@@ -302,9 +283,9 @@ The device currently runs LineageOS 23.2 (Android 16) with Magisk root, wireless
 5555, an 80% charge cap, a working 512 GB ext4 SD card, no phantom "No service", and battery
 percentage visible.
 
-Highest-value next moves, in order: **install Inky OLED (§1.1)** — the app was built for this
-device and has never run on it; **SmartTube codec (§1.2)** — five minutes, prevents visible
-stutter; **JamesDSP onboarding (§1.3)** — the only system-wide EQ available here.
+As of 2026-08-16 evening, §1 is cleared: Inky OLED installed and running, SmartTube pinned to
+VP9 1080p60, JamesDSP deliberately skipped. Fingerprint is settled: attempted thoroughly and
+confirmed unfixable off stock firmware (§2.1) — do not reopen it.
 
-Fingerprint is settled: attempted thoroughly on 2026-08-16 and confirmed unfixable off stock
-firmware (§2.1). Do not reopen it.
+What remains, all optional: **patch B haptics** (untested, low risk) and **patch A HDR** (the
+one bootloop-capable patch — do it last, TWRP ready, see §4.1).
