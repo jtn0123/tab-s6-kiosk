@@ -384,6 +384,173 @@ row above), `RECEIVE_BOOT_COMPLETED` (relaunch after a power cut). Nothing else.
 
 The page also exports `WP.onAndroidBack()`, which `MainActivity.onBackPressed()` calls.
 
+### Who is allowed to hold the bridge
+
+`addJavascriptInterface` attaches `window.Android` to the **WebView**, not to a page. Any
+document that manages to load in it inherits the bridge — which is why two things are locked
+down around it.
+
+**Navigation allowlist.** `shouldOverrideUrlLoading` permits `file:///android_asset/` and
+refuses everything else, returning `true` (handled, do not load) without firing an Intent, so
+a link or a redirect can neither hand a remote origin the bridge nor bounce the wall panel
+into a browser. The refusal is logged as scheme + host only:
+
+```
+W InkyOLED: blocked navigation to https://example.com/…
+```
+
+A blocked URL is by definition something the app did not author, and logcat is readable by
+anything holding `READ_LOGS`, so the path and query — where a token or session id would sit —
+are never written out. `window.open` / `target=_blank` are refused separately by
+`WebChromeClient`'s default `onCreateWindow`. `setAllowFileAccess(false)` and
+`setAllowContentAccess(false)` remove local-file and `content://` reads from the page;
+`file:///android_asset` and `file:///android_res` are explicitly exempt from that setting, so
+the dashboard itself is unaffected.
+
+**The app never asks for the debug socket.** `WebView.setWebContentsDebuggingEnabled` opens a
+devtools socket that any local app can attach to, with full script execution — and therefore
+full use of `window.Android`. It is gated on `ApplicationInfo.FLAG_DEBUGGABLE`, which only
+`build.ps1 -Debuggable` sets (via aapt2's `--debug-mode`). Boot logs which one you are
+running:
+
+```
+I InkyOLED: webview debugging off
+```
+
+To debug the page, rebuild with `-Debuggable` and attach `chrome://inspect`. CI fails the
+build if a default-built APK ever comes out debuggable.
+
+**On this tablet the socket is open anyway. Read the next section before trusting that log
+line.**
+
+### Residual risk: the devtools socket
+
+This was previously written up here as "the debug socket is off in the shipping build", on
+the strength of the `webview debugging off` log line. That claim was wrong on this device, and
+the log line is not evidence for it — it records what the app *asked for*, not what the
+platform did.
+
+**What is actually true.** With the shipping, non-debuggable APK installed and running:
+
+```
+$ adb shell getprop ro.build.type        →  userdebug
+$ adb shell getprop ro.debuggable        →  0
+$ adb shell dumpsys package com.justin.inkyoled | grep -i flags   →  no DEBUGGABLE
+$ adb logcat -d | grep InkyOLED          →  I InkyOLED: webview debugging off
+$ adb shell cat /proc/net/unix | grep devtools
+                                         →  @webview_devtools_remote_<pid>
+$ adb shell pidof com.justin.inkyoled    →  <pid>   (the same one)
+```
+
+The socket belongs to this app's process. Forwarding it and speaking CDP to it yields the
+page (`file:///android_asset/index.html`), `Runtime.evaluate` on it, and
+`typeof window.Android.deviceInfo === "function"` → `true`.
+
+**Cause.** Chromium's WebView force-enables its devtools server whenever `ro.build.type` is
+`userdebug` or `eng`, regardless of the value passed to `setWebContentsDebuggingEnabled`. This
+tablet runs a Magisk-patched `userdebug` ROM. **This is a property of the ROM, not a defect in
+the app** — the gate in `MainActivity` is correct, CI enforces it, and on a retail `user`
+build the same APK would have no socket. (That last part is *unverified here*: there is no
+retail-ROM device to test it on.)
+
+**Blast radius.** Anything that can reach the abstract socket — i.e. any app on the tablet, or
+anyone with adb — gets:
+
+- script execution in the dashboard page, and
+- the `window.Android` bridge, which exposes exactly three methods: `deviceInfo()` (battery,
+  storage, memory, network, uptime, model), `getPref(key)` and `setPref(key, value)` against
+  this app's own `SharedPreferences`.
+
+It does **not** expose a shell, the filesystem, other apps' data, or any credential. The
+`config.js` baked into the APK is readable from the page — so if you ever enable Home
+Assistant, the long-lived token is readable through this socket. That, not the telemetry, is
+the reason this matters.
+
+**What would close it**, in descending order of realism:
+
+1. Flash a retail `user` ROM. This is the only thing that shuts the socket.
+2. Do not put a Home Assistant token on a `userdebug` device — treat the token, not the
+   socket, as the thing being protected.
+3. Keep the bridge as small as it is. Every method added to `@JavascriptInterface` is added to
+   the list above.
+
+Accepting the risk is reasonable for a wall panel on a private LAN with no token in it. It is
+recorded here so the decision is a decision, and not an artefact of a log line that was read
+as a result.
+
+---
+
+## Home Assistant live path verification
+
+The live Home Assistant path is 495 lines that, until this was done, had **never executed** —
+every run on this panel had been the demo simulator. It has now been exercised on the device
+against a local mock HA that serves the two endpoints the app uses (`GET /api/states/<id>`,
+`POST /api/services/<domain>/turn_on|turn_off`).
+
+**Setup, and why there is no LAN address in any of this.** The mock listened on the *host's*
+`127.0.0.1:8123` and the tablet reached it through `adb reverse tcp:8123 tcp:8123`, so the
+configured `baseUrl` was `http://127.0.0.1:8123` — the device's own loopback. No LAN IP existed
+to leak. The temporary `config.js` was restored byte-for-byte afterwards (checksum verified),
+`git status` is clean for it, and its `--skip-worktree` bit is intact.
+
+### The finding: it does not work against a stock Home Assistant
+
+**This is the reason the exercise was worth doing.** On the first run, with a correct
+`baseUrl` and a valid token, *every single request was blocked before it left the device*:
+
+```
+console[ERROR] Access to fetch at 'http://127.0.0.1:8123/api/states/sensor.…'
+  from origin 'null' has been blocked by CORS policy: Response to preflight request
+  doesn't pass access control check: No 'Access-Control-Allow-Origin' header…
+```
+
+The page is a `file://` document, so its origin is `null`; the `Authorization` header makes
+each call a non-simple cross-origin request; Chromium sends a preflight `OPTIONS` first. That
+is not a property of the mock — a stock Home Assistant answers CORS preflights only for origins
+listed in `http.cors_allowed_origins`, and `"null"` is not one of them by default. **Anybody
+enabling this feature on day one gets six dashes and "check baseUrl/token", with a baseUrl and
+a token that are both correct.** The workaround is documented in
+[README](README.md#you-will-also-need-cors-on-the-home-assistant-side).
+
+With the mock answering the preflight (`Access-Control-Allow-Headers: authorization,
+content-type`), everything below worked on the first poll.
+
+### What was verified, on device
+
+| | Result |
+|---|---|
+| Mode detection | Badge flipped `DEMO` → `LIVE`; `initLive` built tiles from `config.entities` |
+| Tiles populate | `72.5 °F` and `41.0 %` read from `GET /api/states/…` |
+| Units from HA | Neither entity declared a `unit` in config; both took it from `attributes.unit_of_measurement` |
+| Auth on every read | 66 GETs, all carrying `Authorization: Bearer …` — asserted from the server's own log |
+| Toggle → service call | One tap produced exactly `POST /api/services/switch/turn_on`, `Content-Type: application/json`, body `{"entity_id":"switch.mock_fan"}`, bearer token present. Domain was derived correctly from the entity id |
+| Toggle round trip | Server state became `on`; subsequent polls read `on` back, so the optimistic flip and the confirmed state agreed |
+| `unavailable` state | Tile shows `--`, and is **not** counted as an error — correct: the entity answered |
+| Malformed JSON body | Caught; tile `--`; counted as an entity error; no uncaught exception |
+| HTTP 404 (entity gone) | Caught; tile `--`; counted as an entity error |
+| HTTP 401 (bad token) | All six entities error; status line escalates to `6 entity error(s) — check baseUrl/token` |
+| Host unreachable | Fresh start with nothing listening: all tiles `--`, status warns, **zero console errors** |
+| Blast radius | In every failure mode the weather, clock, timer and device cards were untouched, and `overflow=0 slack=34px cards=6` still held |
+
+### Still not verifiable without a real instance
+
+- Whether a real Home Assistant's payloads differ in shape from the mock's (extra attributes,
+  `state` types, `context`) in a way that matters. The mock was written from HA's documented
+  response shape, not from a capture of one.
+- Long-run behaviour: token expiry, HA restarting under the poll, `502` from a reverse proxy.
+- HTTPS with a self-signed certificate, which is how many people expose HA — the WebView's
+  certificate handling is untested here.
+- Whether adding `"null"` to `cors_allowed_origins` is sufficient on every HA version, or
+  whether some releases refuse the `null` origin regardless.
+- Rate behaviour against a real box at the configured `refreshSeconds` over days.
+
+### One honest weakness observed
+
+Under a 401, the tiles kept displaying their last successful values with no visual marker;
+only the status line said anything was wrong. Weather solves the same problem with an explicit
+"stale" badge. The HA tiles do not, so a token that expires overnight leaves plausible-looking
+numbers on the wall.
+
 ---
 
 ## Burn-in strategy
@@ -463,7 +630,29 @@ silent black screen.
 
 ---
 
-## How to test on device
+## How to test
+
+Two layers, and they are not interchangeable. The suite catches the class of bug that has
+actually bitten this project — pure functions and small state machines silently inverted by a
+fix — in about a second and a half. The device catches everything the suite structurally
+cannot: real layout, real glyph rendering, real touch, real Open-Meteo, the real bridge.
+
+### Off device
+
+```bash
+cd inky-oled
+npm test                              # or: node --test "test/**/*.test.js"
+```
+
+No `npm install` — node's built-in test runner, no dependencies (see
+[README](README.md#tests)). The suite loads the real `index.html`, `app.js` and `widgets.js`
+into a DOM stub with a virtual clock and drives them with real pointer events, so it exercises
+the same delegation path a finger does.
+
+Every historical regression named in this document has a test that fails when the bug is put
+back. If you are about to "simplify" something in `widgets.js`, run the suite first and after.
+
+### On device
 
 Two transports are usually attached, so pass the serial explicitly (`adb devices` to find it).
 
@@ -495,17 +684,22 @@ adb -s <serial> shell input swipe X Y X Y 700
 adb -s <serial> shell am force-stop com.justin.inkyoled
 ```
 
-Three log lines are worth watching for:
+Four log lines are worth watching for:
 
 ```
+InkyOLED: webview debugging off
 [inky] booted; bridge=true viewport=711x1138 dpr=2.25
 [inky] layout: home overflow=0 slack=34px cards=6
 ```
 
 plus a warning listing any tappable that is not on the pointer delegation — which should never
-appear. `overflow` above 0 means the column no longer fits.
+appear. `overflow` above 0 means the column no longer fits. `webview debugging off` says the
+shipping build did not *ask* for the devtools socket; a build made with `-Debuggable` says so
+instead. It does **not** mean the socket is closed — on this `userdebug` ROM it is open
+regardless, and `cat /proc/net/unix | grep devtools` is the only line that answers that
+question. See [Residual risk: the devtools socket](#residual-risk-the-devtools-socket).
 
-Behaviours worth exercising by hand, because they are the ones that have broken before:
+Behaviours worth exercising by hand, because the suite cannot reach them:
 
 - **Long press.** Hold any card for 700 ms. It must open, not just light up.
 - **Close then immediately tap.** Tap `← Dashboard`, then tap a card within ~100 ms. It must

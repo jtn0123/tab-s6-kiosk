@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.net.ConnectivityManager;
 import android.net.LinkProperties;
 import android.net.Network;
@@ -26,6 +27,7 @@ import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -51,6 +53,18 @@ public class MainActivity extends Activity {
 
     private static final String TAG = "InkyOLED";
     private static final String PREFS = "inky_panel";
+
+    /**
+     * The ONLY origin this WebView is allowed to navigate to. The dashboard is entirely
+     * local: three scripts, one stylesheet, one page, all under assets/. Anything else —
+     * a link, a redirect, a meta refresh, a window.location assignment — is refused.
+     *
+     * This matters because of addJavascriptInterface below: window.Android is attached to
+     * the WebView, not to a page, so any document that manages to load in this WebView
+     * inherits the bridge. Pinning navigation to file:///android_asset/ is what guarantees
+     * only our own page can ever hold it.
+     */
+    private static final String ALLOWED_PREFIX = "file:///android_asset/";
 
     private WebView web;
 
@@ -95,13 +109,48 @@ public class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
 
-        // keep navigation inside the WebView — no stray browser launches on a wall panel
-        web.setWebViewClient(new WebViewClient());
+        /* Nothing on this panel reads the filesystem or a content provider. Assets and
+         * resources are explicitly exempt from setAllowFileAccess (file:///android_asset
+         * and file:///android_res keep working), so switching both off costs the dashboard
+         * nothing and takes local-file and content:// reads away from the page entirely.
+         *
+         * setAllowFileAccessFromFileURLs / setAllowUniversalAccessFromFileURLs are NOT
+         * called: both are deprecated as of API 30 and both already default to false, and
+         * build.ps1 fails on javac's deprecation note. targetSdk is 36, so the defaults
+         * apply — a file:// page here cannot XHR another file:// URL or claim a universal
+         * origin. */
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
+        s.setGeolocationEnabled(false);          // the location comes from config.js, not the OS
+
+        /* Navigation allowlist. A bare WebViewClient blocks external browser launches but
+         * permits in-WebView navigation anywhere, which would hand a remote origin the
+         * window.Android bridge. Only the local page may load; everything else is refused
+         * and logged, and no Intent is fired, so a wall panel can never end up showing a
+         * web page nobody asked for. */
+        web.setWebViewClient(new WebViewClient() {
+            /* Only the WebResourceRequest overload is implemented: it is the one the
+             * framework calls from API 24 up and minSdk here is 29, so the deprecated
+             * String overload is unreachable on every device this can install on. */
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
+                return blocked(req.getUrl() == null ? null : req.getUrl().toString());
+            }
+
+            /** true == "we handled it", i.e. the WebView must not load it. */
+            private boolean blocked(String url) {
+                if (url != null && url.startsWith(ALLOWED_PREFIX)) return false;
+                Log.w(TAG, "blocked navigation to " + describe(url));
+                return true;
+            }
+        });
         web.setBackgroundColor(0xFF000000);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
         // Mirror page console output into logcat so `adb logcat | grep InkyOLED` is enough
-        // to debug the dashboard without attaching devtools.
+        // to debug the dashboard without attaching devtools. (WebChromeClient's default
+        // onCreateWindow already refuses target=_blank / window.open, so no popup can
+        // escape the allowlist above by opening a second WebView.)
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage cm) {
@@ -110,7 +159,31 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        WebView.setWebContentsDebuggingEnabled(true);
+
+        /* Remote debugging opens a devtools socket that ANY local app (or anything reaching
+         * the device over adb) can attach to, with full script execution in this WebView —
+         * which means full use of window.Android. It used to be switched on unconditionally.
+         *
+         * The gate is FLAG_DEBUGGABLE, i.e. android:debuggable in the linked manifest. The
+         * shipping build never sets it; `build.ps1 -Debuggable` passes aapt2's --debug-mode,
+         * which sets the flag, and only that build asks for the socket. Nothing to remember
+         * at release time, no way to ship it on by accident, and CI fails if a default-built
+         * APK ever comes out debuggable.
+         *
+         * IMPORTANT — this gate controls what the app REQUESTS, not what the device does.
+         * Chromium's WebView force-enables its devtools server on userdebug/eng ROMs
+         * whatever value it is handed here, and the target tablet is a Magisk-patched
+         * userdebug build: @webview_devtools_remote_<pid> exists for this process even
+         * though ro.debuggable=0 and the line below logs "off". Do not read that log line as
+         * proof the socket is closed. Nothing here can close it; see "Residual risk: the
+         * devtools socket" in INTERACTIVE.md for the blast radius and the only real fix
+         * (a retail `user` ROM).
+         *
+         * The line below is logged either way so the running build says which it is. */
+        boolean debuggable =
+                (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        WebView.setWebContentsDebuggingEnabled(debuggable);
+        Log.i(TAG, "webview debugging " + (debuggable ? "ENABLED (debuggable build)" : "off"));
 
         // must be attached before the page loads so window.Android exists at first script
         web.addJavascriptInterface(new Bridge(), "Android");
@@ -172,6 +245,22 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (web != null) web.destroy();
         super.onDestroy();
+    }
+
+    /**
+     * Scheme + host only, for the blocked-navigation log line. A refused URL is by
+     * definition something we did not author, and logcat on this device is readable by
+     * anything holding READ_LOGS — so the path and query string, which are where a token
+     * or a session id would be, never get written out.
+     */
+    private static String describe(String url) {
+        if (url == null) return "(null)";
+        int scheme = url.indexOf(':');
+        if (scheme < 0) return "(malformed)";
+        String head = url.substring(0, scheme + 1);
+        if (!url.startsWith(head + "//")) return head + "…";
+        int host = url.indexOf('/', scheme + 3);
+        return (host < 0 ? url : url.substring(0, host)) + "/…";
     }
 
     /* ====================================================================================

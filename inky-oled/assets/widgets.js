@@ -65,10 +65,29 @@
     name: "clock",
     panelTimer: null,
 
+    /* Last value written to each of the four nodes. The tick has to run at 1 Hz — the
+       seconds field is optional but real — while the minute changes 1/60 as often and the
+       date once a day. Writing all four every second meant 86,400 toLocaleDateString() calls
+       and 345,600 textContent assignments a day to produce ~1,500 actual changes; every one
+       of those assignments is a layout invalidation on the busiest element on the wall.
+       Cache what was written and skip the writes that would change nothing. The dirty check
+       is on the RENDERED STRING, not on the clock, so a 12/24h flip or a seconds toggle
+       still lands on the very next tick (S.onChange calls straight into here). */
+    shown: { time: null, ampm: null, secs: null, date: null },
+
     init: function () {
       this.tick();
       setInterval(this.tick.bind(this), 1000);
       S.onChange(this.tick.bind(this));   // 12/24h and seconds apply immediately
+    },
+
+    /* Write only if the text actually differs. */
+    put: function (id, key, value) {
+      if (this.shown[key] === value) return false;
+      this.shown[key] = value;
+      var el = $(id);
+      if (el) el.textContent = value;
+      return true;
     },
 
     tick: function () {
@@ -80,12 +99,20 @@
       } else {
         h = WP.pad2(h);
       }
-      $("time").textContent = h + ":" + WP.pad2(m);
-      $("ampm").textContent = ampm;
-      $("secs").textContent = S.get("seconds") ? ":" + WP.pad2(now.getSeconds()) : "";
-      $("date").textContent = now.toLocaleDateString(undefined, {
-        weekday: "long", month: "long", day: "numeric"
-      });
+      this.put("time", "time", h + ":" + WP.pad2(m));
+      this.put("ampm", "ampm", ampm);
+      this.put("secs", "secs", S.get("seconds") ? ":" + WP.pad2(now.getSeconds()) : "");
+
+      /* toLocaleDateString is the expensive one (it builds an Intl formatter), so it is
+         guarded by the calendar day rather than by comparing its own output — that would
+         mean calling it to find out whether it was worth calling. */
+      var day = now.getFullYear() + "-" + now.getMonth() + "-" + now.getDate();
+      if (day !== this.shownDay) {
+        this.shownDay = day;
+        this.put("date", "date", now.toLocaleDateString(undefined, {
+          weekday: "long", month: "long", day: "numeric"
+        }));
+      }
     },
 
     /* Detail: seconds, full date, timezone, and world clocks computed with Intl —
@@ -109,28 +136,52 @@
         ["Sydney", "Australia/Sydney"]
       ];
 
+      /* Two cadences, not one.
+
+         This whole body used to be rebuilt once a second: nine world clocks, each costing
+         two freshly-constructed Intl.DateTimeFormat objects, plus a full innerHTML swap of
+         the panel — 18 formatter constructions per second for a row of numbers that shows
+         minutes and therefore changes once a minute.
+
+         Only two things on this panel genuinely move every second: the big readout (it shows
+         seconds) and the epoch counter. Those two get their own nodes and a textContent
+         write; everything else is rebuilt when the minute rolls over, or when a setting that
+         affects it changes. Same pixels, 1/60th of the work — and as a side effect the panel
+         stops replacing its own DOM under a reader's finger 59 times a minute. */
+      function liveKey() {
+        var n = new Date();
+        return n.getFullYear() + "-" + n.getMonth() + "-" + n.getDate()
+          + " " + n.getHours() + ":" + n.getMinutes() + " " + S.get("clockHours");
+      }
+
+      function tickLight() {
+        var now = new Date();
+        if (liveKey() !== self.panelKey) { render(); return; }
+        var big = $("clk-big");
+        if (!big) { render(); return; }          // panel was rebuilt from under us
+        big.textContent = fmt.clock(now, true);
+        var ep = $("clk-epoch");
+        if (ep) ep.textContent = String(Math.floor(now.getTime() / 1000));
+      }
+
       function render() {
         var now = new Date();
+        self.panelKey = liveKey();
         var offMin = -now.getTimezoneOffset();
         var offTxt = (offMin >= 0 ? "+" : "-") + WP.pad2(Math.abs(offMin) / 60)
           + ":" + WP.pad2(Math.abs(offMin) % 60);
 
         /* day-of-year / ISO week are cheap extras that make the panel worth opening.
-           DOY compares midnight-to-midnight and rounds: measuring from "now" to Jan 0
-           spans the spring-forward hour, so the difference was 228 d 23 h and floored to
-           228 on day 229 — wrong every day between DST start and DST end. */
-        var soy = new Date(now.getFullYear(), 0, 1);
-        var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        var doy = Math.round((today0 - soy) / 86400000) + 1;
-        var t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7));
-        var week1 = new Date(t.getFullYear(), 0, 4);
-        var isoWeek = 1 + Math.round(((t - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+           Both are DST-sensitive calendar arithmetic (see fmt.dayOfYear for the bug that
+           taught us so), so they live in fmt with the rest of the formatters. */
+        var doy = fmt.dayOfYear(now);
+        var isoWeek = fmt.isoWeek(now);
 
         /* Scroll-preserving: this rebuilds once a second, so a plain innerHTML swap would
            make the panel impossible to scroll at all. */
         WP.repaint(body,
-          '<div class="big-readout"><div class="big-time">' + esc(fmt.clock(now, true)) + "</div>"
+          '<div class="big-readout"><div class="big-time" id="clk-big">'
+          + esc(fmt.clock(now, true)) + "</div>"
           + '<div class="big-sub">' + esc(now.toLocaleDateString(undefined, {
               weekday: "long", year: "numeric", month: "long", day: "numeric" })) + "</div></div>"
           + section("This device", statGrid([
@@ -138,7 +189,7 @@
               ["UTC offset", "UTC" + offTxt],
               ["Day of year", String(doy)],
               ["ISO week", String(isoWeek)],
-              ["Epoch (s)", String(Math.floor(now.getTime() / 1000))],
+              ["Epoch (s)", '<span id="clk-epoch">' + Math.floor(now.getTime() / 1000) + "</span>"],
               ["Format", S.get("clockHours") === 24 ? "24-hour" : "12-hour"]
             ]))
           + section("World clocks", '<div class="wc-grid">' + zones.map(function (z) {
@@ -158,12 +209,19 @@
       }
 
       render();
-      this.panelTimer = setInterval(render, 1000);
+      this.panelTimer = setInterval(tickLight, 1000);
+      /* No S.onChange registration here: onOpen runs every time the panel is opened, and a
+         listener added per open is a listener that is never removed. It is not needed either
+         — liveKey() carries clockHours, so a 12/24h flip forces a full rebuild on the very
+         next tick, which is the same latency the old rebuild-everything loop had. */
       WP.onAction("clock", function () { /* no in-panel actions */ });
-      void self;
     },
 
-    onClose: function () { clearInterval(this.panelTimer); this.panelTimer = null; }
+    onClose: function () {
+      clearInterval(this.panelTimer);
+      this.panelTimer = null;
+      this.panelKey = null;
+    }
   };
 
   /* =========================================================================
@@ -230,8 +288,11 @@
               self.ringing = false; self.finishedAt = 0;
             }
             break;
-          /* order matters: stopAlarm() parks a dismissed countdown at zero, so the reload
-             of the full duration has to come after it */
+          /* Order matters, but not for the reason it is easy to assume. It is not that
+             stopAlarm() would overwrite the reloaded duration — it is that cdReset() clears
+             `ringing`, and stopAlarm() early-returns unless `ringing` is set. Reset-while-
+             ringing with these two swapped therefore reloads the duration correctly and
+             leaves the full-screen alarm overlay on the wall forever. */
           case "cd-reset":  self.stopAlarm(); self.cdReset(); break;
           /* Dismiss on the full-screen alarm. It used to carry its own click listener,
              which is the one path the pointerup delegation never saw: a short tap worked
@@ -302,6 +363,15 @@
       if (open || now - this.lastCardPaint > 950) { this.lastCardPaint = now; this.paintCard(); }
     },
 
+    /* What was last written to the home tile. paintCard runs at 10 Hz with the panel open and
+       1 Hz without it, and in the app's resting state ("00:00 / tap to open") every one of
+       those writes is identical to the last. Comparing first turns the resting cost into two
+       string comparisons. The comparison is on the rendered text, so anything that genuinely
+       changes still lands on the same tick it always did. */
+    shownBig: null,
+    shownSub: null,
+    shownAlert: null,
+
     paintCard: function () {
       var big = $("tmr-big"), sub = $("tmr-sub");
       if (!big) return;
@@ -309,31 +379,37 @@
          which beats something merely parked. A stopwatch running through an alarm has to
          keep the tile — it is the live number. */
       var trace = this.trace();
+      var bigText, subText;
       if (this.ringing) {
-        big.textContent = "00:00";
-        sub.textContent = "TIMER DONE";
+        bigText = "00:00";
+        subText = "TIMER DONE";
       } else if (this.cd.running) {
-        big.textContent = fmt.countdown(this.cdRemain());
-        sub.textContent = "counting down";
+        bigText = fmt.countdown(this.cdRemain());
+        subText = "counting down";
       } else if (this.sw.running) {
-        big.textContent = fmt.stopwatch(this.swElapsed(), false);
-        sub.textContent = "stopwatch running";
+        bigText = fmt.stopwatch(this.swElapsed(), false);
+        subText = "stopwatch running";
       } else if (trace != null) {
         /* the quiet trace: it fired, here is roughly when, and it expires by itself */
-        big.textContent = "00:00";
-        sub.textContent = trace < 60000 ? "just finished"
+        bigText = "00:00";
+        subText = trace < 60000 ? "just finished"
           : "finished " + fmt.durationShort(trace) + " ago";
       } else if (this.cd.remain > 0 && this.cd.remain < this.cd.duration) {
-        big.textContent = fmt.countdown(this.cd.remain);
-        sub.textContent = "paused";
+        bigText = fmt.countdown(this.cd.remain);
+        subText = "paused";
       } else if (this.swElapsed() > 0) {
-        big.textContent = fmt.stopwatch(this.swElapsed(), false);
-        sub.textContent = "stopwatch paused";
+        bigText = fmt.stopwatch(this.swElapsed(), false);
+        subText = "stopwatch paused";
       } else {
-        big.textContent = "00:00";
-        sub.textContent = "tap to open";
+        bigText = "00:00";
+        subText = "tap to open";
       }
-      big.classList.toggle("alert", this.ringing);
+      if (bigText !== this.shownBig) { this.shownBig = bigText; big.textContent = bigText; }
+      if (subText !== this.shownSub) { this.shownSub = subText; sub.textContent = subText; }
+      if (this.ringing !== this.shownAlert) {
+        this.shownAlert = this.ringing;
+        big.classList.toggle("alert", this.ringing);
+      }
     },
 
     /* The countdown hitting zero and the alarm being dismissed both change which controls
@@ -356,8 +432,14 @@
     stopAlarm: function () {
       if (!this.ringing) return;
       this.ringing = false;
-      /* Dismiss must leave the countdown genuinely stopped at zero, not merely quiet:
-         anything else lets the next tap on the primary button re-fire the same alarm. */
+      /* These two lines are an assertion, not a fix — be precise about that, because the
+         comment that used to sit here ("anything else lets the next tap re-fire the same
+         alarm") claimed work they do not do. `ringing` is only ever set by fireAlarm(), and
+         tick() has already written running=false / remain=0 before calling it, so by the time
+         any of the four dismiss paths reaches this line both values are already what it sets
+         them to. Restating them costs nothing and keeps a future fireAlarm() caller from
+         leaving a dismissed countdown running; the thing this function is actually FOR is the
+         line below, which takes the overlay off the screen. */
       this.cd.running = false;
       this.cd.remain = 0;
       $("alarm").classList.remove("show");
@@ -550,12 +632,7 @@
          advanced to the 07:00 slot. Same instant, two different current temperatures.
          Refetching on the rollover keeps every card sourced from one payload, and costs
          at most one extra request per hour. */
-      setInterval(function () {
-        var h = new Date().getHours();
-        if (weather.lastHour === h) return;
-        weather.lastHour = h;
-        if (weather.fetchedAt) weather.fetch();   // skip the boot pass; init() already fetched
-      }, 15000);
+      setInterval(function () { weather.checkRollover(); }, 15000);
 
       /* Changing units re-requests rather than converting locally: Open-Meteo will hand
          back mph/inch or km/h/mm to match, so every derived field stays consistent.
@@ -566,6 +643,20 @@
         if (k === "units" || k === "*") weather.fetch();
         else if (k === "clockHours") weather.showStatus();
       });
+    },
+
+    /* Called by the 15 s tick above. A named method rather than an anonymous interval body
+       because it IS the fix for the Now/NOW desync and therefore the thing a test has to be
+       able to ask about: has the wall clock crossed into a new hour, and if so has the
+       payload been refreshed so the card and the strip are reading the same one. Returns
+       true when it started a refetch. */
+    checkRollover: function () {
+      var h = new Date().getHours();
+      if (this.lastHour === h) return false;
+      this.lastHour = h;
+      if (!this.fetchedAt) return false;        // boot pass; init() already fetched
+      this.fetch();
+      return true;
     },
 
     /* Single source of truth for the status line, so it can be redrawn at any time from
@@ -638,13 +729,29 @@
     },
 
     /* index into hourly[] for the hour we are currently inside */
+    /* Which hourly slot the wall clock is inside. Called by the hourly strip's 15 s tick and
+       by every render, and it parses up to 168 ISO date strings each time — ~670 Date
+       constructions a minute to answer a question whose answer is, by construction, valid
+       until the next hour boundary.
+
+       So cache the answer together with the exact window it was derived from, and reuse it
+       while the clock is still inside that window. Not keyed on "the current hour": the
+       payload's timestamps come back in the location's own zone (timezone=auto), and a zone
+       at a :30 or :45 offset would put a UTC-hour key out of step with the slot boundaries.
+       The window is taken from the data itself, so it cannot drift from it. A miss (no slot
+       contains `now`, e.g. a stale cached payload) is deliberately not cached — that is the
+       case where re-checking every call is the point. */
     nowIndex: function () {
       var d = this.data;
       if (!d || !d.hourly || !d.hourly.time) return -1;
       var now = Date.now();
+      if (this.niData === d && now >= this.niFrom && now < this.niTo) return this.niVal;
       for (var i = 0; i < d.hourly.time.length; i++) {
         var t = new Date(d.hourly.time[i]).getTime();
-        if (t <= now && now < t + 3600000) return i;
+        if (t <= now && now < t + 3600000) {
+          this.niData = d; this.niFrom = t; this.niTo = t + 3600000; this.niVal = i;
+          return i;
+        }
       }
       return 0;
     },
@@ -1581,13 +1688,40 @@
   var system = {
     name: "system",
     info: null,
+    lastPoll: 0,
+    shownBig: null,
+    shownSub: null,
+
+    /* Two cadences. The panel is a live readout and wants 5 s; the home tile carries a
+       battery percentage, free storage, uptime rounded to the largest unit, and a network
+       type — none of which is meaningfully wrong at 60 s, and three of which move slower
+       than that.
+
+       The old single 5 s cadence crossed the JS/Java boundary ~17,300 times a day and
+       re-rendered the tile every time, whether the panel was open or not and whether
+       anything had changed or not. Nothing on the wall was better for it: with the panel
+       closed the tile changed maybe 300 times in that day.
+
+       The timer itself still fires at 5 s so that opening the panel gets a fresh reading
+       within one tick rather than up to a minute later — what backs off is the JNI call and
+       the render, not the callback. */
+    POLL_OPEN_MS: 5000,
+    POLL_IDLE_MS: 60000,
 
     init: function () {
       this.refresh();
-      setInterval(this.refresh.bind(this), 5000);
+      setInterval(this.tick.bind(this), this.POLL_OPEN_MS);
+    },
+
+    tick: function () {
+      var due = WP.panels.isOpen("system") ? this.POLL_OPEN_MS : this.POLL_IDLE_MS;
+      /* 100 ms of tolerance: setInterval jitter must not push a poll a whole period late. */
+      if (Date.now() - this.lastPoll < due - 100) return;
+      this.refresh();
     },
 
     refresh: function () {
+      this.lastPoll = Date.now();
       this.info = WP.bridge.json("deviceInfo");
       this.render();
       this.paintPanel();
@@ -1598,23 +1732,36 @@
       if (!big) return;
       var i = this.info;
       if (!i) {
-        big.textContent = "n/a";
-        sub.textContent = WP.bridge.present() ? "bridge error" : "no Android bridge";
+        this.put(big, sub, "n/a", WP.bridge.present() ? "bridge error" : "no Android bridge");
         return;
       }
       /* "↯" (U+21AF), not "⚡" (U+26A1): the latter is an emoji-presentation codepoint and
          Android drew it as a colour sprite in an otherwise monochrome tile row. */
-      big.textContent = (i.battery && i.battery.level != null ? i.battery.level : "--") + "%"
-        + (i.battery && i.battery.charging ? " ↯" : "");
-      /* The tile is a third of the panel wide — short units only, or it ellipsises. */
-      sub.textContent = [
-        fmt.bytes(i.storage && i.storage.free),
-        fmt.durationShort(i.uptimeMs || 0) + " up",
-        (i.network && i.network.type) || "offline"
-      ].join(" · ");
+      this.put(big, sub,
+        (i.battery && i.battery.level != null ? i.battery.level : "--") + "%"
+          + (i.battery && i.battery.charging ? " ↯" : ""),
+        /* The tile is a third of the panel wide — short units only, or it ellipsises. */
+        [
+          fmt.bytes(i.storage && i.storage.free),
+          fmt.durationShort(i.uptimeMs || 0) + " up",
+          (i.network && i.network.type) || "offline"
+        ].join(" · "));
     },
 
-    onOpen: function (panel) { this.panel = panel; this.paintPanel(); },
+    /* Dirty-checked tile write. A poll that finds nothing changed — which is most of them,
+       since the tile's coarsest field is a whole percent — should cost no DOM writes at all. */
+    put: function (big, sub, bigText, subText) {
+      if (bigText !== this.shownBig) { this.shownBig = bigText; big.textContent = bigText; }
+      if (subText !== this.shownSub) { this.shownSub = subText; sub.textContent = subText; }
+    },
+
+    onOpen: function (panel) {
+      this.panel = panel;
+      /* The tile may be up to POLL_IDLE_MS stale when the panel is opened, and the panel is
+         the detailed view of exactly that data — so take a reading now rather than showing a
+         minute-old battery voltage until the next tick. */
+      this.refresh();
+    },
     onClose: function () { this.panel = null; },
 
     paintPanel: function () {

@@ -1,0 +1,197 @@
+/* The shipped assets themselves: the real config.js parses and has the shape the app
+   expects, and the packaging invariants that aapt2 on Windows forces on us still hold.
+
+   Nothing here prints a config VALUE. assets/config.js holds a real location and is held
+   back from the repo with --skip-worktree; a test that echoed it into CI output would put
+   it somewhere it does not belong. Every assertion below is about types and keys. */
+
+"use strict";
+
+var test = require("node:test");
+var assert = require("node:assert/strict");
+var fs = require("node:fs");
+var path = require("node:path");
+var vm = require("node:vm");
+var h = require("./lib/harness.js");
+
+function loadConfig() {
+  var sandbox = { window: {} };
+  sandbox.window.window = sandbox.window;
+  vm.createContext(sandbox);
+  vm.runInContext(h.readAsset("config.js"), sandbox, { filename: "config.js" });
+  return sandbox.window.CONFIG;
+}
+
+test("config.js parses and defines window.CONFIG", function () {
+  var C = loadConfig();
+  assert.equal(typeof C, "object");
+  assert.notEqual(C, null);
+});
+
+test("the location block has the right shape", function () {
+  var C = loadConfig();
+  assert.ok(C.location, "no location block");
+  assert.equal(typeof C.location.name, "string");
+  ["latitude", "longitude"].forEach(function (k) {
+    var v = C.location[k];
+    assert.ok(v === null || typeof v === "number", k + " must be a number or null");
+    if (typeof v === "number") assert.equal(isNaN(v), false, k + " is NaN");
+  });
+  if (typeof C.location.latitude === "number") {
+    assert.ok(Math.abs(C.location.latitude) <= 90, "latitude out of range");
+    assert.ok(Math.abs(C.location.longitude) <= 180, "longitude out of range");
+  }
+});
+
+test("units and clock format are values the app understands", function () {
+  var C = loadConfig();
+  assert.ok(C.units === "fahrenheit" || C.units === "celsius", "unknown units value");
+  assert.ok(C.clockHours === 12 || C.clockHours === 24, "unknown clockHours value");
+});
+
+test("the Home Assistant block is present and ships disabled with no token", function () {
+  /* The repo is public and build.ps1 bakes config.js into the APK. */
+  var C = loadConfig();
+  var ha = C.homeAssistant;
+  assert.ok(ha, "no homeAssistant block");
+  assert.equal(typeof ha.enabled, "boolean");
+  assert.equal(typeof ha.baseUrl, "string");
+  assert.equal(typeof ha.token, "string");
+  assert.equal(ha.token, "", "a token must never be committed in config.js");
+  assert.equal(ha.enabled, false, "the shipped default is the simulator");
+  assert.ok(Array.isArray(ha.entities));
+  ha.entities.forEach(function (e) {
+    assert.equal(typeof e.id, "string");
+    assert.match(e.id, /^[a-z_]+\.[a-z0-9_]+$/, "entity id is not domain.object_id: " + e.id);
+  });
+});
+
+test("burn-in protection is configured within sane bounds", function () {
+  var C = loadConfig();
+  var b = C.burnInProtection;
+  assert.ok(b, "no burnInProtection block");
+  assert.equal(typeof b.enabled, "boolean");
+  assert.ok(b.maxShiftPx > 0 && b.maxShiftPx <= 40, "maxShiftPx out of range");
+  assert.ok(b.intervalSeconds >= 10, "drifting faster than every 10 s would be visible");
+});
+
+test("the refresh interval will not hammer Open-Meteo", function () {
+  var C = loadConfig();
+  assert.ok(C.weatherRefreshMinutes >= 5, "weatherRefreshMinutes is too aggressive");
+});
+
+test("the real config boots the dashboard", function () {
+  /* The default harness config is synthetic on purpose; this is the one place the real file
+     is put through the app, to catch an edit that parses but breaks a widget. */
+  var app = h.createApp({ config: loadConfig() });
+  assert.deepEqual(app.logs.error, []);
+  assert.deepEqual(app.logs.warn, []);
+  assert.equal(Object.keys(app.registry).length, 8);
+});
+
+/* ---------------- packaging invariants ---------------- */
+
+test("assets stay FLAT — aapt2 on Windows cannot ship a subdirectory", function () {
+  /* aapt2 writes subdir separators as backslashes ("assets/dashboard\index.html") and
+     file:///android_asset/ cannot resolve them. Multiple flat files are fine and expected. */
+  var entries = fs.readdirSync(h.ASSETS, { withFileTypes: true });
+  var dirs = entries.filter(function (e) { return e.isDirectory(); }).map(function (e) { return e.name; });
+  assert.deepEqual(dirs, [], "assets/ has subdirectories: " + dirs.join(", "));
+});
+
+test("no test code is shipped inside the APK", function () {
+  var names = fs.readdirSync(h.ASSETS);
+  names.forEach(function (n) {
+    assert.equal(/\.test\.|(^|[^a-z])test([^a-z]|$)|\.spec\./.test(n), false,
+      "test file in assets/: " + n);
+  });
+  assert.ok(fs.existsSync(path.join(__dirname, "..", "test")), "tests live outside assets/");
+});
+
+test("index.html loads exactly the three scripts that exist", function () {
+  var html = h.readAsset("index.html");
+  var srcs = (html.match(/<script src="([^"]+)"/g) || []).map(function (s) {
+    return s.replace(/^<script src="/, "").replace(/"$/, "");
+  });
+  assert.deepEqual(srcs, ["config.js", "app.js", "widgets.js"]);
+  srcs.forEach(function (s) {
+    assert.ok(fs.existsSync(path.join(h.ASSETS, s)), "index.html loads a missing file: " + s);
+  });
+  var css = (html.match(/href="([^"]+\.css)"/) || [])[1];
+  assert.ok(fs.existsSync(path.join(h.ASSETS, css)), "missing stylesheet: " + css);
+});
+
+/* ---------------- Content Security Policy ----------------
+   shouldOverrideUrlLoading only sees navigations, so it cannot stop a <script src> or a
+   fetch; addJavascriptInterface then means any script that DOES load holds window.Android.
+   The CSP meta is what closes that, and it is one deletable line, so it is pinned here. */
+
+function cspDirectives() {
+  var html = h.readAsset("index.html");
+  var m = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i);
+  assert.ok(m, "index.html has no Content-Security-Policy meta");
+  var out = {};
+  m[1].split(";").forEach(function (part) {
+    var bits = part.trim().split(/\s+/).filter(Boolean);
+    if (bits.length) out[bits[0]] = bits.slice(1);
+  });
+  return out;
+}
+
+test("the page carries a CSP that cannot execute a remote or inline script", function () {
+  var d = cspDirectives();
+  assert.deepEqual(d["script-src"], ["'self'"],
+    "script-src must be exactly 'self' — it is the directive that keeps window.Android "
+    + "out of reach of injected code");
+  assert.deepEqual(d["default-src"], ["'none'"], "default-src must deny by default");
+  assert.deepEqual(d["object-src"] || d["default-src"], ["'none'"]);
+  assert.deepEqual(d["base-uri"], ["'none'"], "a rewritten <base> would relocate 'self'");
+});
+
+test("the CSP relaxations are the two the app actually needs, and no more", function () {
+  var d = cspDirectives();
+  /* style: the fill bars are emitted as style="width:NN%" */
+  assert.ok(d["style-src"].indexOf("'unsafe-inline'") !== -1,
+    "the countdown and battery bars render at zero width without inline styles");
+  assert.equal(d["style-src"].indexOf("'unsafe-eval'"), -1);
+  /* connect: Open-Meteo plus whatever LAN host Home Assistant is configured on */
+  assert.ok(d["connect-src"], "no connect-src — the weather fetch would be blocked");
+  /* nothing anywhere may be allowed to eval or to run a data: URI as script */
+  var all = Object.keys(d).map(function (k) { return d[k].join(" "); }).join(" ");
+  assert.equal(/unsafe-eval/.test(all), false, "CSP permits eval");
+  assert.equal(/script-src[^;]*data:/.test(all), false, "CSP permits data: scripts");
+});
+
+test("every data-open target has a panel, and every panel has a widget", function () {
+  var app = h.createApp({});
+  var panels = app.qsa("[data-panel]").map(function (n) { return n.getAttribute("data-panel"); });
+  app.qsa("[data-open]").forEach(function (n) {
+    var name = n.getAttribute("data-open");
+    assert.ok(panels.indexOf(name) !== -1, "data-open=\"" + name + "\" has no panel");
+    assert.ok(app.registry[name], "data-open=\"" + name + "\" has no registered plugin");
+  });
+  panels.forEach(function (p) {
+    assert.ok(app.registry[p], "panel \"" + p + "\" has no plugin to fill it");
+  });
+});
+
+test("every panel has both close affordances and a body", function () {
+  /* The Android back button is intentionally dead on this kiosk, so a panel with no visible
+     way out would strand the wall. */
+  var app = h.createApp({});
+  app.qsa("[data-panel]").forEach(function (panel) {
+    var name = panel.getAttribute("data-panel");
+    assert.ok(panel.querySelector(".panel-head [data-close]"), name + " has no header close");
+    assert.ok(panel.querySelector(".panel-foot [data-close]"), name + " has no footer close");
+    assert.ok(panel.querySelector("[data-body]"), name + " has no body");
+    assert.ok(panel.querySelector("[data-sub]"), name + " has no subtitle");
+  });
+});
+
+test("every widget named in WP.WIDGETS has a card and a label", function () {
+  var app = h.createApp({});
+  app.WP.WIDGETS.forEach(function (w) {
+    assert.ok(app.qs('[data-widget="' + w + '"]'), "no card for widget " + w);
+    assert.equal(typeof app.WP.WIDGET_LABELS[w], "string", "no label for widget " + w);
+  });
+});

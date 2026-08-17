@@ -189,14 +189,56 @@ powershell -File scripts/scan-secrets.ps1    # scan tracked files on demand
   Slack keys, private key blocks, JWTs, connection strings and password assignments, plus
   project-specific PII: emails, private LAN IPs, Android serials, local user paths.
   Placeholders like `<tablet-ip>` are allowlisted. Exit 1 on findings.
-- **`.githooks/pre-commit`** — runs the scanner against staged changes and blocks the commit.
+- **`.githooks/pre-commit`** — runs the scanner against the **git index** and blocks the commit.
+  Enable once per clone with `git config core.hooksPath .githooks`.
 - **`.github/workflows/secret-scan.yml`** — gitleaks over full history plus the repo scanner, on
   every push and weekly.
+
+**The headline risk in this repo is not an API key — it is a home location.**
+`inky-oled/assets/config.js` holds real coordinates and is tracked with `--skip-worktree` so
+they never stage. That bit was, until recently, the *only* thing protecting them: the scanner
+had no latitude/longitude rule at all and reported CLEAN while reading a working copy full of
+them. It now carries four coordinate rules — a `latitude:`/`longitude:`/`lat:`/`lon:`/`lng:`
+assignment with 3+ decimals (~110 m, house-sized), a bare `NN.NNNN, -NNN.NNNN` pair anywhere in
+prose, coordinates in a URL query string, and a `name:` inside a `config*.js` — with the
+committed Seattle placeholder allowlisted by its exact digits so the rule does not self-trigger.
+
+Two more properties worth keeping:
+
+- `-Staged` mode reads content from the **index** (`git show :<path>`), not from the worktree.
+  It used to list staged paths and then read whatever was on disk, so `git add secrets.js`
+  followed by an edit sailed straight through the hook.
+- Findings are printed with the matched span **redacted**. The scanner runs in a GitHub Actions
+  job on a public repo; echoing the offending value would publish the very thing it exists to
+  keep unpublished. File and line are enough to go and fix it.
 
 The working log (`PROGRESS.md`) is deliberately **gitignored** — it contains device serials and
 account addresses. This README carries the publishable findings instead.
 
-Verified by planting fake credentials and confirming all of them were caught.
+Verified by planting fake credentials and confirming all of them were caught, and — for the
+coordinate rules — in a throwaway scratch repo with the hook installed: a commit carrying
+non-placeholder coordinates in `config.js`, a bare pair in a README, and coordinates in an
+Open-Meteo URL were each blocked; the staged-dirty / clean-worktree bypass was blocked; and the
+committed Seattle placeholder and an ordinary clean commit both went through.
+
+## CI
+
+Two workflows:
+
+- **`.github/workflows/secret-scan.yml`** — the two scanner jobs described above, on every push
+  and pull request plus weekly.
+- **`.github/workflows/build.yml`** — runs the Inky OLED test suite on `ubuntu-latest` and
+  compiles the APK on `windows-latest`, so a change that does not build or does not pass
+  cannot reach `main`. Pushes are filtered to `main` so a PR branch does not run everything
+  twice, and both jobs carry a `timeout-minutes`. The build job resolves the Android SDK
+  explicitly and fails with what it found if there isn't one, rather than skipping. It also
+  asserts the shipping APK is not debuggable and that `assets/` stayed flat — both now written
+  to fail *closed*, which the debuggable check previously did not. Details in
+  [`inky-oled/README.md`](inky-oled/README.md#ci).
+
+```bash
+cd inky-oled && npm test        # the same suite locally; no npm install needed
+```
 
 ## Warning
 

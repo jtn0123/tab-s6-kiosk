@@ -815,6 +815,25 @@ window.WP = (function () {
       if (s < 60) return s + "s ago";
       if (s < 3600) return Math.round(s / 60) + "m ago";
       return Math.round(s / 3600) + "h ago";
+    },
+
+    /* Calendar arithmetic for the clock panel. It lives here, beside the other formatters,
+       rather than inline in the panel's render closure, because it is exactly the kind of
+       thing that goes quietly wrong: measuring from "now" to Jan 0 spans the spring-forward
+       hour, so the difference came to 228 d 23 h and floored to 228 on day 229 — wrong every
+       day between DST start and DST end. Comparing midnight to midnight and rounding is what
+       makes it DST-safe, and being a named function is what makes it checkable. */
+    dayOfYear: function (d) {
+      var soy = new Date(d.getFullYear(), 0, 1);
+      var today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      return Math.round((today0 - soy) / 86400000) + 1;
+    },
+    /* ISO-8601 week: Thursday of this week decides which year's week 1 we are counting from. */
+    isoWeek: function (d) {
+      var t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      t.setDate(t.getDate() + 3 - ((t.getDay() + 6) % 7));
+      var week1 = new Date(t.getFullYear(), 0, 4);
+      return 1 + Math.round(((t - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
     }
   };
 

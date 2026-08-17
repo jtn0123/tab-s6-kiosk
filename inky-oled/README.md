@@ -51,11 +51,80 @@ legacy starting hint; which widgets render is a per-widget switch in Settings.
 ## Build
 
 ```bash
-powershell -File build.ps1
+powershell -File build.ps1                # shipping build
+powershell -File build.ps1 -Debuggable    # + WebView devtools socket (see Security posture)
 ```
 
 Uses **only the Android SDK build-tools** — aapt2 -> javac -> d8 -> zipalign -> apksigner.
-No Gradle, no Maven, no network. Builds in seconds. Output ~69 KB.
+No Gradle, no Maven, no network. Builds in seconds. Output ~73 KB.
+
+The SDK is found via `ANDROID_SDK_ROOT`, then `ANDROID_HOME`, then
+`%LOCALAPPDATA%\Android\Sdk`. Override any of it:
+
+```bash
+powershell -File build.ps1 -SdkRoot D:\android-sdk -BuildToolsVersion 36.0.0 -Platform android-36
+```
+
+A missing build-tool prints what the SDK *does* have and the `sdkmanager` line that would fix
+it, rather than a bare path.
+
+## Tests
+
+```bash
+cd inky-oled
+npm test                              # or: node --test "test/**/*.test.js"
+```
+
+**No `npm install`.** The app has no dependencies and neither does the suite — it runs on
+node's built-in `node:test` / `node:assert` (node 22+; developed on 26). `package.json` exists
+only so `npm test` works.
+
+The tests load the real `assets/index.html`, `app.js` and `widgets.js` unmodified, into a small
+DOM stub with a virtual clock (`test/lib/minidom.js`, `test/lib/harness.js`), and drive them by
+dispatching real pointer events at real elements — so a control's label and the action behind
+it cannot drift apart without something failing. Nothing in `assets/` is exported or
+restructured for the tests' benefit; the only two seams added for them are `fmt.dayOfYear` /
+`fmt.isoWeek` (calendar arithmetic moved out of a render closure into the formatter namespace
+where the rest of it lives) and `weather.checkRollover()` (a named method instead of an
+anonymous interval body).
+
+Tests live outside `assets/`, so nothing ships inside the APK — and `assets.test.js` asserts
+that, along with the flat-assets rule.
+
+What the suite is for: **four of the five rounds of regressions on this panel were
+self-inflicted by fixes**, and every one was a pure function or a small state machine. Each has
+a test named `REGRESSION:` that fails when the bug is put back —
+
+| Historical bug | Caught by |
+|---|---|
+| Post-alarm button did the opposite of its label | `timer.test.js` — after the alarm the primary button reads Start *and starts*; `stateKey` must move whenever a control's legality moves |
+| Reset parked the countdown at 00:00 after a statement reorder | `timer.test.js` — Reset reloads the full duration, from a finished alarm and from a pause |
+| Double-tap on close reopened the panel underneath | `panels.test.js` — with the tile rect explicitly laid under the close bar; close-then-tap-*elsewhere* at 100 ms must still open |
+| Now card / hourly NOW chip desync after an hour rollover | `weather.test.js` — both are read from the DOM across a simulated 06:59 -> 07:00 crossing |
+| Day-of-year one low between DST start and end | `dates.test.js` — every day of 2024 in `America/Los_Angeles` |
+
+Also covered: countdown ceiling, lap-split reconciliation, duty cycle (time-weighted),
+settings merge, WMO codes, the demo simulator's mean reversion, `esc()` including the live
+Home Assistant feed, the growth cap and the `overflow=0` layout assertion, the bridge contract
+and its degradation, the monochrome-glyph rule, the CSP meta, and the poll cadences
+(`polling.test.js` — see below).
+
+### Coverage
+
+```bash
+node --test --experimental-test-coverage "test/**/*.test.js"
+```
+
+Currently **app.js 98% of lines / 88% of branches, widgets.js 97% / 81%**. The numbers only
+exist because `harness.js` hands `vm.runInContext` an *absolute* filename under `assets/`; with
+a bare `"app.js"` node attributed the sources to nothing and printed a 100%-of-empty report. CI
+runs this and asserts both files appear in it, for exactly that reason.
+
+Coverage is measured, not gated. A line being executed is not the same as its behaviour being
+asserted, and this suite has been mutation-tested precisely because the percentage does not
+prove much on its own; four surviving mutants found that way (a `<=` boundary, drift moving
+under a finger, the burn-in default with no config block, and `ago()`'s rounding) have tests
+now, and each was written by first reintroducing the mutation and watching it fail.
 
 ## What it shows
 
@@ -102,7 +171,81 @@ falls back to the simulator.
 
 > **The token grants full API access to your Home Assistant** and is stored in plain text inside
 > the APK. Only sideload this build onto your own device, and never commit a real token — the
-> repo's pre-commit scanner blocks it.
+> repo's pre-commit scanner blocks it. On this tablet's `userdebug` ROM the token is also
+> readable through the WebView devtools socket; see
+> [Residual risk](INTERACTIVE.md#residual-risk-the-devtools-socket).
+
+### You will also need CORS on the Home Assistant side
+
+This is the part nobody tells you, and it is the first thing that will happen when you flip
+`enabled` to `true`.
+
+The dashboard is a `file://` document, so its origin is the string `null`. The `Authorization`
+header makes every `/api/states` call a *non-simple* cross-origin request, so Chromium sends a
+CORS preflight `OPTIONS` first. A Home Assistant that does not answer that preflight for the
+`null` origin blocks **every** request before it leaves the device. What you see is:
+
+```
+Home Assistant: 6 entity error(s) — check baseUrl/token
+```
+
+…with correct `baseUrl` and a perfectly valid token, and one `blocked by CORS policy` line per
+entity per poll in logcat. Verified on device against a mock HA (details in
+[INTERACTIVE.md](INTERACTIVE.md#home-assistant-live-path-verification)): with the preflight
+unanswered, nothing populates; with it answered, everything does, on the first poll.
+
+In `configuration.yaml`:
+
+```yaml
+http:
+  cors_allowed_origins:
+    - "null"      # the quotes matter — bare null is a YAML null, not the string
+```
+
+then restart Home Assistant. If you would rather not open that up, the alternative is to stop
+being a `file://` page — serve the assets from HA itself, or from any origin you then allow —
+which is a bigger change than this project wants.
+
+## Poll cadences
+
+A wall panel's normal state is nobody looking at it, so the idle cost *is* the cost. Every
+repeating timer in the app is listed here with what it does and why it runs at that rate.
+`test/polling.test.js` and `test/device-bridge.test.js` assert the numbers.
+
+| # | Timer | Rate | Notes |
+|---|---|---|---|
+| 1 | clock tile tick | 1 Hz | Dirty-checked per node; `toLocaleDateString` is guarded by the calendar day |
+| 2 | clock panel readout | 1 Hz, open only | Writes two nodes; a full rebuild happens on the minute |
+| 3 | timer tick | **10 Hz** | Deliberately unchanged — tenths and tap latency. Paints are dirty-checked, so an idle tick writes nothing |
+| 4 | weather fetch | 15 min | `weatherRefreshMinutes` |
+| 5 | hour-rollover check | 15 s | **Deliberately unchanged** — this is the fix for the Now/NOW desync. Costs one `getHours()` |
+| 6 | hourly strip re-anchor | 15 s | Redraws only when `nowIndex()` moves; the scan behind it is memoised to one per hour |
+| 7 | hourly scroll snap-back | 5 s | One `scrollLeft` read; returns immediately unless the strip has been scrolled |
+| 8 | HA sensors | 5 s demo / `refreshSeconds` live | The live poll is a network call and is floored at 5 s |
+| 9 | Device bridge | 5 s open / **60 s closed** | See below |
+| 10 | burn-in drift | 120 s | `burnInProtection.intervalSeconds` |
+| 11 | layout heartbeat | 30 s | Backstop for a growth cap measured while a card was still empty. Two forced layouts a minute; kept |
+
+Measured before and after the throttling work, with the dashboard idle on the home view:
+
+| | before | after |
+|---|---:|---:|
+| clock tile DOM writes | 14,400 / h | 60 / h |
+| `toLocaleDateString()` | 3,600 / h | 0 / h |
+| clock panel rebuilds (panel open) | 600 / 10 min | 10 / 10 min |
+| bridge `deviceInfo()` JNI calls | 720 / h | 60 / h |
+| Device tile DOM writes | 1,440 / h | 0 / h |
+| timer tile DOM writes | 7,200 / h | 0 / h |
+| forecast timestamp reads | 2,400 / h | 10 / h |
+
+Two principles behind all of it:
+
+- **The timer keeps its rate; the work inside it is what backs off.** The Device widget's
+  callback still fires every 5 s, so opening its panel gets a fresh reading within one tick
+  rather than up to a minute later — what drops to 60 s is the JNI call and the render.
+  Opening the panel also takes a reading immediately.
+- **Dirty checks compare the rendered string, never the clock.** That is what keeps a 12/24h
+  flip or a seconds toggle landing on the very tick it happens, rather than on the next minute.
 
 ## Auto-start after reboot
 
@@ -139,6 +282,89 @@ Details in [INTERACTIVE.md](INTERACTIVE.md#wall-panel-posture).
 - `FLAG_KEEP_SCREEN_ON` while showing; shown over the lock screen, keyguard still armed
 - Manifest asks for landscape; the device renders portrait and the CSS is tuned for it, with a
   landscape fallback
+
+## Security posture
+
+The WebView holds a JS bridge (`window.Android`), so what can run inside it matters.
+
+**The app never asks for the devtools socket** — but on this tablet it gets one anyway.
+`WebView.setWebContentsDebuggingEnabled` is gated on `ApplicationInfo.FLAG_DEBUGGABLE`.
+Nothing sets that flag unless you pass `build.ps1 -Debuggable`, which adds aapt2's
+`--debug-mode`. There is no switch to remember at release time, and CI fails the build if a
+default-built APK ever comes out debuggable. The running build says which it is:
+
+```
+I InkyOLED: webview debugging off
+```
+
+That log line is the app's *request*, not the outcome, and on the wall panel the two do not
+agree. Measured on the device, with the shipping (non-debuggable) APK installed:
+
+```
+ro.build.type = userdebug      ro.debuggable = 0      package flags: no DEBUGGABLE
+/proc/net/unix → @webview_devtools_remote_<pid>     (pid = com.justin.inkyoled)
+```
+
+Chromium's WebView force-enables its devtools server on `userdebug` and `eng` builds
+regardless of what the app passes to `setWebContentsDebuggingEnabled`. This tablet runs a
+Magisk-patched `userdebug` ROM, so the socket is open, and an attached debugger gets script
+execution inside the page **plus `window.Android`**. See
+[Residual risk: the devtools socket](INTERACTIVE.md#residual-risk-the-devtools-socket) for
+the blast radius and what would actually close it. There is no app-side fix; it is a property
+of the ROM.
+
+**Navigation is allowlisted to `file:///android_asset/`.** A bare `WebViewClient` blocks
+external browser launches but permits in-WebView navigation anywhere — and the bridge is
+attached to the *WebView*, not to a page, so any document that loaded would inherit it.
+`shouldOverrideUrlLoading` now refuses everything else and logs scheme+host only (a blocked
+URL is by definition something we did not author; its path and query never reach logcat):
+
+```
+W InkyOLED: blocked navigation to https://example.com/…
+```
+
+`window.open` / `target=_blank` are refused too, by `WebChromeClient`'s default
+`onCreateWindow`. `setAllowFileAccess(false)` and `setAllowContentAccess(false)` take local
+files and `content://` away from the page; assets and resources are explicitly exempt from
+that setting, so the dashboard is unaffected.
+
+The bridge itself is read-only apart from the SharedPreferences pair, needs no permission
+beyond `ACCESS_NETWORK_STATE`, and deliberately avoids SSID/BSSID/signal (which would drag in
+a location permission).
+
+Deliberate and not a bug: the dashboard renders **over the lock screen**, so its contents are
+readable without unlocking. The keyguard is not bypassed — see *Screen-on behaviour*.
+
+## CI
+
+`.github/workflows/build.yml`, alongside the existing secret-scan workflow (which it does not
+touch):
+
+- **tests** (`ubuntu-latest`) — runs `npm test` (the command the README documents, so the
+  script cannot rot while CI stays green), asserts `package.json` still declares no
+  dependencies, and then asserts the suite **actually ran**: `node --test <glob>` exits 0 when
+  the glob matches nothing, so a rename of `test/` would otherwise turn this job into a green
+  light over zero executed tests. It parses the runner's summary and requires a floor.
+  Coverage is produced and checked for the presence of both app sources.
+- **build-apk** (`windows-latest`) — pins JDK 17, resolves the Android SDK from
+  `ANDROID_SDK_ROOT` / `ANDROID_HOME` and **fails loudly if there isn't one** rather than
+  skipping, installs the pinned build-tools + platform with `sdkmanager` if they are missing,
+  then runs `build.ps1`. It then checks the artefact: not debuggable, assets flat and
+  complete, no test code packaged, and that `-Debuggable` still does set the flag. The SDK pin
+  lives in one workflow-level `env:` and is passed to both `build.ps1` and the `aapt2` path,
+  so the script and the checks cannot drift onto different build-tools.
+
+The APK is **not** uploaded as an artifact: `build.ps1` bakes `assets/config.js` into it, and
+on a public repo an artifact is a download link.
+
+**House rule: every assertion must fail closed.** Two have already shipped here that did not —
+`-notmatch` on an array (which filters rather than answering yes/no, so it was true whenever
+any line differed), and `Select-String -Quiet` over an *empty* `$badging`, which printed
+`ok: not debuggable` whenever `aapt2` failed to run at all. PowerShell does not throw on a
+native command's exit code, so nothing else caught it. Both times it was the security-critical
+check that silently passed. Concretely: check `$LASTEXITCODE` after every native command,
+assert the output exists before asserting anything *about* it, and treat "zero results" as a
+failure rather than as a clean bill of health.
 
 ## Why it looks like this
 
@@ -199,6 +425,9 @@ output if you ever want the two linked.
 ## Not done yet
 
 Auto-start on boot and screen pinning — patch-backlog items rather than app features. The
-on-device settings UI is now built (widget #8). Untested paths: a real Home Assistant token, and
-the offline/stale badge (verifying it means toggling the tablet's Wi-Fi, which drops the adb
-transport).
+on-device settings UI is now built (widget #8).
+
+Untested against reality: a **real** Home Assistant instance (the live REST path is exercised
+by the suite against stubbed responses, but has never talked to an actual HA box), and the
+offline/stale badge on device (verifying it means toggling the tablet's Wi-Fi, which drops the
+adb transport — the suite covers the code path).

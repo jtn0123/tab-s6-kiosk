@@ -3,6 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Content Security Policy.
+
+     shouldOverrideUrlLoading in MainActivity only sees NAVIGATIONS. It does not see a
+     <script src>, an <img>, or a fetch, so on its own it does not stop an injected remote
+     script from loading — and that script would get window.Android, because
+     addJavascriptInterface attaches the bridge to the WebView, not to a page. esc() is the
+     only thing standing in that path today. This meta closes it at the browser level.
+
+     The directive doing the security work is script-src 'self': no remote origin, no data:
+     URI and no inline <script> can execute, so the bridge is reachable only from the three
+     files packaged in the APK.
+
+     Two deliberate relaxations, both load-bearing:
+       style-src 'unsafe-inline' — the panels emit style="width:NN%" for the fill bars
+         (bar(), the countdown progress bar). Without it every bar renders at zero width.
+         It permits no script.
+       connect-src http: https: — the Home Assistant base URL is user configuration in
+         config.js and can be any host on the LAN; a static meta tag cannot know it, and
+         hard-coding api.open-meteo.com alone would break the HA feed the day somebody
+         enables it. Widen no further than this: 'none' everywhere else means an injected
+         string still cannot load code, only talk to a host it cannot get code from. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' http: https:; base-uri 'none'; form-action 'none'">
 <title>Wall Panel</title>
 <link rel="stylesheet" href="style.css">
 </head>
