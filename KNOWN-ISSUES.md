@@ -108,9 +108,12 @@ Two traps discovered for anyone who retries anyway:
    (`PHH-Enroll`), which is the only component that ever forwarded a press to the HAL. It also
    dies at `UdfpsHelper: failed to cast the HIDL to V2_3` — Samsung's blob predates that
    interface. The overlay is kept, unused, in `patches/O-fingerprint-udfps/`.
-2. **The sensor is not where portrait math says it is.** `installOrientation 3` — the panel is
-   mounted rotated. The kernel's position node (`11.74mm from edge, centered`) is in panel-native
-   space; in portrait that lands on a **side edge at mid-height**, not bottom-center.
+2. **The sensor is not where the kernel node's naive reading says.** Converting
+   `11.74mm-from-bottom` gives portrait (800, 2428); the owner's stock muscle memory and their
+   first instinctive press (recorded at (640, 1941)) put the real spot at center-x,
+   **y ≈ 1900–2150** — an inch-plus higher. The panel is mounted rotated
+   (`installOrientation 3`), so treat the node's frame as unverified. Details in
+   `patches/O-fingerprint-udfps/README.md`.
 
 ## 2.2 Ambient light sensor — dead, so no adaptive brightness
 

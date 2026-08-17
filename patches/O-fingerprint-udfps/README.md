@@ -11,10 +11,14 @@ system layer, which exists nowhere else.
 ## Hardware
 
 - **Egis ET713**, optical, under-display. `/dev/esfp0`, `type_check = 8`, SPI at 20 MHz.
-- Position node `/sys/class/fingerprint/fingerprint/position` = `11.74,0.00,7.50,7.50,...`
-  (mm, **panel-native frame**). The panel is mounted rotated (`installOrientation 3`), so this is
-  NOT portrait bottom-center — in portrait the sensor sits on a side edge at mid-height,
-  "above the Home button" in the tablet's natural landscape orientation.
+- Position node `/sys/class/fingerprint/fingerprint/position` = `11.74,0.00,7.50,7.50,...` —
+  **do not trust a naive mm-from-bottom reading of this.** Converting it that way puts the sensor
+  at portrait (800, 2428); the owner's One UI muscle memory and their first instinctive unlock
+  press (recorded at **(640, 1941)** via `pointer_location`) both say the true spot is
+  center-x, roughly **y ≈ 1900–2150** — an inch-plus higher. The panel is also mounted rotated
+  (`installOrientation 3`), so the node's coordinate frame is unverified. Best available guess
+  for a future `set_fod_rect`: center (800, ~2000), and use a generous rect — the stock target
+  is visibly larger than the 85 px square tried here.
 - Optical means the panel **is the light source**. Samsung's bright green/white glow on press is
   functional illumination, not decoration. No glow → the sensor photographs darkness → timeout.
 
