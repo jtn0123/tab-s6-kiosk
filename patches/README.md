@@ -17,16 +17,20 @@ Everything here was researched and — where possible — **validated in an Andr
 |---|---|---|---|---|---|
 | **C** | Treble toggles | runtime settings | no | none | yes |
 | **D** | Kiosk settings | `settings put` | no | none | yes |
-| **E** | Audio DSP (RootlessJamesDSP) | app + adb permission | no | none | yes |
-| **F** | Speaker tuning — **diagnostic only** | `tinymix` read-only | yes | none (reads only) | n/a |
-| **G** | Battery longevity — **diagnostic first** | power_supply sysfs | yes | none (reads only) | n/a |
-| **H** | Persistent wireless adb | `persist.adb.tcp.port` | yes | LAN security trade | yes |
+| **E** | Audio DSP (JamesDSP) | app + adb permission | optional | none | yes |
+| **K** | **Magisk root** | patched boot image | n/a | Play Integrity fails | **no** |
+| **G** | Battery longevity — **applied** | `batt_full_capacity` sysfs | yes | none | yes (`/data`) |
+| **H** | Persistent wireless adb | `persist.adb.tls_server.port` | yes | LAN security trade | yes |
 | **I** | OLED burn-in protection | settings + kiosk design | no | none | yes |
 | **B** | Haptic strength | `/vendor/build.prop` | yes | low | **no** |
 | **A** | Display config | `/vendor/etc/displayconfig/` | yes | **bootloop if malformed** | **no** |
+| **F** | Speaker tuning — **closed, no action** | `tinymix` read-only | yes | none (reads only) | n/a |
 
 **Start with C.** It is free, instant, and two of its three items are still untried —
 including one that likely disproves a claim in the original turnover doc.
+
+**Do K before anything needing root.** `adb root` does not work on this device — it kills USB *and*
+wireless until a reboot. Patch K is how you get a working `su`.
 
 **Do A last**, and only if you actually want HDR. It is the only patch that can brick a boot.
 
@@ -59,59 +63,73 @@ real fix is the kiosk app keeping pixels moving.
 
 Directly conflicts with Patch D's `stay_on_while_plugged_in`. Read both before choosing.
 
+## K — Magisk root (prerequisite for A, B, G, H)
+`K-magisk-root/README.md`
+
+**`adb root` is unusable on this device.** It restarts adbd, the vendor USB gadget HAL loses the
+re-enumeration race, and the tablet vanishes from USB *and* wireless until a reboot. Reproduced
+three times.
+
+Magisk patches the boot image instead, so `su` works inside a normal shell and adbd never restarts.
+Includes the gotcha that costs an hour: **Magisk cannot unpack Samsung's `boot.img.lz4`** — you must
+decompress it PC-side first.
+
 ## H — Persistent wireless adb
 `H-wireless-adb/README.md`
 
-Survives reboots, so you can manage the tablet once it is on the wall. Also sidesteps the USB
-drop-out this device does whenever adbd restarts.
+Pins wireless debugging to a fixed port so it stops picking a random one each boot. Needed here
+because this GSI's Settings screen sometimes fails to display the port at all.
 
-Trade: leaves an adb port open on the LAN permanently. Fine on a home network, but a deliberate
-choice rather than a default.
+Uses `persist.adb.tls_server.port` (modern, TLS-paired) rather than the legacy unencrypted
+`persist.adb.tcp.port`. Trade: a paired adb service stays reachable on the LAN.
 
-## G — Battery longevity (highest long-term value)
-`G-battery/diagnose.ps1` · `README.md`
+Also documents how to recover the port **without root** — adbd logs it, and `shell` is in the `log`
+group. `adb mdns services` is unreliable and fails silently.
+
+## G — Battery longevity (highest long-term value) — **APPLIED**
+`G-battery/README.md` · `battery-cap.sh` · `diagnose.ps1`
 
 A wall panel is plugged in 24/7. Holding a lithium cell at 100% and warm wears it out fast — on a
 Tab S6 that means a **swollen battery in a year or two**, which pushes the screen out of the
-chassis. Capping charge around 80% is the fix.
+chassis.
 
-Run the diagnostic first; it finds which charge-control sysfs node this device actually has
-(`batt_slate_mode` / `store_mode` / `input_suspend`). **Do not guess** — writing the wrong one can
-stop charging entirely or freeze the reported level.
+The node on this device is **`batt_full_capacity`** — Samsung's real charge limit, enforced in
+firmware, so no polling daemon is needed. Set to `80`, made persistent with a Magisk boot script.
+(`batt_capacity_max` is *not* a charge limit — do not touch it.)
 
-Interacts with Patch D: if the screen stays on permanently, the extra heat makes charge capping
-matter more, not less.
+Battery health was measured at **100%** (`charge_full == charge_full_design`), so this is purely
+preventive.
 
-## F — Speaker tuning investigation (START HERE for speaker quality)
-`F-speaker-tuning/diagnose.ps1` · `README.md`
+## F — Speaker tuning investigation — **CLOSED, hypothesis disproven**
+`F-speaker-tuning/README.md` · `diagnose.ps1`
 
-**This targets the actual complaint: all four speakers play, but One UI sounded far better.**
+The theory was that the CS35L41 amps' onboard DSP never loads on a GSI, leaving the speakers
+"routed but not tuned". **The diagnostic disproved it.**
 
-The four CS35L41 amps have onboard DSP doing speaker protection, bass extension and loudness —
-that DSP is what makes small drivers sound big. **Neither speaker fix touches it.** Both only set
-ASPRX1 slot positions, i.e. routing. Verified by reading `phh-spkrot.sh` off the tablet.
+All four amps report `DSP Booted = On`, `DSP1 Firmware = Protection`, `HALO_STATE = 2` with a live
+heartbeat, `CSPL_ENABLE = 1`, and a valid applied calibration (`CAL_STATUS = 1`,
+`CAL_SET_STATUS = 2`, checksum matches). The hardware tuning and protection DSP is **fully
+operational**.
 
-`/vendor` is still Samsung's, so the Cirrus firmware and calibration blobs are almost certainly
-still on the device. The diagnostic finds out whether anything loads them.
+What is missing is Samsung's **software** effects layer (Dolby Atmos / SoundAlive) — not a mixer
+setting. That makes patch E the answer, not a `tinymix` tweak.
 
-**Read-only. Writes nothing.** Run it, send back `speaker-report.txt`, then decide.
+⚠️ This is why diagnose-first mattered. Raising amp gain "because the DSP isn't loaded" would have
+been driving drivers whose protection *was* running — risking permanent damage, unrecoverable by
+TWRP — to fix a problem that did not exist.
 
-⚠️ **Do not raise amp gain blind.** Speaker protection exists to stop these drivers being
-physically damaged. Overdriving without protection running risks permanent damage — and unlike a
-bad config file, that is not recoverable with TWRP.
-
-## E — System-wide audio DSP
+## E — System-wide audio DSP (the actual fix for speaker quality)
 `E-audio-dsp/README.md`
 
-RootlessJamesDSP — parametric EQ, convolution, bass, virtual surround, system-wide, **no root**.
+JamesDSP — parametric EQ, convolution, bass, virtual surround, system-wide.
 
-This is the real answer to "better audio". Samsung's Dolby Atmos / UHQ / tuning are One UI
-features and are not recoverable on a GSI, same as HDR. The Treble audio toggles in Patch C are
-mostly Bluetooth-call and headphone-jack fixes and will likely do nothing here.
+With patch F closed, **this is the real answer to "before it was amazing"**. Samsung's Dolby Atmos /
+UHQ tuning are One UI components, not recoverable on a GSI, same as HDR. The Treble audio toggles in
+Patch C are mostly Bluetooth-call and headphone-jack fixes and will likely do nothing here.
 
-**Compatibility limit worth knowing up front:** it processes **SmartTube / YouTube** (your main
-use case) but **NOT Brave or any Chrome-based app**, which block audio capture. If the kiosk ends
-up playing audio through a WebView instead of SmartTube, this patch will not affect it.
+**Now that root is available (patch K), prefer the rootful JamesDSP** — it hooks at the audio HAL,
+so it processes *everything* including Brave/WebView. The rootless variant is limited to apps that
+permit audio capture: SmartTube/YouTube yes, **Brave and Chrome-based apps no**.
 
 ## B — Haptic strength
 `B-haptics/README.md`
@@ -145,3 +163,8 @@ needs system_server, which is the process crashing.
 
 Patches A and B live in `/vendor` and are wiped by a system image update. Re-apply them, along
 with `tabs6-gsi-fixes.zip`. Patches C and D live in `/data` and survive.
+
+**Patch K (root) does not survive a system image flash either** — the GSI update replaces `system`,
+but re-flashing `boot` from stock (or an OTA touching boot) removes Magisk. Keep both the stock and
+patched boot images archived so root is a two-minute `dd`, not a re-derivation. Patch G's boot
+script lives in `/data/adb/` and survives, but stops taking effect until root is restored.

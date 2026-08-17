@@ -71,16 +71,20 @@ Each uses a different mechanism, so each applies and reverts on its own.
 | B | Haptic strength | tuning only | yes | low |
 | C | Treble toggles | brightness cap, fingerprint, audio policy | no | none |
 | D | Usage mode — panel vs tablet | conflicting rotation/sleep settings | no | none |
-| E | Audio DSP (RootlessJamesDSP) | no system EQ on a GSI | no | none |
-| F | Speaker tuning — **diagnostic** | speakers routed but not tuned | yes | none |
-| G | Battery longevity — **diagnostic** | 24/7 charging kills the cell | yes | none |
-| H | Persistent wireless adb | USB drops when adbd restarts | yes | LAN security trade |
+| E | Audio DSP (JamesDSP) | no system EQ on a GSI | optional | none |
+| F | Speaker tuning — **closed** | hypothesis disproven, no action needed | yes | none |
+| G | Battery longevity — **applied** | 24/7 charging kills the cell | yes | none |
+| H | Persistent wireless adb | wireless port is random every boot | yes | LAN security trade |
 | I | OLED burn-in protection | static UI ghosts the panel | no | none |
 | J | Video playback | **no AV1 hardware decode**; Widevine L3 | no | none |
+| K | **Magisk root** | `adb root` kills all transports on this device | n/a | Play Integrity fails |
 
 Start with **C** and **J** — both free, and both fix real defects. C includes a fingerprint
 procedure that likely disproves the "fingerprint never works on a GSI" folklore. J covers the AV1
 decode cliff, which will stutter YouTube if left alone.
+
+**Do K before anything that needs root.** `adb root` does not merely fail here — it takes USB *and*
+wireless down until a reboot.
 
 **A is the only one that can bootloop the device.** Do it last, and only if you want HDR back.
 
@@ -99,7 +103,10 @@ What actually breaks on this device, and whether it is recoverable:
 | Colour clamped to sRGB on a P3 panel | **Improved** — vendor vivid mode |
 | UI rendered at 360 dpi on a ~287 dpi panel | **Fixable** — patch A |
 | HDR pipeline inert (`mMaxDesiredHdrRatio = 1.0`) | **Probably fixable** — patch A, unverified on-device |
-| Speakers routed but **not tuned** (CS35L41 DSP) | **Under investigation** — patch F |
+| Speakers thinner than stock | **Not the DSP** — it is loaded and calibrated. Missing Atmos/SoundAlive; use patch E |
+| `adb root` kills USB and wireless until reboot | **Worked around** — Magisk root, patch K |
+| Wireless debugging port randomises; UI may not show it | **Fixed** — pinned to 5555, patch H |
+| Battery held at 100% on a 24/7 panel | **Fixed** — capped at 80%, patch G |
 | Fingerprint not working | **Probably fixable** — patch C3 |
 | **No AV1 hardware decode** (SD855 limitation) | **Not a GSI bug.** Work around it — patch J |
 | **Widevine L1 → L3** | **Permanent.** Knox fuse blown. HD Netflix/Disney+ gone |
@@ -108,9 +115,19 @@ What actually breaks on this device, and whether it is recoverable:
 
 - **Reactivation Lock blocks Odin outright.** Remove the Samsung *and* Google accounts before
   unlocking, or the flash fails with an auth error. Not mentioned in most guides.
-- **The four speakers are only *routed*, not *tuned*.** Both community fixes set ASPRX1 slot
-  positions; neither touches the CS35L41 amps' onboard DSP. That is likely why they sound thinner
-  than stock — see patch F.
+- **The "speakers are routed but not tuned" theory is wrong.** It is a very plausible story — both
+  community fixes only set ASPRX1 slot positions, so it *looks* like nothing loads the CS35L41 DSP.
+  Reading the mixer proved otherwise: all four amps report the protection firmware loaded, HALO DSP
+  running with a live heartbeat, and per-unit calibration applied. The gap is Samsung's *software*
+  Atmos/SoundAlive layer. Had we "fixed" it by raising amp gain, we would have been overdriving
+  speakers whose protection was working fine. See patch F.
+- **`adb root` is worse than useless on this device.** It restarts adbd, the vendor USB gadget HAL
+  loses the race, and the tablet drops off USB *and* wireless until a reboot. Use Magisk (patch K).
+- **Magisk cannot unpack Samsung's `boot.img.lz4`** — it reports "unable to unpack boot image".
+  Decompress to a raw `boot.img` on the PC first and check for the `ANDROID!` magic bytes.
+- **`adb mdns services` fails silently** on networks that filter multicast — an empty list, not an
+  error. To find the wireless port, read adbd's own log instead:
+  `adb shell "logcat -d | grep 'adbwifi started'"`. No root needed.
 - **A malformed display config bootloops `system_server`** and does *not* fail safe. `initFromFile`
   returns `true` even after a parse error, so the `config.xml` fallback never runs. Recovery is
   TWRP, not adb.

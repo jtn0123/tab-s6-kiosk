@@ -1,68 +1,96 @@
 # Patch F — Speaker tuning investigation
 
-**Status: DIAGNOSTIC ONLY. Nothing to apply yet.**
+**Status: RESOLVED — hypothesis disproven. Nothing to apply. Read this before believing the
+"GSI breaks the speaker DSP" folklore.**
 
-This is the one that targets the actual complaint: *all four speakers play, but they sounded
-far better on One UI.*
+The complaint that started this: *all four speakers play, but they sounded far better on One UI.*
 
-## The hypothesis
+## The hypothesis (wrong, but worth writing down)
 
-The Tab S6 uses four **Cirrus Logic CS35L41** amplifiers. These are not dumb amps — each has an
-**onboard DSP** that runs firmware doing:
+The Tab S6 uses four **Cirrus Logic CS35L41** amplifiers. Each has an **onboard DSP** running
+firmware that does speaker protection, bass extension and loudness enhancement, plus per-unit
+factory calibration.
 
-- **Speaker protection** (excursion/thermal limiting)
-- **Bass extension and loudness enhancement** — this is what makes small drivers sound big
-- Per-unit **calibration** data measured at the factory
-
-On stock One UI, Samsung loads its calibration + AKG-derived tuning into that DSP, then layers
-Dolby Atmos on top. The result is the "amazing" sound.
-
-**Neither speaker fix for this device touches any of that.** Both the original
+Neither community speaker fix touches any of that — both the original
 ([1987tlz's Magisk module](https://xdaforums.com/t/gsi-4-speaker-fix-for-galaxy-tab-s6.4780990/))
-and the newer `tabs6-gsi-fixes.zip` only set **ASPRX1 slot positions** — i.e. *which channel goes
-to which amp*. Routing, not tuning. Confirmed by reading `phh-spkrot.sh` off this tablet: it calls
-`tinymix` solely on `"<FL|FR|RL|RR> ASPRX1 Slot Position"`.
+and `tabs6-gsi-fixes.zip` only set **ASPRX1 slot positions**, i.e. which channel goes to which amp.
+Routing, not tuning. `phh-spkrot.sh` on the device calls `tinymix` solely on
+`"<FL|FR|RL|RR> ASPRX1 Slot Position"`.
 
-So the plausible story is: routing is fixed, the amps play, but the DSP that gives them body is
-either not loaded or not enabled. That would sound exactly like "all four work but it's thin."
+So the story looked obvious: routing fixed, amps play, but the DSP that gives them body never
+loads. That would sound exactly like "all four work but it's thin."
 
-**Encouraging fact:** `/vendor` is still Samsung's partition — untouched by the GSI. The Cirrus
-firmware and calibration blobs are almost certainly still physically present on the device. The
-question is purely whether anything loads and enables them.
+**It was wrong.**
 
-## What to run
+## What the diagnostic actually found
+
+Full `tinymix` dump — 4242 controls, with real root. Every one of the four amps (RR/RL/FR/FL)
+reports the same thing:
+
+| Control | Value | Means |
+|---|---|---|
+| `DSP Booted` | `On` | DSP core running |
+| `DSP1 Preload Switch` | `On` | firmware preloaded |
+| `DSP1 Firmware` | `Protection` | the Cirrus protection/tuning firmware **is** the loaded image |
+| `DSP1 Protection 400a4 HALO_STATE` | `0x02` | HALO DSP in run state |
+| `... HALO_HEARTBEAT` | incrementing | DSP alive, not hung |
+| `... cd CSPL_ENABLE` | `1` | Cirrus SPL processing enabled |
+| `... cd CAL_STATUS` | `1` | calibration loaded |
+| `... cd CAL_R` | `0x2184` | per-unit measured coil resistance |
+| `... cd CAL_CHECKSUM` | `0x2185` | matches `CAL_R + 1` — checksum valid |
+| `... cd CAL_SET_STATUS` | `2` | calibration **applied** |
+
+Kernel log corroborates the probe path:
+
+```
+cs35l41 3-0040..0043: Cirrus Logic CS35L41 (35a40), Revision: A0
+cs35l41 3-0040: Prince MFD core probe
+cs35l41-cal cs35l41-cal.1.auto: Prince Calibration Driver probe, Dev ID = 35a40
+cirrus cirrus_pwr: cirrus_pwr_set_params: global enable = 0, cs35l41_r, target temp = 3700
+```
+
+**The hardware tuning and protection DSP is fully operational on the GSI.** `/vendor` is still
+Samsung's partition, the firmware blobs load, and calibration is applied per speaker.
+
+## So what is actually missing
+
+Samsung's **software** effects layer — Dolby Atmos / SoundAlive / UHQ upscaling. That is a
+proprietary APK + audio-effects stack living in One UI's `/system`, which a GSI by definition
+replaces. It is not a mixer setting, so no amount of `tinymix` poking brings it back.
+
+That makes this a software-EQ problem, which is **[patch E](../E-audio-dsp/)** — and with real root
+now available, the full rootful JamesDSP applies system-wide (convolver / impulse responses,
+dynamic bass), not just the rootless per-app variant.
+
+## The gain trap this avoided
+
+**Do not raise amp gain blind.** The original plan was diagnose-first precisely because speaker
+protection exists to stop these drivers being physically destroyed by overdriving. Had the DSP
+genuinely been unloaded, raising gain would have been driving unprotected drivers — and unlike a
+bad config file, a blown voice coil is not recoverable with TWRP.
+
+The diagnostic showed the protection firmware **is** running, so the amps are already being driven
+to their safe limit. There was never gain headroom to reclaim here. Diagnosing first turned a
+tempting, plausible, hardware-damaging change into a five-minute read.
+
+## One loose end
+
+All four amps report `Boost Enable = Disabled`. The CS35L41's boost converter raises supply voltage
+for more output headroom, and stock may well have run it enabled.
+
+Deliberately **not** changed. It interacts directly with the thermal/excursion limits the protection
+firmware enforces, and the payoff (some loudness) does not justify the risk while an untried
+software EQ is sitting right there. Revisit only if patch E alone doesn't close the gap, and only
+with protection confirmed still engaged.
+
+## Reproducing
 
 ```bash
 powershell -File diagnose.ps1 > speaker-report.txt
 ```
 
-Needs root (Developer options -> Root access -> "ADB only"). `tinymix` returns
-"Failed to open mixer" as the plain shell user — this was already hit during verification.
+Read-only — dumps the mixer, checks `/vendor` firmware, greps the kernel log for the load path,
+and records calibration state. Needs root; `tinymix` returns "Failed to open mixer" as plain shell.
 
-**The script only reads. It writes nothing.** It dumps the full mixer control list, checks whether
-Cirrus firmware exists in `/vendor`, greps `dmesg` for whether the kernel actually loaded it,
-looks for calibration data, and records current gain/DSP control values.
-
-## ⚠️ Why this is diagnose-first, not tweak-first
-
-**Do not raise amp gain blind.** Speaker protection exists because these drivers can be physically
-damaged by overdriving them. If the protection DSP is *not* running and gain gets raised anyway,
-distortion or permanent driver damage is a real possibility — and unlike a bad config file, that
-is not recoverable with TWRP.
-
-So: read the state, work out whether the DSP is loaded, and only then decide.
-
-## Realistic expectations
-
-- **Dolby Atmos is not coming back.** It is a One UI component, same category as HDR.
-- **If the Cirrus DSP is genuinely not loaded, enabling it could be a large improvement** — this is
-  the single most likely explanation for the drop in quality, and the most promising lead.
-- **If the DSP *is* already loaded**, then the gap is Samsung's tuning/Atmos layer, and the
-  practical answer becomes EQ compensation via Patch E (RootlessJamesDSP), which covers SmartTube
-  but not Brave.
-
-## Next step
-
-Run the diagnostic and send back `speaker-report.txt`. The mixer dump will show whether there are
-DSP-enable, tuning, or gain controls sitting at defaults — and that determines whether there is a
-safe, targeted change worth making.
+Note the kernel log is reachable **without** root via `logcat -b kernel` (shell is in the `log`
+group), which is enough to confirm the driver probe — handy when root is unavailable.

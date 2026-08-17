@@ -1,5 +1,7 @@
 # Patch G — Battery longevity
 
+**Status: APPLIED and persistent. The node is `batt_full_capacity`.**
+
 ## Why this matters most of all the remaining patches
 
 A wall panel is plugged in **24/7**. Holding a lithium battery at 100% and warm is the fastest way
@@ -9,42 +11,65 @@ screen out of the chassis and can crack it.
 Keeping charge in the 20–80% band dramatically extends life. For a permanently-mounted tablet this
 is the difference between "still fine in 5 years" and "binned in 2".
 
-## How it works
+## What this device actually has
 
-Samsung/Qualcomm devices expose a sysfs file that stops charging. Which one exists varies:
+The diagnostic ruled out the usual suspects and found the good one:
 
-| Node | Behaviour |
-|---|---|
-| `batt_slate_mode` | Samsung. `1` = stop charging, `0` = resume |
-| `store_mode` | Samsung retail-demo mode. Freezes the level until unplugged |
-| `input_suspend` / `battery_input_suspend` | Qualcomm. `1` = cut charge input |
-| `batt_capacity_max` | Reports 100% early (e.g. `800` = real 80%) |
+| Node | Value found | Verdict |
+|---|---|---|
+| `batt_full_capacity` | `0` (off) | **This is the one.** Samsung's real charge limit — set it to a percentage and the firmware stops there |
+| `batt_slate_mode` | `0` | present but cruder — a hard stop-charging toggle, needs polling logic |
+| `store_mode` | `0` | retail demo mode, sticky on some devices — avoid |
+| `batt_capacity_max` | `990` | scaling//reporting value, **not** a charge limit — do not touch |
 
-The SM-T860 is Snapdragon 855, so `input_suspend` is likely — but it has to be checked.
+`batt_full_capacity` is the right mechanism because the **firmware** enforces the target. No polling
+daemon, no app watching the level, nothing to go wrong if a script dies.
 
-## Step 1 — diagnose (do this first)
+Battery health at time of writing: `charge_full` = `charge_full_design` = `7040000` — **100%, zero
+measured degradation.** So this is purely preventive, applied before any damage.
+
+## Apply
+
+Needs root (see [patch K](../K-magisk-root/) — `adb root` does not work on this device).
 
 ```bash
-powershell -File diagnose.ps1 > battery-report.txt
+adb shell "su -c 'echo 80 > /sys/class/power_supply/battery/batt_full_capacity'"
 ```
 
-**Read-only, changes nothing.** Needs root. Send the report back and we pick the right node.
+Verify:
 
-## Step 2 — apply (after we know which node exists)
+```bash
+adb shell "su -c 'cat /sys/class/power_supply/battery/batt_full_capacity'"   # -> 80
+```
 
-Not written yet, deliberately. Two possible approaches once the node is known:
+## Make it persist
 
-- **App:** "Battery Charge Limit" (root) — set 80%, it handles the polling
-- **Script:** a small init service that watches level and toggles the node
+sysfs does not survive reboot. A Magisk boot script does:
 
-## ⚠️ Caveats
+```bash
+adb push battery-cap.sh /data/local/tmp/battery-cap.sh
+adb shell "su -c 'mkdir -p /data/adb/service.d && \
+  cp /data/local/tmp/battery-cap.sh /data/adb/service.d/battery-cap.sh && \
+  chmod 755 /data/adb/service.d/battery-cap.sh'"
+```
 
-- **Do not guess the node.** Writing to the wrong power-supply file can stop charging entirely, or
-  freeze the reported level so the tablet looks stuck at some percentage.
-- **`store_mode` is sticky on some devices** — it can require unplugging for several seconds to
-  clear. Prefer `slate_mode` or `input_suspend` if present.
-- With charging capped, the tablet runs off battery down to your lower limit, then recharges. That
-  is normal and correct — it is not "failing to charge".
+`/data/adb/service.d/` runs late in boot, after `/data` is mounted. The script sleeps 30s first so
+the power-supply driver is definitely up before writing.
+
+## Revert
+
+```bash
+adb shell "su -c 'echo 0 > /sys/class/power_supply/battery/batt_full_capacity'"
+adb shell "su -c 'rm /data/adb/service.d/battery-cap.sh'"
+```
+
+`0` means "no cap" — full charging returns.
+
+## What you will see
+
+The tablet charges to 80% and stops. It then runs down slightly and tops back up. **This is correct
+behaviour, not a charging fault** — the reported level simply never reaches 100% again while the cap
+is set.
 
 ## Related
 
