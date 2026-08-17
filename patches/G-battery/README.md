@@ -113,3 +113,66 @@ the charger plugged in, the cap is doing its job.
 With the cap off at "100%", the tablet still drew **408 mA** — it was trickle-topping a cell it
 considered full. That continuous top-up at maximum charge, warm, forever, is exactly the wear this
 patch exists to prevent.
+
+## "The cap is set but it still says 100%"
+
+This is the most common way to conclude the cap is broken. It isn't.
+
+`batt_full_capacity` stops charging **above** its threshold. It cannot discharge the cell. And a
+plugged-in tablet runs off USB power, so the battery is never drawn down — there is nothing to
+"drift" toward 80%. If the battery was full when you set the cap, it stays full indefinitely.
+
+The cap only takes effect on the way **up**: once the level falls below 80% it charges back to 80%
+and holds. You just have to get it into that band once.
+
+### Getting there without unplugging: `drain-to-cap.sh`
+
+Samsung's kernel exposes `batt_slate_mode`, which makes the device run **from the battery while
+still plugged in**:
+
+| `batt_slate_mode` | `status` | `current_now` |
+|---|---|---|
+| 0 | `Not charging` | +17 mA |
+| 1 | **`Discharging`** | **−600 to −1200 mA** |
+
+```bash
+adb push drain-to-cap.sh /data/local/tmp/
+adb shell "su -c 'setsid sh /data/local/tmp/drain.sh 80 </dev/null >/data/local/tmp/drain.log 2>&1 &'"
+adb shell "su -c 'tail -f /data/local/tmp/drain.log'"
+```
+
+Roughly 7 minutes per percentage point (~600 mA against a 7040 mAh cell), so 100% → 80% takes about
+2¼ hours. Faster with the screen on, which pushes it past 1200 mA.
+
+### The safety design, and why each piece is there
+
+Leaving slate mode on with nothing watching would drain the tablet flat, so:
+
+- **`FLOOR=70`** — a hard stop independent of the target, in case the target is wrong or a level
+  read is garbage.
+- **`MAX_ITERS=600`** (5 h) — a backstop against a wedged loop. Sized deliberately: an earlier
+  2-hour bound stopped at ~84%, short of the target, because the drain rate makes 20% take longer
+  than that.
+- **`trap cleanup EXIT INT TERM`** — slate mode is cleared on any normal exit, Ctrl-C, or `kill`.
+- **slate mode re-asserted every pass** — this one is not paranoia. Running two copies of the
+  script at once is easy to do by accident; when the first exits, its trap clears slate mode and
+  the *other* copy keeps counting against a tablet that quietly stopped discharging. Re-asserting
+  each iteration makes the loop self-healing.
+
+**`kill` alone is not enough to stop it.** The loop spends its life inside `sleep 30`, and the shell
+defers the signal until that returns, so a `kill` appears to do nothing for up to 30 seconds. If you
+`kill -9`, the trap **cannot** run — clear slate mode yourself:
+
+```bash
+adb shell "su -c 'echo 0 > /sys/class/power_supply/battery/batt_slate_mode'"
+```
+
+### Verify it finished cleanly
+
+```bash
+adb shell "su -c 'cd /sys/class/power_supply/battery; \
+  echo level=$(cat capacity) slate=$(cat batt_slate_mode) status=$(cat status)'"
+```
+
+Want: level ≈ 80, **slate=0**, status `Not charging`. A non-zero slate with no script running means
+the tablet is still discharging and nothing is watching it.
