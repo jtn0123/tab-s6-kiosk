@@ -133,6 +133,75 @@ test("the Air panel names which pollutant is nearest its guideline", function ()
    Deleting a screen means deleting the assertions that kept it honest, not leaving them to
    pass against nothing. */
 
+/* ---------------- the picture widgets ---------------- */
+
+test("a broken picture source never prints the machine's own words", function () {
+  /* Found by running the simulator fully offline: the panel rendered "NASA is not
+     answering right now — Error: sim offline." On the tablet the same path prints
+     whatever the Java shell threw — "connect timed out", "origin not allowed" — which is
+     the machinery's vocabulary on a wall in a kitchen, and precisely what the copy sweep
+     exists to keep off the screen. Every failure maps to one of four things a person can
+     act on, and the raw string is never one of them. */
+  var app = h.createApp({});
+  var g = app.registry.gallery;
+  var cases = [
+    ["Error: sim offline", /No connection to NASA/],
+    ["TypeError: Failed to fetch", /No connection to NASA/],
+    ["connect timed out", /No connection to NASA/],
+    ["HTTP 401", /refused the request/],
+    ["invalid api key", /refused the request/],
+    ["HTTP 404", /has not published one today/],
+    ["no picture today", /has not published one today/],
+    ["something nobody predicted", /is not answering right now/]
+  ];
+  cases.forEach(function (c) {
+    var out = g.humanError(c[0], "NASA");
+    assert.match(out, c[1], c[0] + " -> " + out);
+    assert.equal(/error|http \d|typeerror|timed out|origin/i.test(out), false,
+      "the raw failure leaked through: " + out);
+  });
+});
+
+test("an unreachable source and an empty day are different states on the tile", function () {
+  /* Two words at 3 m have to separate "the wifi is out" from "they did not post today",
+     because only one of them is worth walking over to look at. */
+  /* with no bridge at all the tile correctly says "needs the tablet" — that answer
+     outranks every other, so this case needs a shell to be about what it claims */
+  var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({ net: true }) });
+  var g = app.registry.gallery;
+  g.cur = "apod";
+  g.slots.apod = { err: "Error: sim offline", at: app.clock.now };
+  g.renderCard();
+  assert.equal(app.text("gallery-sub"), "no connection");
+
+  g.slots.apod = { err: "no picture today", at: app.clock.now };
+  g.renderCard();
+  assert.equal(app.text("gallery-sub"), "nothing today");
+});
+
+test("the front page walks back a shelf, and says which one it landed on", function () {
+  /* The archive shelves by day of month and posts through the morning, so today's URL
+     404s for part of every day. Showing yesterday silently would be a lie on a wall. */
+  var app = h.createApp({});
+  var paper = app.registry.paper;
+  assert.match(paper.urlFor(7, "USAT"), /\/dfp\/jpg7\/lg\/USAT\.jpg$/);
+  assert.match(paper.urlFor(31, "CA_SDUT"), /\/dfp\/jpg31\/lg\/CA_SDUT\.jpg$/);
+
+  var today = new Date(app.clock.now).getDate();
+  paper.uri = "data:image/jpeg;base64,AAAA";
+  paper.shownDay = today;
+  paper.paintPanel();
+  var sub = app.qs('[data-panel="paper"] [data-sub]').textContent;
+  assert.match(sub, /Today's front page/);
+
+  /* a page from an earlier shelf must SAY it is an earlier shelf */
+  paper.shownDay = today === 1 ? 28 : today - 1;
+  paper.paintPanel();
+  sub = app.qs('[data-panel="paper"] [data-sub]').textContent;
+  assert.match(sub, /today's is not up yet/);
+  assert.match(sub, /\d+(st|nd|rd|th)/, "it does not name the shelf it used");
+});
+
 /* ---------------- sky scenes ---------------- */
 
 test("every documented WMO code lands in the scene its icon promises", function () {

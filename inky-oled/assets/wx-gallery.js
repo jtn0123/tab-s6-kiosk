@@ -48,6 +48,25 @@
 
   var NAMES = { xkcd: "XKCD", wpotd: "Wikimedia", apod: "NASA", ai: "Generated" };
 
+  /* A transport failure is not a sentence. The panel printed whatever the shell threw —
+     "Error: sim offline" in the simulator, "connect timed out" or "origin not allowed"
+     on the tablet — which is the machine's vocabulary on a wall in somebody's kitchen,
+     and exactly what the copy sweep exists to keep off the screen. Every failure becomes
+     one of four things a person can act on. */
+  function humanError(err, name) {
+    var e = String(err || "").toLowerCase();
+    if (/offline|failed to fetch|timed out|timeout|unreachable|refused|network/.test(e)) {
+      return "No connection to " + name + " right now.";
+    }
+    if (/\b401\b|\b403\b|unauthor|forbidden|api key|invalid/.test(e)) {
+      return name + " refused the request — check the key in config.js.";
+    }
+    if (/\b404\b|no picture|no comic|no image/.test(e)) {
+      return name + " has not published one today.";
+    }
+    return name + " is not answering right now.";
+  }
+
   var gallery = {
     name: "gallery",
     cur: null,                       // which source the panel is showing
@@ -188,7 +207,10 @@
       big.textContent = NAMES[this.cur] || "—";
       sub.textContent = !WP.bridgeFetch.available() ? "needs the tablet"
         : !slot ? "fetching…"
-        : slot.err ? "not answering"
+        /* the tile says WHICH kind of failure, in two words, so a glance from across the
+           room distinguishes "the wifi is out" from "they have not posted today" */
+        : slot.err ? (/offline|failed to fetch|timed out|network|refused/i.test(slot.err)
+            ? "no connection" : "nothing today")
         : "tap to view";
     },
 
@@ -230,8 +252,14 @@
       } else if (!slot) {
         main = '<div class="muted">Fetching…</div>';
       } else {
-        main = '<div class="muted">' + esc(NAMES[this.cur]) + " is not answering right now — "
-          + esc(slot.err) + ".</div>";
+        /* Composed, not a line stranded at the top of a black screen: the reason, then
+           what happens next, then the way out — the other sources are one tap away and
+           the chips are right above this. */
+        main = '<div class="pic-empty">'
+          + '<div class="pic-empty-t">' + esc(humanError(slot.err, NAMES[this.cur])) + "</div>"
+          + '<div class="pic-empty-s">It tries again on its own. '
+          + (sources().length > 1 ? "The other sources are above." : "") + "</div>"
+          + "</div>";
       }
 
       var regen = (this.cur === "ai" && aiEnabled())
@@ -252,6 +280,7 @@
       if (WP.fetchOrigins.indexOf(o) === -1) WP.fetchOrigins.push(o);
     });
 
+  gallery.humanError = humanError;
   gallery.sources = sources;
   gallery.todaysSource = todaysSource;
   WP.register(gallery);

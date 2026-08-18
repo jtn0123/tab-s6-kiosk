@@ -38,6 +38,7 @@
   var paper = {
     name: "paper",
     uri: null,           // data: URI of the page being shown
+    problem: null,       // why the last attempt gave up, in the tile's words
     shownDay: 0,         // which shelf it actually came from
     fetchedAt: 0,
     panel: null,
@@ -62,9 +63,13 @@
         return { day: d };
       });
 
+      var offline = false;
       (function attempt(i) {
         if (i >= tries.length) {
-          self.renderCard("no page found");
+          /* "no page found" read as "this paper does not exist" when the truth was a dead
+             wifi. The shelf walk records WHY it gave up. */
+          self.problem = offline ? "no connection" : "not published yet";
+          self.renderCard(self.problem);
           if (self.panel) self.paintPanel();
           return;
         }
@@ -77,7 +82,12 @@
             self.renderCard();
             if (self.panel) self.paintPanel();
           })
-          .catch(function () { attempt(i + 1); });
+          .catch(function (e) {
+            if (/offline|failed to fetch|timed out|network|refused/i.test(String(e && e.message))) {
+              offline = true;
+            }
+            attempt(i + 1);
+          });
       })(0);
     },
 
@@ -106,11 +116,18 @@
         : "Front page";
       var body = WP.qs("[data-body]", panel);
       if (!this.uri) {
-        body.innerHTML = '<div class="muted">'
-          + (WP.bridgeFetch.available()
-              ? "Fetching today's front page…"
-              : "Front pages arrive through the app shell, which a browser tab does not have.")
-          + "</div>";
+        var why = !WP.bridgeFetch.available()
+          ? ["Front pages arrive through the app shell.",
+             "A browser tab does not have one; the tablet does."]
+          : this.problem === "no connection"
+          ? ["No connection to the newspaper archive.",
+             "It tries again on its own, and shows the last page it managed to fetch."]
+          : this.problem
+          ? ["Today's front page is not up yet.",
+             "The archive posts through the morning; this checks again on its own."]
+          : ["Fetching today's front page…", ""];
+        body.innerHTML = '<div class="pic-empty"><div class="pic-empty-t">' + esc(why[0])
+          + '</div><div class="pic-empty-s">' + esc(why[1]) + "</div></div>";
         return;
       }
       /* The page IS the screen: letterboxed on black, no chrome competing with it.

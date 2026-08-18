@@ -144,7 +144,16 @@
           note(check(w));
           var panel = document.querySelector('[data-panel="' + w + '"]');
           var body = panel.querySelector("[data-body]");
-          if (!(body.textContent || "").trim()) findings.push(w + ": the screen is blank");
+          /* A screen whose content is a PHOTOGRAPH has no text, and the front page and
+             the daily picture are exactly that: judging them by textContent reported the
+             working ones as blank. Blank means neither words nor picture. */
+          var pictured = body.querySelectorAll(".page-img, img, canvas, svg").length > 0;
+          if (!(body.textContent || "").trim() && !pictured) {
+            findings.push(w + ": the screen is blank");
+          }
+          /* dead-space and near-miss-scroll are text-layout judgements; a letterboxed
+             picture is SUPPOSED to leave bars, so they do not apply to it */
+          if (pictured) return;
           var deadTail = (function () {
             var kids = Array.prototype.filter.call(body.children, function (c) {
               return c.getBoundingClientRect().height > 0;
