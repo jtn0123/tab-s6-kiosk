@@ -73,6 +73,27 @@
       + '<div class="big-sub">' + subHtml + "</div></div></div>";
   }
 
+  /* A chart, with the four labels that are the difference between a picture and a chart:
+     the top and bottom of the y-domain down the left edge, and the two ends of the x-domain
+     under it. Without them a line's height means nothing and the shape is unopposed —
+     whatever it does reads as what happened.
+
+     It lives here rather than in the panel that first needed it because a second panel now
+     draws a trace (Air Quality's next 24 hours was a bare squiggle with no scale, no ticks
+     and no annotation, one screen away from an hourly chart that had all three), and two
+     charts annotated two ways is two design systems.
+
+     The labels are HTML over the SVG, not SVG <text>: a size inside a scaling viewBox is a
+     size authored outside the ramp, and these sit at the axis tier (--fs-note at --dim).
+     They cost the chart no height. */
+  function plot(svg, hi, lo, from, to) {
+    return '<div class="plot">' + svg
+      + '<span class="plot-hi">' + esc(hi) + "</span>"
+      + '<span class="plot-lo">' + esc(lo) + "</span>"
+      + '<div class="plot-x"><span>' + esc(from) + "</span><span>"
+      + esc(to) + "</span></div></div>";
+  }
+
   /* Horizontal fill bar with a percentage. Used for storage, memory and battery. */
   function bar(pct, tone, label) {
     var p = Math.max(0, Math.min(100, pct || 0));
@@ -130,6 +151,7 @@
     statGrid: statGrid,
     section: section,
     hero: hero,
+    plot: plot,
     bar: bar,
     btn: btn,
     segmented: segmented,

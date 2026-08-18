@@ -21,6 +21,7 @@ var CSS = ["style.css", "style-home.css", "style-panels.css", "style-widgets.css
            "style-theme.css"]
   .map(h.readAsset).join("\n");
 var HTML = h.readAsset("index.html");
+var VIEW_JS = h.readAsset("app-view.js");
 /* every widget file, concatenated — the rule below is about the whole widget layer, and
    reading the directory means a new wx-*.js is covered the day it is added */
 var WIDGETS_JS = require("node:fs").readdirSync(h.ASSETS)
@@ -57,7 +58,8 @@ function ruleFor(sel, prop) {
 test("the type ramp is declared once, in vh, and is strictly increasing", function () {
   var r = ramp();
   var order = ["fs-caption", "fs-label", "fs-note", "fs-body", "fs-body-lg",
-               "fs-title-sm", "fs-title", "fs-hero", "fs-display", "fs-display-xl"];
+               "fs-title-sm", "fs-title", "fs-title-lg", "fs-hero", "fs-display",
+               "fs-display-xl"];
   order.forEach(function (k) {
     assert.equal(typeof r[k], "number", "the ramp has no --" + k);
   });
@@ -74,7 +76,7 @@ test("the text tiers step by a consistent ratio — no tier is a rounding error"
      1.7 vh before this, i.e. four "different" sizes inside 0.2vh, which is 5 device px. */
   var r = ramp();
   var text = ["fs-caption", "fs-label", "fs-note", "fs-body", "fs-body-lg",
-              "fs-title-sm", "fs-title"];
+              "fs-title-sm", "fs-title", "fs-title-lg"];
   for (var i = 1; i < text.length; i++) {
     var ratio = r[text[i]] / r[text[i - 1]];
     assert.ok(ratio > 1.1 && ratio < 1.25,
@@ -126,7 +128,8 @@ test("the landscape ramp is a RAMP, not ten restatements of one number", functio
      the block exists is that a landscape viewport is short. */
   var portrait = ramp(), land = css.landscapeRamp();
   var order = ["fs-caption", "fs-label", "fs-note", "fs-body", "fs-body-lg",
-               "fs-title-sm", "fs-title", "fs-hero", "fs-display", "fs-display-xl"];
+               "fs-title-sm", "fs-title", "fs-title-lg", "fs-hero", "fs-display",
+               "fs-display-xl"];
   order.forEach(function (k) {
     assert.equal(typeof land[k], "number", "the landscape ramp has no --" + k);
     assert.ok(land[k] > portrait[k],
@@ -139,7 +142,7 @@ test("the landscape ramp is a RAMP, not ten restatements of one number", functio
       + order[i - 1] + " (" + land[order[i - 1]] + ")");
   }
   /* and the text tiers keep the same ~1.16 relationship they have in portrait */
-  for (var j = 1; j < 7; j++) {
+  for (var j = 1; j < 8; j++) {
     var ratio = land[order[j]] / land[order[j - 1]];
     assert.ok(ratio > 1.1 && ratio < 1.25,
       "landscape " + order[j - 1] + " -> " + order[j] + " is a ratio of " + ratio.toFixed(3));
@@ -189,33 +192,122 @@ test("every small-caps label is drawn from one recipe", function () {
 
 test("a section heading outranks the field labels under it", function () {
   /* .psec-t was 1.7vh and .stat-k 1.6vh, both --dimmer: a 0.1vh difference is not a
-     hierarchy, and the Conditions panel read as one flat wall of small caps.
-     The heading then moved to --fs-note and the field label stayed put, which fixed the
-     heading and left the tier that actually carries the meaning at the bottom of the ramp.
-     Both moved up a step in the label-tier round: a heading is --fs-body, a field label is
-     --fs-note, and the gap between them is a full ramp step rather than a rounding error. */
+     hierarchy, and the Conditions panel read as one flat wall of small caps. The heading
+     then moved to --fs-note and the field label stayed put, which fixed the heading and
+     left the tier that carries the meaning at the bottom of the ramp. Then BOTH moved up
+     one step — and that was the trap: --fs-body over --fs-note at the same --dim is a 14%
+     size step and no colour step at all, so cropped from the Conditions panel AIR and
+     HUMIDITY were indistinguishable as tiers, and the page read as grey / grey / white
+     repeated nine times.
+
+     So the property is no longer "the heading is one token higher". It is that the two
+     tiers differ on BOTH available axes at once: a full ramp step in size AND a full step
+     in the grey scale. Either one alone is what produced the flat wall, twice. */
   var r = ramp();
   var psec = ruleFor(".psec-t", "font-size");
-  assert.equal(decl(psec.body, "font-size"), "var(--fs-body)");
-  assert.equal(decl(psec.body, "color"), "var(--dim)");
   var statk = ruleFor(".stat-k", "font-size");
-  assert.equal(decl(statk.body, "font-size"), "var(--fs-note)");
-  assert.ok(r["fs-body"] > r["fs-note"], "a heading must be a step above a field label");
+
+  var headVh = css.vh(decl(psec.body, "font-size"));
+  var labelVh = css.vh(decl(statk.body, "font-size"));
+  assert.ok(headVh / labelVh >= 1.15,
+    "a section heading is " + headVh + "vh over a field label's " + labelVh
+    + "vh — a ratio of " + (headVh / labelVh).toFixed(3) + "; under a whole ramp step "
+    + "the two tiers read as one");
+
+  assert.equal(decl(psec.body, "color"), "var(--dim)", "a section heading is --dim");
+  assert.equal(decl(statk.body, "color"), "var(--dimmer)",
+    "a field label must be a shade BELOW its own heading — at --dim they were the same "
+    + "object at two sizes, and the wider word won");
+  assert.ok(r["fs-title"] > headVh,
+    "a section heading has reached the panel TITLE size; the screen's name has to outrank "
+    + "the names of the blocks on it");
 });
 
 test("a panel's field label is legible from across the room", function () {
   /* The property, not the token: a field label is what tells you whether 29.91 is a
      pressure or a price, and at 1.6vh / --dimmer it measured ~41 device px at 4.9:1 — the
      smallest step in the ramp at the lowest contrast in the palette, which at 2-4 m is
-     not small, it is absent. Pinned as a FLOOR on both axes so a later round cannot walk
-     it back down one step at a time: at least --fs-note, and no dimmer than --dim (8.2:1),
-     which is the same shade the section heading above it uses. */
-  var r = ramp();
+     not small, it is absent. It was then raised by 2.9 CSS px, to 3.7 arcminutes, which is
+     still under the 5' that 20/20 acuity resolves — a 16% bump where the diagnosis called
+     for 75%. Stating the floor in vh is what let that happen twice, because a vh number
+     does not say whether anybody can read it. It is stated in ARCMINUTES AT 3 M now, which
+     is the only form of this assertion that has an answer. */
   var statk = ruleFor(".stat-k", "font-size");
-  assert.ok(css.vh(decl(statk.body, "font-size")) >= r["fs-note"],
-    ".stat-k is below --fs-note: " + decl(statk.body, "font-size"));
-  assert.equal(decl(statk.body, "color"), "var(--dim)",
-    ".stat-k is back on a dimmer grey than its own section heading");
+  var a = css.arcmin(css.vh(decl(statk.body, "font-size")));
+  assert.ok(a >= 4.8,
+    "a field label subtends " + a.toFixed(1) + "' of cap height at 3 m; 20/20 acuity "
+    + "resolves 5', so anything under that is not small print, it is a blank");
+});
+
+test("a panel's VALUE is a size you read, not a size you resolve", function () {
+  /* The single number that capped the whole build: every value on all twelve panels was
+     --fs-title-sm = 33 CSS px = 5.9 arcminutes at 3 m, i.e. sitting ON the 20/20 threshold.
+     The home clock is 15.3' and the home hero 10.5', which is exactly why those two were
+     the only things in the app anybody could read from the sofa, and why the panels were
+     screens you walked to. A value is the thing its screen exists to say; it gets the
+     reading size, and the floor is stated where the eye is rather than where the
+     stylesheet is. */
+  [".stat-v", ".wc-time"].forEach(function (sel) {
+    var a = css.arcmin(css.vh(decl(ruleFor(sel, "font-size").body, "font-size")));
+    assert.ok(a >= 7.5,
+      sel + " subtends " + a.toFixed(1) + "' at 3 m; a value tier wants 8' or better");
+  });
+  /* and it stays a rung of the same ladder, not a size somebody typed */
+  assert.equal(decl(ruleFor(".stat-v", "font-size").body, "font-size"), "var(--fs-title-lg)");
+});
+
+test("a chart's annotations are sized like the chart, not like a footnote", function () {
+  /* A y-axis number, an x tick and a peak callout are not decoration ON a chart, they are
+     what makes the chart's height mean anything: without them whatever the line does reads
+     as what happened. Every one of them in the build was at --fs-caption — 2.8 arcminutes
+     at 3 m, under the threshold at which a glyph resolves — including three that were built
+     that way by the round which had just diagnosed exactly that fault. They sit at the axis
+     tier now, and the floor is stated where the eye is.
+
+     A chart is the one place where "it did not fit" is not an argument: if the annotation
+     will not fit, the chart is too small or has too many bars, and both of those are the
+     chart's problem to solve. */
+  [".plot-hi, .plot-lo", ".plot-x", ".hc-ticks span", ".hc-hi, .hc-lo",
+   ".daybar-v", ".daybar-t"]
+    .forEach(function (sel) {
+      var a = css.arcmin(css.vh(decl(ruleFor(sel, "font-size").body, "font-size")));
+      assert.ok(a >= 3.6,
+        sel + " subtends " + a.toFixed(1) + "' at 3 m; the axis tier is --fs-note (3.7')");
+    });
+});
+
+test("nothing is drawn at the ramp's floor AND the palette's floor", function () {
+  /* THE BAN. --fs-caption at --dimmer is 15.9 CSS px at 4.9:1 = 2.8' at 3 m — under the
+     threshold at which the eye resolves a glyph at all. The round that first diagnosed
+     "smallest size AND lowest contrast = gone" then built the sensor chart's new y-axis,
+     the daily panel's hour ticks and the ug/m3 units at precisely that spec, because the
+     diagnosis lived in a comment and nothing in the suite could see it. A chart's axis
+     numbers ARE the chart — they are what makes its height mean anything — so this is
+     enforced over the RENDERED DOM of every screen rather than over a list of selectors
+     somebody has to remember to extend.
+
+     Where the width genuinely cannot pay (five Home Assistant tiles across a 711 px card,
+     24 hour bars across a panel) the size stays and the contrast gives: --fs-caption at
+     --dim is allowed, and --dimmer at any larger step is allowed. It is the PAIR that is
+     the blank. */
+  var app = h.createApp({});
+  var offenders = [];
+  function sweep(root, where) {
+    app.qsa("*", root).forEach(function (el) {
+      if (css.inherited(el, "font-size") !== "var(--fs-caption)") return;
+      if (css.inherited(el, "color") !== "var(--dimmer)") return;
+      offenders.push(where + ": " + (el.getAttribute("class") || el.tagName)
+        + " " + JSON.stringify((el.textContent || "").slice(0, 24)));
+    });
+  }
+  sweep(app.doc, "home");
+  app.qsa("[data-panel]").forEach(function (p) {
+    var name = p.getAttribute("data-panel");
+    app.WP.panels.open(name);
+    sweep(p, name);
+    app.WP.panels.close();
+  });
+  assert.deepEqual(offenders, []);
 });
 
 /* ---------------- one idiom per concept (D1) ---------------- */
@@ -556,19 +648,27 @@ test("every control's padding comes off the spacing scale", function () {
   assert.deepEqual(offenders, []);
 });
 
-test("the hourly list is a bar chart, so its columns have a fixed origin", function () {
+test("the hourly list is a table, so its columns have a fixed origin", function () {
   /* Measured on device: the sun rows' bars started at x=382, the moon rows' at 356 and the
      cloud rows' at 391 — a 35 device px swing driven purely by which glyph the weather put
      in the column, because `.hrow-i` was the one column authored `flex: 0 0 auto` while
-     every sibling had a fixed basis. A bar chart whose baseline moves per row is not a bar
-     chart. No test touched this geometry at all, and two mutations against it survived. */
+     every sibling had a fixed basis. Columns that move per row are not columns. No test
+     touched this geometry at all, and two mutations against it survived.
+
+     The row used to BE a bar chart, and is not any more: `.hrow-bar` drew each hour as a
+     fill of a full-width grey track, which implies a maximum temperature has no zero to
+     fill from, thirty pixels under a curve already drawing the same eight hours. The
+     column that takes the remainder now says what the weather is in words. The geometry
+     property is unchanged and is the reason this test exists. */
   [".hrow-t", ".hrow-i", ".hrow-d", ".hrow-p"].forEach(function (sel) {
     var flex = decl(ruleFor(sel, "flex").body, "flex");
     assert.match(flex, /^0 0 [\d.]+v[wh]$/,
-      sel + " is `flex: " + flex + "`; a column with no fixed basis moves the bar beside it");
+      sel + " is `flex: " + flex + "`; a column with no fixed basis moves the one beside it");
   });
-  assert.match(decl(ruleFor(".hrow-bar", "flex").body, "flex"), /^1 1 auto$/,
-    "the bar itself is the only column that may take the remainder");
+  assert.match(decl(ruleFor(".hrow-w", "flex").body, "flex"), /^1 1 auto$/,
+    "exactly one column may take the remainder, and it is the words");
+  assert.equal(/\.hrow-bar\b/.test(css.CSS), false,
+    "the progress track is back; temperature does not have a zero to fill from");
   assert.equal(decl(ruleFor(".hrow-i", "text-align").body, "text-align"), "center",
     "a glyph narrower than its column has to be centred in it or the origin moves again");
 });
@@ -746,6 +846,23 @@ test("the cold extreme of the day chart is not painted with the hot token", func
   assert.match(stripComments(h.readAsset("wx-daily.js")), /n === iCold \? " cold" : ""/);
 });
 
+test("the scroll fade only appears on a strip that is actually scrolling", function () {
+  /* The mask that dissolves the last 4vw of the hourly strip was authored on .hstrip
+     unconditionally. In landscape the card is nearly twice as wide, all eight chips fit,
+     nothing scrolls — and the last column was still rendered at reduced opacity, hour,
+     glyph and temperature together, inside a card with spare width. On the most-looked-at
+     card in the product that reads as a broken renderer, not as "there is more this way".
+     A mask cannot ask whether its own content overflows, so relayoutHome() answers it and
+     the mask hangs off the answer. */
+  var plain = ruleFor(".hstrip", "overflow-x");
+  assert.equal(decl(plain.body, "mask-image"), null,
+    "the fade is back on every .hstrip, scrolling or not");
+  var scrolls = ruleFor(".hstrip.scrolls", "mask-image");
+  assert.match(decl(scrolls.body, "mask-image"), /linear-gradient/);
+  assert.match(stripComments(VIEW_JS), /classList\.toggle\("scrolls"/,
+    "nothing sets .scrolls, so the fade can never appear at all");
+});
+
 test("an affordance is not painted in the colour of a temperature", function () {
   /* --accent and --temp-cold are the same hex. On the home screen that meant blue marked
      both "this number is a low" (65° 64° 64°) and "this thing opens something"
@@ -755,4 +872,31 @@ test("an affordance is not painted in the colour of a temperature", function () 
     assert.equal(decl(r.body, "color"), "var(--fg)",
       sel + " is drawn in " + decl(r.body, "color") + ", which is the cold-temperature blue");
   });
+});
+
+test("a control's STATE is not painted in the colour of a temperature either", function () {
+  /* The other half of the same defect, and the half that survived: blue marked cold AND
+     selected AND on. Every toggle in Settings, the selected day chip on Daily (a hand's
+     width from that day's blue low), the selected hour row, the calendar's today cell and
+     the Home Assistant tiles were all --accent, which is --temp-cold's hex. A state of a
+     control is drawn as more light, not as a hue; a hue on this wall means a datum. */
+  [".chip.on", ".seg-b.on", ".switch.on", ".cal-day.today", ".hrow.sel"].forEach(function (sel) {
+    var r = ruleFor(sel, "background");
+    var bg = decl(r.body, "background");
+    assert.equal(/109,\s*179,\s*242|var\(--accent\)/.test(bg), false,
+      sel + " fills with " + bg + ", which is the cold-temperature blue");
+  });
+});
+
+test("colour marks DATA, so no button carries a hue of its own", function () {
+  /* .btn.primary (green Start) and .btn.danger (red "Reset to defaults") took the palette
+     from three hues to five and spent both additions on affordances. What a button does is
+     its word and its position; --danger stays for a STATE — the countdown alarm's flash and
+     a reading in the red. */
+  ["primary", "danger"].forEach(function (v) {
+    assert.equal(new RegExp("\\.btn\\." + v + "\\b").test(css.CSS), false,
+      ".btn." + v + " is back; an affordance does not get a hue");
+  });
+  assert.equal(/"(primary|danger)"/.test(stripComments(WIDGETS_JS)), false,
+    "a widget is still asking for a coloured button");
 });

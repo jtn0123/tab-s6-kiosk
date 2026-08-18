@@ -22,6 +22,12 @@
   --fg:        #f2f2f2;
   --dim:       #a2a2a2;
   --dimmer:    #7a7a7a;
+  /* --accent IS --temp-cold, the same hex, and that is the whole problem it used to
+     cause: blue meant "this number is a low", "this thing is selected" and "this switch is
+     on", all at once, on screens where two of the three were 2 cm apart. Selection and
+     on/off are drawn in white now (see .chip.on, .seg-b.on, .switch.on) and blue is left to
+     mean cold and nothing else. What --accent still marks is a LINE of data: the sensor
+     trace, the countdown bar, the rain figure. */
   --accent:    #6db3f2;
   --warn:      #f2b46d;
   --danger:    #f26d6d;
@@ -35,24 +41,57 @@
      which is the main reason the panels did not read as one app. Every size now comes off
      this ramp and nothing may introduce a new value — pick the NEAREST step.
 
-     Nine steps: a ~1.16 ratio through the text range (fine enough that adjacent tiers are
+     Eight steps: a ~1.16 ratio through the text range (fine enough that adjacent tiers are
      distinguishable at 2-4 m without any tier feeling arbitrary), then three larger jumps
      for the hero tiers, which are read as shapes rather than as text.
+
+     ---------------- how big is big enough, in arcminutes ----------------
+     The ramp used to be chosen by eye against a screenshot on a desk, and the whole build
+     came out sized for a tablet in the hand. The panel is 244.5 x 152.8 mm of active area
+     at 2560 x 1600, so 1 CSS px = 0.215 mm; cap height is ~0.72 em; and a cap of height h
+     read from 3 m subtends h/3000 * 3438 arcminutes. 20/20 acuity RESOLVES about 5' — that
+     is the threshold at which a letter stops being a smudge, not a reading size. Fluent
+     glance-reading wants 12-18'.
+
+     Measured against that, every panel VALUE in the app was --fs-title-sm = 33 CSS px =
+     5.9', every field label 3.7', and every chart axis and unit 2.8'. Only the home clock
+     (15.3') and the home hero (10.5') were sized for the room, which is exactly why the
+     home screen worked from the sofa and the twelve panels did not: you walked to them.
+
+     So the panel tiers now sit on these steps, and the arcminute figure is the reason:
+
+       value    --fs-title-lg  45.5 CSS px   8.1'    a number you read, not decode
+       heading  --fs-title-sm  33.0 CSS px   5.9'    at --dim
+       label    --fs-body-lg   27.9 CSS px   5.0'    at --dimmer
+       axis     --fs-note      21.1 CSS px   3.8'    at --dim, and never lower
+
+     --fs-title-lg is the step this needed and did not have: --fs-title (38.7) is the panel
+     TITLE and a value cannot equal the name of the screen it is on, and --fs-hero (59.2) is
+     a hero. Two adjacent tiers of the same ramp, one step apart, is the answer.
+
+     --fs-caption is now the floor of the ramp rather than a tier anything important uses.
+     Nothing may set it together with --dimmer — see the ban in the label block below.
 
      Units are vh for the same reason the rest of the layout is: this panel has exactly one
      viewport and the whole column is a height budget. The remap was measured on device
      against that budget — see the overflow/slack line in the boot log, which must stay
      overflow=0 in all four 12h/24h x seconds combinations. */
-  --fs-caption:    1.4vh;    /* units, badges, tile sub-lines, chart ticks */
-  --fs-label:      1.6vh;    /* letter-spaced small caps: field and card labels */
-  --fs-note:       1.85vh;   /* section headings, panel subtitles, secondary prose */
+  --fs-caption:    1.4vh;    /* the floor: badges, tile sub-lines. Never with --dimmer. */
+  --fs-label:      1.6vh;    /* letter-spaced small caps: card labels on the home column */
+  --fs-note:       1.85vh;   /* panel subtitles, chart axes, secondary prose */
   --fs-body:       2.15vh;   /* list rows, chips, the toast */
-  --fs-body-lg:    2.45vh;   /* things a finger aims at: buttons, switch rows */
-  --fs-title-sm:   2.9vh;    /* stat values, tile glyphs, world-clock times */
+  --fs-body-lg:    2.45vh;   /* a panel's FIELD LABEL; things a finger aims at */
+  --fs-title-sm:   2.9vh;    /* a panel's SECTION HEADING; tile glyphs; list values */
   --fs-title:      3.4vh;    /* panel titles, tile headline numbers */
+  --fs-title-lg:   4.0vh;    /* a panel's VALUE — the number the screen is about */
   --fs-hero:       5.2vh;    /* the home weather hero */
   --fs-display:    7.6vh;    /* the clock, and a panel's one big readout */
-  --fs-display-xl: 10.5vh;   /* the stopwatch — the entire point of its own screen */
+  /* The stopwatch, and the widest string this ramp step ever has to hold: a 60-minute
+     countdown reads "1:00:00", seven glyphs, ~3.3 em of tabular digits. 16vh is 182 CSS px,
+     which lays that out in 603 of the 668 px the panel body has. It was 10.5vh — the one
+     screen in the app whose entire subject is a single number, drawn smaller than the home
+     clock, on the least-inked panel in the build. */
+  --fs-display-xl: 16vh;
 
   /* One recipe for every letter-spaced small-caps label, so a section heading looks the
      same in Conditions as it does in Settings (see the label block further down).
@@ -276,8 +315,8 @@ button {
    (1.5 / 1.6 / 1.65 / 1.7 vh), four trackings (0.06 / 0.08 / 0.1 / 0.2 em) and two weights.
 
    Three tiers, and the difference between them IS the hierarchy:
-     .psec-t   a panel's section heading — two ramp steps up, one shade brighter
-     .stat-k   a panel's FIELD label — one step up, and the same shade as the heading
+     .psec-t   a panel's section heading — --fs-title-sm (33 CSS px, 5.9' at 3 m) at --dim
+     .stat-k   a panel's FIELD label — --fs-body-lg (27.9 px, 5.0' at 3 m) at --dimmer
      the rest  a card label on the home screen, where the card's own shape does half the
                work of saying what it is — smallest, dimmest, subordinate to its value
 
@@ -288,7 +327,26 @@ button {
    unlabelled sheet of numbers (55%, 63°, 29.91 inHg, 0%, 33.4 mi) beside a 74-device-px
    white value it was supposed to explain. The label tier is the tier that has to be
    readable; the value is the tier you can guess. Raising it costs one grid row per panel,
-   and the field cuts in the panels below are what paid for it. */
+   and the field cuts in the panels below are what paid for it.
+
+   Why the heading is BRIGHTER than the label under it, and why they are a full step apart.
+   The first pass at this raised .stat-k to --fs-note and left .psec-t at --fs-body, both at
+   --dim: a 14% size step and the same grey. Cropped from the Conditions panel, AIR and
+   HUMIDITY were indistinguishable as tiers — HUMIDITY actually read optically brighter,
+   because it is the wider word — so the page came out as grey / grey / white repeated nine
+   times and the parent-child relation the grid is built on was simply not drawn. Two tiers
+   that differ only in a rounding error are one tier. They now differ on both axes at once:
+   a whole ramp step (2.9 vs 2.45vh) AND a whole shade (8.2:1 vs 4.9:1). The label can
+   afford --dimmer at this size in a way it could not at 1.6vh — 4.9:1 is the WCAG body-text
+   threshold and 5.0' is above the acuity floor; what was fatal before was small AND dim
+   together, and the size half of that is fixed.
+
+   THE BAN. Nothing anywhere — no axis number, no unit, no tick, no caption — may set
+   --fs-caption together with --dimmer. That combination is 15.9 CSS px at 4.9:1, which is
+   2.8' at 3 m: below the threshold at which the eye resolves a glyph at all. It is not
+   "small print", it is a blank. The sensor chart's y-axis, the daily panel's hour ticks and
+   the µg/m³ units were all built at exactly that spec in the round that condemned it, which
+   is why it is now a test (design-system.test.js) rather than a habit. */
 .psec-t,
 .card-label, .mini-head, .stat-k, .fc-name, .hr-t, .wc-city, .sensor-label, .daybar-t {
   font-size: var(--fs-label);
@@ -297,12 +355,27 @@ button {
   text-transform: uppercase;
   color: var(--dimmer);
 }
-.psec-t { font-size: var(--fs-body); color: var(--dim); }
-.stat-k { font-size: var(--fs-note); color: var(--dim); }
-/* The two dense grids run their labels a step down: five HA tiles across a 711px viewport
-   and 24 hour-bars across a panel simply do not have the width, and an ellipsised label is
-   worse than a small one. Same weight, same tracking, same colour — same object. */
-.sensor-label, .daybar-t { font-size: var(--fs-caption); letter-spacing: 0.08em; }
+.psec-t { font-size: var(--fs-title-sm); color: var(--dim); }
+.stat-k { font-size: var(--fs-body-lg); color: var(--dimmer); }
+/* Five Home Assistant tiles across a 711 px card is 142 px each, and an ellipsised label
+   is worse than a small one — so this is the one label in the app still on --fs-caption,
+   and it therefore has to give on the OTHER axis: --dim, not the recipe's --dimmer. See
+   THE BAN above — caption AND dimmer together is 2.8' at 3 m, and where the width
+   genuinely cannot pay, the contrast does. */
+.sensor-label {
+  font-size: var(--fs-caption);
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+/* The daily chart's TIME AXIS. It is labelled every third bar, so it has three bars' worth
+   of width — 72 CSS px for "12A" — and it was sitting at caption/--dimmer, 2.8' at 3 m,
+   which is a chart with no x-scale on it. Chart annotations carry the chart's meaning and
+   belong at the axis tier with the rest of them. */
+.daybar-t {
+  font-size: var(--fs-note);
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
 
 .card-head {
   display: flex;
@@ -324,7 +397,7 @@ button {
 }
 
 .badge {
-  font-size: var(--fs-caption);
+  font-size: var(--fs-label);
   font-weight: var(--label-weight);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -337,6 +410,6 @@ button {
    same screen — one a note about where the numbers come from, the other a value on the
    EPA's own scale. The scale keeps the colour, since there it IS the datum; provenance
    gets an outline. --warn stays for the stale badge, which is a genuine warning. */
-.badge-demo  { color: var(--dimmer); }
+.badge-demo  { color: var(--dim); }
 .badge-live  { color: var(--ok); }
 .badge-stale { color: var(--warn); }

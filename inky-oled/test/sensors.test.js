@@ -438,6 +438,41 @@ test("the plot prints the range it is drawn at, at both edges", function () {
   assert.equal(body.querySelector(".plot-x").textContent, "2h agonow");
 });
 
+test("the panel states ONE range for one series", function () {
+  /* The panel used to print two, sixty pixels apart and both labelled °F: the plot corners
+     carried the y-DOMAIN (76.4 / 72.4 — the synthetic window the floor above opens up) and
+     the stat row directly under them carried the DATA (LOWEST 73.9 / HIGHEST 74.9). Neither
+     said which it was, and the pair drawn on the chart was the pair that is not the data.
+
+     The corners are the scale, so the row below is not allowed to be a second scale. Mean,
+     spread and net movement are three facts about the series that the axis does not state,
+     and none of them is a y-value a reader could hold against the corner labels. */
+  var app = boot();
+  drive(app, "sensor.living_room_temperature", 75, 1);
+  var body = app.panelBody("sensors");
+  var keys = body.querySelectorAll(".stat-k").map(function (n) { return n.textContent; });
+  assert.deepEqual(keys, ["Average", "Range", "Change"]);
+});
+
+test("a flat two hours says so in words, at a size you can read across a room", function () {
+  /* A flat line drawn 250 px wide is still a chart implying that something happened. When
+     the drift is under the floor the verdict goes first, in words, at the VALUE tier —
+     which is the tier somebody 3 m away can actually read — and the trace behind it becomes
+     the evidence rather than the claim. The qualifier names the floor rather than repeating
+     the range printed in the grid under it. */
+  var app = boot();
+  drive(app, "sensor.living_room_temperature", 75, 1);
+  var body = app.panelBody("sensors");
+  assert.equal(body.querySelector(".psec .stat-v").textContent, "Steady");
+  assert.match(body.querySelector(".psec .stat-x").textContent, /less than 4 °F/);
+
+  /* and a real swing does NOT get the verdict — it gets the chart */
+  drive(app, "sensor.living_room_temperature", 75, 20);
+  body = app.panelBody("sensors");
+  assert.equal(body.querySelector(".psec .stat-v").textContent !== "Steady", true,
+    "a 20 °F swing is being called steady");
+});
+
 test("an on/off trace keeps its fixed 0..1 domain and says On / Off on the axis", function () {
   /* A switch has no range to floor: it is high or it is low, and a domain taken from the
      data would redraw a lamp that never moved as noise. */

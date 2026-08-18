@@ -105,6 +105,19 @@
   background: linear-gradient(to bottom, var(--bg), transparent);
 }
 
+/* The rule under a pinned block insets to the same 3vw rail every other rule in the app
+   uses. It was `border-bottom` on .stick itself, and .stick cancels the body's side padding
+   with a negative margin so that its background reaches the scrollport edges — which made
+   this the one rule in the build drawn full-bleed to both edges of the screen, on the panel
+   with the fewest other things to look at. A block child sits inside the padding, so the
+   rule lands on the rail without giving up the full-width background. */
+.stick::after {
+  content: "";
+  display: block;
+  margin-top: 0.8vh;
+  border-bottom: 1px solid var(--card-line);
+}
+
 /* Control block pinned under the panel header while only the list below it scrolls.
    Past ~9 laps the stopwatch readout and the Lap button used to scroll off the top, so
    looking at lap 1 cost you both the running time and the button you needed next.
@@ -118,7 +131,6 @@
   background: var(--bg);
   margin: -1.6vh -3vw 0;
   padding: 1.6vh 3vw 0.8vh;
-  border-bottom: 1px solid var(--card-line);
 }
 
 /* Still the empty state's "Open settings" and the alarm's "Dismiss" — both of which are
@@ -135,12 +147,14 @@
 }
 
 /* ---------- panel content blocks ---------- */
-/* 1.6vh, not 2: with the hero laid out as a row and the grids running three across, the
-   Conditions panel came to within about one stat row of fitting its screen. This is the
-   last 1.6vh x 4 sections that closes it, and it costs nothing anywhere else — the gap
-   between a section's last value and the next section's heading is still ~2.6vh once the
-   stat cell's own bottom padding is counted. */
-.psec { margin-top: 1.6vh; }
+/* 1.2vh, not 1.6 and not 2. Each drop paid for a re-scale: with the hero laid out as a row
+   and the grids running three across, Conditions came to within one stat row of fitting its
+   screen, and 1.6 closed it; sizing every value for a 3 m read then cost roughly 2vh per
+   stat row, and 1.2 is what Conditions and Daily needed to close again. It costs nothing
+   visually — the gap between a section's last value and the next section's heading is still
+   over 2vh once the stat cell's own bottom padding is counted, and the heading is now a
+   whole ramp step larger than the labels under it, which separates the blocks by itself. */
+.psec { margin-top: 1.2vh; }
 .psec-t { margin-bottom: 1vh; }   /* size/weight/tracking/colour: see the label recipe */
 
 /* ---------- the one hero block ----------
@@ -185,7 +199,11 @@
 .big-time.mono { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 .big-sub { font-size: var(--fs-body); color: var(--dim); margin-top: 0.6vh; }
 .dim { color: var(--dim); }
-.muted { font-size: var(--fs-note); color: var(--dimmer); line-height: 1.5; margin-top: 0.8vh; }
+/* The one-sentence answer — "None forecast in the next 7 days.", "Steady, +/-0.5 deg over
+   2 h". It replaced whole grids of zeros on three panels, so it is not a footnote about the
+   screen, it IS the screen's answer, and it is set as prose at --fs-body/--dim (4.4' at 3 m)
+   rather than at the note tier it was left on (3.8' at 4.9:1). */
+.muted { font-size: var(--fs-body); color: var(--dim); line-height: 1.5; margin-top: 0.8vh; }
 /* One-line notice for a panel that is not showing live data — the demo simulator, or a
    Home Assistant feed that has stopped answering. Sized as a note, not as body copy: it
    explains a state, it is not something to read. */
@@ -207,13 +225,21 @@
 .stat-grid.cols3 { grid-template-columns: repeat(3, 1fr); gap: 1.1vh 2.2vw; }
 .stat { border-bottom: 1px solid var(--card-line); padding-bottom: 0.8vh; min-width: 0; }
 .stat.last-row { border-bottom: none; }   /* see statGrid(): a rule with no next row */
+/* The one number a field is about. --fs-title-lg is 45.5 CSS px, i.e. 8.1 arcminutes of
+   cap height at 3 m; it was --fs-title-sm, 5.9', which is the 20/20 THRESHOLD — the size at
+   which a glyph resolves rather than the size at which a sentence reads. Every value on
+   every one of the twelve panels sat there, which is why the panels were screens you walked
+   to and the home hero was a screen you read. See the arcminute block in style.css. */
 .stat-v {
-  font-size: var(--fs-title-sm);
+  font-size: var(--fs-title-lg);
   font-weight: 300;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.stat-x { font-size: var(--fs-label); letter-spacing: 0.02em; color: var(--dim); }
+/* The qualifier under a value — "Low" under a UV index, "from 286°" under a compass
+   point. It carries the BAND, which is the part a person acts on, so it is a step of prose
+   and not a footnote: --fs-label was 3.3' at 3 m. */
+.stat-x { font-size: var(--fs-body); letter-spacing: 0.02em; color: var(--dim); }
 
 .wind-arrow { display: inline-block; }
 
@@ -239,8 +265,13 @@
   border-radius: 1.3vh;
   color: var(--fg);
 }
-.btn.primary { color: var(--ok); border-color: rgba(125, 224, 141, 0.45); }
-.btn.danger  { color: var(--danger); border-color: rgba(242, 109, 109, 0.45); }
+/* There is no .primary and no .danger any more. A green Start on the Timer and a red
+   "Reset to defaults" in Settings took the palette from three hues to five, and both of the
+   additions were on AFFORDANCES — the rule this app is built on is that colour marks data.
+   What the button does is carried by its word, its position and, for the destructive one,
+   by the confirm step it already has. --danger survives where it is a STATE and not a
+   control: the countdown alarm's flash, and a battery reading in the red.
+   .off is not a hue, it is the disabled shade — Lap with nothing to split. */
 .btn.off     { color: var(--dimmer); }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 1.2vw 1.2vw; }
@@ -251,7 +282,8 @@
    becomes a grid and the break is chosen instead of discovered. */
 .chip-row.cols3 { display: grid; grid-template-columns: repeat(3, 1fr); }
 .chip-row.cols4 { display: grid; grid-template-columns: repeat(4, 1fr); }
-.chip-row.cols3 .chip, .chip-row.cols4 .chip {
+.chip-row.cols7 { display: grid; grid-template-columns: repeat(7, 1fr); }
+.chip-row.cols3 .chip, .chip-row.cols4 .chip, .chip-row.cols7 .chip {
   flex: initial;
   min-width: 0;
   text-align: center;
@@ -271,7 +303,11 @@
   color: var(--dim);
   min-width: 0;
 }
-.chip.on { color: var(--fg); border-color: var(--accent); background: rgba(109, 179, 242, 0.1); }
+/* SELECTED is white — a brighter box, not a different hue. In blue it was the same
+   colour as a low temperature, and on the Daily panel the selected day chip and the day's
+   low sat within a hand's width of each other. Selection is a state of the control, so it
+   is drawn the way a control is: more light. */
+.chip.on { color: var(--fg); border-color: var(--fg); background: rgba(255, 255, 255, 0.10); }
 
 /* Segmented control — the ONLY paired-button idiom left in the app, and it is reserved for
    a genuine either/or with two named values (°F/°C, 12-hour/24-hour). Anything that is
@@ -287,7 +323,7 @@
   border: 1px solid var(--card-line2);
   border-radius: 1.3vh;
 }
-.seg-b.on { color: var(--fg); border-color: var(--accent); background: rgba(109, 179, 242, 0.12); }
+.seg-b.on { color: var(--fg); border-color: var(--fg); background: rgba(255, 255, 255, 0.12); }
 
 /* ---------- switch rows ----------
    The single idiom for every on/off in the app: seconds, screen drift, and each widget's
@@ -300,7 +336,7 @@
    470 x 142 device px, well over the 88 px target floor, and the knob is narrower because a
    third of the width has a third of the room for one. */
 .srows.cols3 { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 2vw; }
-.srows.cols3 .srow { padding: var(--pad-row) 1vw; gap: 1.5vw; }
+.srows.cols3 .srow { padding: var(--pad-row) 0; gap: 1.5vw; }
 .srows.cols3 .srow-k { font-size: var(--fs-body); }
 /* 9vw, not 6.5: at 6.5 the pill was barely wider than its own knob, so the knob travelled
    5 px between off and on and twelve switches all read as the same state from 30 cm, let
@@ -323,17 +359,28 @@
    a pill, and at an even third the word came out as "Secon" with the knob over the rest. */
 .seg-pair .srows { flex: 1.5 1 0; min-width: 0; }
 .seg-pair .srow { padding: var(--pad-row) 1vw; border-bottom: none; gap: 1.5vw; }
+/* ...except inside the units cluster, where the row sits in a bordered box of its own. */
+
+/* Seven day chips across a 711 px panel have ~95 px each; the side padding a chip carries
+   for a wrapping row is width it cannot spare here. */
+.chip-row.cols7 .chip { padding: var(--pad-row) 0.4vw; }
 
 /* A panel's closing strip: one control and the one line that belongs beside it. */
 .pfoot { display: flex; align-items: center; gap: 2.5vw; margin-top: 1.6vh; }
 .pfoot .btn-row { flex: 0 0 40%; margin-top: 0; }
 .pfoot .muted { flex: 1 1 auto; margin-top: 0; }
+/* No side padding. The 1vw here was 5 CSS px, and it applied to the LABEL but not to the
+   row's own hairline or to the section heading above it — so every switch row in Settings
+   started 12 device px to the right of the rule it sits on and of the heading that owns it,
+   and the panel had a visibly ragged left rail running its whole length. A row that is a
+   full-width target does not need to inset its own contents; the panel body's 3vw is the
+   rail, and everything on the screen now starts on it. */
 .srow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 3vw;
-  padding: var(--pad-control) 1vw;
+  padding: var(--pad-control) 0;
   border-bottom: 1px solid var(--card-line);
   border-radius: 0.8vh;
   width: 100%;
@@ -364,6 +411,9 @@
   background: var(--dimmer);
   transition: transform var(--dur-ui) var(--ease), background-color var(--dur-ui) var(--ease);
 }
-.switch.on { background: rgba(109, 179, 242, 0.25); border-color: var(--accent); }
-.switch.on span { background: var(--accent); transform: translateX(calc(10vw - 3.6vh)); }
+/* ON is white, for the same reason SELECTED is: every toggle in Settings was blue, which
+   is the colour of a cold temperature two screens away. The knob's POSITION is what says
+   which way the switch is set; the brightness is what makes that readable at 3 m. */
+.switch.on { background: rgba(255, 255, 255, 0.22); border-color: var(--fg); }
+.switch.on span { background: var(--fg); transform: translateX(calc(10vw - 3.6vh)); }
 

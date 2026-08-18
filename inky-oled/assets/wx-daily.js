@@ -21,6 +21,26 @@
      already in the registry by the time this IIFE runs. */
   var weather = WP.registry.weather;
 
+  /* One sentence, in place of two grid cells that printed 0% and 0 in on every dry day.
+     Same shape as the Conditions panel's RAIN section, deliberately: one question, one
+     idiom, wherever on the wall it is asked. */
+  function rainLine(day, i) {
+    var pop = Math.round(day.precipitation_probability_max[i] || 0);
+    var amt = Math.round((day.precipitation_sum[i] || 0) * 100) / 100;
+    if (!pop && !amt) return "None forecast.";
+    if (!amt) return pop + "% chance, none expected to fall.";
+    return amt + " " + WP.fmt.precipUnit() + " expected, " + pop + "% chance.";
+  }
+
+  /* A UV index carries its own band and the band is the part somebody acts on, so the
+     figure wears the band's colour — the same treatment AQI already gets on the Air panel.
+     Before this, the one coloured value in the app was 70/Moderate (harmless) while
+     UV MAX 8.3 "Very high" and OZONE 98 were plain white. Colour marked the safe number. */
+  function uvBand(v) {
+    var u = WP.fmt.uv(v);
+    return '<span class="' + u.tone + '">' + u.n + "</span>";
+  }
+
   var daily = {
     name: "daily",
     sel: 0,
@@ -83,7 +103,11 @@
         dt.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
       /* day switcher across the top of the panel */
-      var tabs = '<div class="chip-row" role="radiogroup" aria-label="Day">'
+      /* cols7, not a wrapping flex row: seven intrinsically-sized chips stopped 200 device
+         px short of the right rail, so the strip that selects the day looked like a row
+         that had run out rather than a control spanning the panel. Seven is the count and
+         the grid is told so. */
+      var tabs = '<div class="chip-row cols7" role="radiogroup" aria-label="Day">'
         + day.time.map(function (iso, k) {
           var dk = new Date(iso + "T12:00:00");
           return '<button class="chip tappable' + (k === i ? " on" : "") + '"'
@@ -156,26 +180,47 @@
                   the screen the dashboard opens into. */
                fmt.deg(day.temperature_2m_max[i])
                  + ' <span class="lo">/ ' + fmt.deg(day.temperature_2m_min[i]) + "</span>",
-               esc(info.text))
+               /* The two ends of the day belong on the day's own line. As a pair of grid
+                  cells they cost a whole stat row at the re-scaled value size, to say two
+                  clock times that nobody reads as a measurement. */
+               esc(info.text) + " · " + esc(fmt.clock(sunrise, false))
+                 + " – " + esc(fmt.clock(sunset, false)))
 
-        /* Nine cells, three full rows. It was ten, which in a three-across grid left SUNSET
-           alone on a fourth row under a hairline stopping at a third of the width. Wind and
-           gusts are one fact about one day, so the gust figure moved onto the wind cell's
-           second line beside the direction it blows from. */
+        /* SIX cells, two rows, and the count is fixed whatever the weather does.
+
+           It was nine. Two of them were the zeros this panel never got the zero-suppression
+           the others did — a dry day printed RAIN CHANCE 0% beside PRECIP TOTAL 0 in, which
+           is two cells to say nothing — and DAYLIGHT was sunset minus sunrise printed
+           between sunset and sunrise. When the value tier was re-scaled for 3 m each stat
+           row grew by ~2vh and three rows put this panel 19 px off the bottom of the frame
+           (measured on the device). Cutting the row that carried the least is the trade the
+           re-scale is paid for with; shrinking the type back is not.
+
+           Rain moved OUT of the grid and into one sentence below it, which is the idiom
+           Conditions already answers the same question with. */
+        /* THREE cells, one row. It was nine, then six, and the arithmetic is the same
+           each time: a stat row costs ~2vh more now that its value is sized for a 3 m read,
+           and this panel is a fixed canvas. What went, and why:
+             RAIN CHANCE + PRECIP TOTAL  two cells printing 0% and 0 in on a dry day, the
+                                         zero suppression the other panels got. Now one
+                                         sentence under the grid.
+             DAYLIGHT                    sunset minus sunrise, printed between sunset and
+                                         sunrise.
+             SUNRISE + SUNSET            two clock times, now on the hero's own line where
+                                         they read as the shape of the day rather than as
+                                         two measurements.
+             FEELS HIGH + FEELS LOW      one cell. They are one fact with two ends, exactly
+                                         like the 93° / 65° in the hero above them. */
         + section("Day", statGrid([
-            ["Feels high", fmt.deg(day.apparent_temperature_max[i])],
-            ["Feels low", fmt.deg(day.apparent_temperature_min[i])],
-            ["Rain chance", Math.round(day.precipitation_probability_max[i] || 0) + "%"],
-            ["Precip total", (Math.round((day.precipitation_sum[i] || 0) * 100) / 100)
-              + " " + fmt.precipUnit()],
+            ["Feels", fmt.deg(day.apparent_temperature_max[i])
+              + ' <span class="lo">/ ' + fmt.deg(day.apparent_temperature_min[i]) + "</span>",
+              "high / low"],
             ["Max wind", Math.round(day.wind_speed_10m_max[i]) + " " + fmt.speedUnit(),
               fmt.compass(day.wind_direction_10m_dominant[i]) + " · gusts "
                 + Math.round(day.wind_gusts_10m_max[i]) + " " + fmt.speedUnit()],
-            ["UV max", String(fmt.uv(day.uv_index_max[i]).n), fmt.uv(day.uv_index_max[i]).label],
-            ["Daylight", esc(fmt.duration(day.daylight_duration[i] * 1000))],
-            ["Sunrise", esc(fmt.clock(sunrise, false))],
-            ["Sunset", esc(fmt.clock(sunset, false))]
+            ["UV max", uvBand(day.uv_index_max[i]), fmt.uv(day.uv_index_max[i]).label]
           ], 3))
+        + section("Rain", '<div class="muted">' + rainLine(day, i) + "</div>")
         + section("Hour by hour", barsHtml));
     }
   };

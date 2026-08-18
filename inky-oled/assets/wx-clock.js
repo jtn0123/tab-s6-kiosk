@@ -94,14 +94,18 @@
       }
       WP.qs("[data-sub]", panel).textContent = tzText || "local time";
 
+      /* SIX cities, two across, down from nine across three. A world clock's time is that
+         cell's value and takes the value tier like every other number on every other panel,
+         and "10:09 PM" at that size measured 213 px against a 213 px cell — one glyph of
+         Roboto away from wrapping the time onto two lines on every cell in the grid. Two
+         columns give it 320 px. The three that went are the three nearest neighbours of the
+         local clock two centimetres above: Denver, Chicago and Berlin are each within an
+         hour of a zone still listed, which is what a world clock is for. */
       var zones = [
         ["Los Angeles", "America/Los_Angeles"],
-        ["Denver", "America/Denver"],
-        ["Chicago", "America/Chicago"],
         ["New York", "America/New_York"],
         ["UTC", "UTC"],
         ["London", "Europe/London"],
-        ["Berlin", "Europe/Berlin"],
         ["Tokyo", "Asia/Tokyo"],
         ["Sydney", "Australia/Sydney"]
       ];
@@ -152,18 +156,21 @@
           + esc(fmt.clock(now, true)) + "</div>"
           + '<div class="big-sub">' + esc(now.toLocaleDateString(undefined, {
               weekday: "long", year: "numeric", month: "long", day: "numeric" })) + "</div></div>"
-          /* Four cells, and every one of them is something a person might want off a wall.
-             Two were dropped:
+          /* THREE cells, one row, and every one of them is something a person might want
+             off a wall. What went, and why:
                "Unix time 1786999387" — a seconds-since-1970 counter, ticking, on a kiosk in
                  a hallway. Raw developer output; nobody reads it and nothing reads it back.
                "Time zone America/Los Angeles" — the subtitle four hundred pixels above says
-                 the same thing, better. One fact, one place. */
+                 the same thing, better. One fact, one place.
+               "Clock 12-hour" — a SETTING, not a reading. It is in Settings, and it is on
+                 the home screen's SETUP tile. This panel is about what time it is.
+             And two of the three that stayed printed their own label inside their value:
+             WEEK said "Week 34" and UTC OFFSET said "UTC-07:00". The label is the label. */
           + section("Today", statGrid([
-              ["UTC offset", "UTC" + offTxt],
+              ["UTC offset", offTxt],
               ["Day of year", String(doy) + " of " + fmt.daysInYear(now)],
-              ["Week", "Week " + isoWeek],
-              ["Clock", S.get("clockHours") === 24 ? "24-hour" : "12-hour"]
-            ]))
+              ["Week", String(isoWeek)]
+            ], 3))
           + section("World clocks", '<div class="wc-grid">' + zones.map(function (z) {
               var s = "--:--", day = "";
               try {

@@ -102,10 +102,13 @@ test("the panel renders every section from one snapshot", function () {
      already on the screen, and a pixel count and a percentage of a byte are facts about
      the hardware rather than about the room. The subtitle assertion below is what keeps
      the model and the Android version asserted at all. */
-  var dev = stats(body, "Uptime");
-  assert.equal(dev["Uptime"], "3d 4h 0m");
-  assert.equal(dev["Awake"], "2d 0h 0m");
-  assert.match(app.qs('[data-panel="system"] [data-sub]').textContent, /TEST-PANEL · Android 13/);
+  /* Uptime followed them into the subtitle. It had a section headed UPTIME holding a cell
+     labelled UPTIME — the label printed inside its own value — beside an AWAKE cell that on
+     a wall panel prints the identical string, because a wall panel never sleeps. The awake
+     figure survives as a SHARE, which is the form in which it can differ from uptime and so
+     the form in which it is worth the pixels: 2 of 3.17 days is 63%. */
+  assert.match(app.qs('[data-panel="system"] [data-sub]').textContent,
+    /TEST-PANEL · Android 13 · up 3d 4h 0m, 63% awake/);
 });
 
 test("battery temperature follows the unit setting", function () {

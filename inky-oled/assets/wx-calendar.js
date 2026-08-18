@@ -92,13 +92,20 @@
       WP.qs("[data-sub]", panel).textContent =
         now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
+      /* The two chevrons sit BESIDE the month they move, not at the two edges of the
+         screen. They were 145 x 125 px boxes holding a 20 px glyph, pushed ~1000 device px
+         apart by a title that took the remainder — so the control and the thing it controls
+         were nowhere near each other, and the row read as two stray buttons. */
       var head = '<div class="cal-nav">'
-        + '<button class="btn tappable" data-ns="calendar" data-act="prev" aria-label="Previous month">&#8249;</button>'
         + '<div class="cal-title">' + esc(title) + "</div>"
+        + '<button class="btn tappable" data-ns="calendar" data-act="prev" aria-label="Previous month">&#8249;</button>'
         + '<button class="btn tappable" data-ns="calendar" data-act="next" aria-label="Next month">&#8250;</button>'
         + "</div>";
 
-      var dows = ["S", "M", "T", "W", "T", "F", "S"];
+      /* Two letters. S M T W T F S has two ambiguous pairs, and at 3 m you cannot tell
+         which of the two Ss or the two Ts you are under — on a grid whose whole job is
+         telling you which column a date is in. */
+      var dows = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
       var grid = '<div class="cal-grid" role="grid" aria-label="' + esc(title) + '">'
         + dows.map(function (d) { return '<div class="cal-dow">' + d + "</div>"; }).join("");
       monthGrid(y, m).forEach(function (week) {
@@ -114,23 +121,19 @@
         '<div class="btn-row"><button class="btn tappable" data-ns="calendar" data-act="today">'
         + "Back to today</button></div>";
 
-      WP.repaint(WP.qs("[data-body]", panel), head + grid + back
-        + section("Year", '<div class="muted">Day ' + this.dayOfYear(now) + " of "
-          + (this.isLeap(now.getFullYear()) ? 366 : 365)
-          + " · week " + this.isoWeek(now) + "</div>"));
+      /* The YEAR section is gone. It printed "Day 229 of 365 · week 34" — the same
+         sentence the Clock panel prints, in the same words, one swipe away — under a month
+         grid that was floating inset at the top of the panel with 313 device px of black
+         beneath it. The grid takes that height instead (see the calendar block in
+         style-theme.css): a month you can read a date off from across the room is the whole
+         of what this screen is, and it is now the whole of what is on it. */
+      WP.repaint(WP.qs("[data-body]", panel), head + grid + back);
     },
 
-    dayOfYear: function (d) {
-      return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
-    },
-    isLeap: function (y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; },
-    isoWeek: function (d) {
-      var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-      var dow = t.getUTCDay() || 7;
-      t.setUTCDate(t.getUTCDate() + 4 - dow);
-      var y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-      return Math.ceil(((t - y0) / 86400000 + 1) / 7);
-    }
+    /* dayOfYear / isLeap / isoWeek used to live here, feeding a YEAR section that printed
+       the same sentence the Clock panel prints. The section is gone and so are they; the
+       DST-safe versions in WP.fmt are the ones the Clock panel uses and the ones the date
+       tests cover. */
   };
 
   cal.monthGrid = monthGrid;

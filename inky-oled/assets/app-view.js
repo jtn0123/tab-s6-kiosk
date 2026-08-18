@@ -137,6 +137,19 @@
     });
   }
 
+  /* The "there is more this way" fade only belongs on a strip that HAS more this way.
+     It was unconditional, so in landscape — where the hourly card is nearly twice as wide
+     and all eight chips fit with room to spare — the last column was rendered at reduced
+     opacity inside a card that was not scrolling: its hour, its glyph and its temperature
+     all dimmed, on the most-looked-at card in the product, reading as a rendering fault.
+     A mask cannot ask whether its own content overflows, so the question is answered here,
+     where the geometry is already being measured. */
+  function markScrollers() {
+    qsa(".hstrip").forEach(function (n) {
+      n.classList.toggle("scrolls", n.scrollWidth - n.clientWidth > 1);
+    });
+  }
+
   /* ---------------- burn-in drift ----------------
      This panel is AMOLED: a dashboard that never moves ghosts permanently, and on a wall
      panel "never moves" is the normal case — nobody is watching it at 3am.
@@ -240,13 +253,17 @@
                  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
       return pts[Math.round(deg / 22.5) % 16];
     },
-    /* UV bands are the WHO ones; the label is what actually matters at a glance. */
+    /* UV bands are the WHO ones; the label is what actually matters at a glance.
+       `tone` puts the figure on the app's one severity ramp — the same six steps AQI and
+       the pollutants use. It was missing, so the wall printed UV MAX 8.3 "Very high" in
+       plain white next to an amber 70 / Moderate: the only value wearing a warning colour
+       was the only harmless one. */
     uv: function (v) {
-      if (v == null) return { n: "--", label: "" };
+      if (v == null) return { n: "--", label: "", tone: "band-na" };
       var n = Math.round(v * 10) / 10;
-      var label = v < 3 ? "Low" : v < 6 ? "Moderate" : v < 8 ? "High"
-                : v < 11 ? "Very high" : "Extreme";
-      return { n: n, label: label };
+      var i = v < 3 ? 1 : v < 6 ? 2 : v < 8 ? 3 : v < 11 ? 4 : 5;
+      var label = ["Low", "Moderate", "High", "Very high", "Extreme"][i - 1];
+      return { n: n, label: label, tone: "band-" + i };
     },
     clock: function (d, withSeconds) {
       var h = d.getHours(), m = d.getMinutes(), suffix = "";
@@ -258,10 +275,16 @@
       }
       return h + ":" + pad2(m) + (withSeconds ? ":" + pad2(d.getSeconds()) : "") + suffix;
     },
+    /* ONE casing for one datum. The meridiem letter came out of here lowercase, and two
+       of the three places that print an hour sit inside the small-caps label recipe, which
+       upper-cases whatever it is given — so the same hour was "9P" on the home strip, "9p"
+       in the hourly list and "12A" on the daily axis, on three screens one swipe apart.
+       Upper is the one that survives being inside the recipe, and it is the more legible of
+       the two at 3 m: "9P" has no descender to lose. */
     hourLabel: function (d) {
       if (settings.get("clockHours") === 24) return pad2(d.getHours()) + ":00";
       var h = d.getHours() % 12; if (h === 0) h = 12;
-      return h + (d.getHours() >= 12 ? "p" : "a");
+      return h + (d.getHours() >= 12 ? "P" : "A");
     },
     bytes: function (b) {
       if (b == null || isNaN(b)) return "--";
@@ -366,10 +389,13 @@
       var y = h - ((v - min) / (max - min)) * h;
       return (Math.round(x * 10) / 10) + "," + (Math.round(y * 10) / 10);
     });
-    /* The filled area under the line is what makes it readable from across a room. */
-    var area = "0," + h + " " + pts.join(" ") + " " + w + "," + h;
+    /* A LINE, and nothing under it. The filled area was here to make the trace readable
+       from across a room, and it did that by lighting a large translucent slab of an OLED
+       panel permanently — on a screen whose stated rule is that lit pixels are data, to
+       carry information the line already carries. The stroke does the job instead: it is
+       non-scaling, so 3 CSS px is 3 CSS px whatever the viewBox is stretched to, and a
+       bright 3 px line on true black is legible at 3 m where a 1.4 px one was not. */
     return '<svg class="spark" viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="none">'
-      + '<polygon class="spark-fill" points="' + area + '"></polygon>'
       + '<polyline class="spark-line" points="' + pts.join(" ") + '"></polyline>'
       + "</svg>";
   }
@@ -380,7 +406,7 @@
   WP.applyVisibility = applyVisibility;
   /* A widget calling this is telling us its content has landed, which is exactly the
      condition the growth cap needs before it may bind. */
-  WP.relayoutHome = function () { layoutReady = true; relayoutHome(); };
+  WP.relayoutHome = function () { layoutReady = true; relayoutHome(); markScrollers(); };
   /* boot (app-touch.js) logs the measured budget and re-measures on settings changes */
   WP._layout = { metrics: homeMetrics, relayout: relayoutHome };
 })();

@@ -138,7 +138,7 @@
            drifting the layout still needs a reason, because "Drift the layout" does not on
            its own explain why anybody would want it. */
         + section("Display", '<div class="srows">'
-          + switchRow("settings", "sky", "Weather behind the cards", S.get("sky") !== false)
+          + switchRow("settings", "sky", "Weather behind the cards", S.get("sky") === true)
           + switchRow("settings", "cycle", "Cycle screens every "
               + Math.round((C.cycle && C.cycle.seconds) || 20) + "s", !!S.get("cycle"))
           + switchRow("settings", "burn", "Drift the layout", !!S.get("burnIn"), null,
@@ -163,7 +163,7 @@
            only moment either of them is worth reading. */
         + '<div class="pfoot"><div class="btn-row">'
             + btn("reset", this.resetArmed ? "Tap again to confirm" : "Reset to defaults",
-                  "danger", null, "settings")
+                  "", null, "settings")
             + "</div>"
             + (this.resetArmed
                 ? '<div class="muted">This clears units, clock format, burn-in and which '

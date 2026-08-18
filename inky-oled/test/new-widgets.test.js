@@ -74,12 +74,12 @@ test("every band wears its own colour class and junk degrades to unknown", funct
   var seen = {};
   [10, 75, 125, 175, 250, 400].forEach(function (v) {
     var b = air.band(v);
-    assert.match(b.cls, /^aqi-/);
+    assert.match(b.cls, /^band-/);
     assert.equal(seen[b.cls], undefined, b.cls + " reused across bands");
     seen[b.cls] = true;
   });
   assert.equal(air.band(null).label, "Unknown");
-  assert.equal(air.band(NaN).cls, "aqi-na");
+  assert.equal(air.band(NaN).cls, "band-na");
 });
 
 /* ---------------- calendar ---------------- */
@@ -138,15 +138,20 @@ test("every documented WMO code lands in the scene its icon promises", function 
   assert.equal(sky.sceneFor(1234), "clear", "unknown codes degrade to the quiet scene");
 });
 
-test("the sky honours its settings switch", function () {
+test("the sky honours its settings switch, and ships OFF", function () {
+  /* It shipped on. The scene drew its specks inside the cards as well as behind them, and
+     at 2-4 m a scatter of dim dots on a black panel reads as dust on the glass or as dead
+     pixels rather than as weather — on a display where a dead pixel is a thing that
+     actually happens — while animating 24/7 on a panel whose rule is that lit pixels are
+     data. The default is the decision; the switch is still there for anyone who wants it. */
   var a = h.createApp({});
-  assert.equal(a.WP.settings.get("sky"), true, "sky ships on");
+  assert.equal(a.WP.settings.get("sky"), false, "sky ships on");
   a.WP.panels.open("settings");
   var row = a.qs('[data-panel="settings"] [data-act="sky"]');
   assert.ok(row, "settings offers no sky switch");
-  assert.equal(row.getAttribute("aria-checked"), "true");
+  assert.equal(row.getAttribute("aria-checked"), "false");
   a.tap(row);
-  assert.equal(a.WP.settings.get("sky"), false, "the switch does not persist the setting");
+  assert.equal(a.WP.settings.get("sky"), true, "the switch does not persist the setting");
 });
 
 /* ---------------- the home tiles ---------------- */
@@ -166,6 +171,6 @@ test("the air tile renders a banded reading once data lands", function () {
   a.registry.air.stale = false;
   a.registry.air.render();
   assert.equal(a.text("air-big"), "42");
-  assert.match(a.qs("#air-big span").getAttribute("class"), /aqi-good/);
+  assert.match(a.qs("#air-big span").getAttribute("class"), /band-1/);
   assert.match(a.text("air-sub"), /Good/);
 });

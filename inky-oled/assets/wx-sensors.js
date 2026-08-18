@@ -448,7 +448,10 @@
         var at = (e && e.okAt) || this.lastOkAt;
         return at ? "Not updating — last answered " + fmt.ago(at) : "Not updating";
       }
-      return this.lastOkAt ? "Live — updated " + fmt.ago(this.lastOkAt) : "Live";
+      /* a clock time, not an age: see the note on weather.panelSub — "updated 0s ago"
+         re-rendered every second and could not be read at the size it is set in */
+      return this.lastOkAt
+        ? "Live — updated " + fmt.clock(new Date(this.lastOkAt), false) : "Live";
     },
 
   };

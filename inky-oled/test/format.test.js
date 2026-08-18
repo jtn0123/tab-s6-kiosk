@@ -168,8 +168,12 @@ test("clock honours 12/24h and the seconds setting", function () {
   assert.equal(fmt.clock(noon, false), "12:05 PM");
   assert.equal(fmt.clock(midnight, false), "12:05 AM", "midnight is 12 AM, not 0 AM");
   assert.equal(fmt.clock(evening, true), "11:05:09 PM");
-  assert.equal(fmt.hourLabel(evening), "11p");
-  assert.equal(fmt.hourLabel(midnight), "12a");
+  /* UPPER. Two of the three places that print an hour sit inside the small-caps label
+     recipe, which upper-cases whatever it is handed, so a lowercase meridiem here produced
+     "9P" on the home strip, "9p" in the hourly list and "12A" on the daily axis — one datum
+     in two casings on adjacent screens. The formatter is the only place that can settle it. */
+  assert.equal(fmt.hourLabel(evening), "11P");
+  assert.equal(fmt.hourLabel(midnight), "12A");
 
   S.data.clockHours = 24;
   assert.equal(fmt.clock(noon, false), "12:05");

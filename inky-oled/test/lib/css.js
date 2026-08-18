@@ -103,6 +103,38 @@ function vh(value) {
   return null;
 }
 
+/* ---------------- how big a size actually is, on the wall ----------------
+   The unit the design brief is written in. This panel is 244.5 x 152.8 mm of active area at
+   2560 x 1600, so 1 CSS px = 0.215 mm and 1vh = 11.38 CSS px; cap height is ~0.72 em; and a
+   feature h mm tall subtends h / 3000 * 3438 arcminutes at 3 m, which is the distance the
+   thing is read from. 20/20 acuity RESOLVES ~5' — the threshold at which a glyph stops
+   being a smudge — and fluent glance-reading wants 12-18'.
+
+   It exists because "is 1.85vh big enough" is not answerable and "is 3.7 arcminutes big
+   enough" is: no. Every legibility floor in design-system.test.js is stated in arcminutes
+   for that reason, so a later round cannot argue a step down is fine. */
+var CSS_PX_PER_VH = 11.38;
+var MM_PER_CSS_PX = 0.215;
+var CAP_RATIO = 0.72;
+var VIEWING_MM = 3000;
+
+function arcmin(sizeVh) {
+  if (sizeVh == null) return null;
+  return sizeVh * CSS_PX_PER_VH * MM_PER_CSS_PX * CAP_RATIO / VIEWING_MM * 3437.75;
+}
+
+/* The value a property RESOLVES to for this element: its own rule, or the nearest ancestor
+   that declares it. font-size and color both inherit, and the two questions the legibility
+   tests ask are always about the pair together — a size means nothing without the contrast
+   it is drawn at. */
+function inherited(el, prop) {
+  for (var n = el; n && n.nodeType === 1; n = n.parentNode) {
+    var v = styleOf(n, prop);
+    if (v != null) return v;
+  }
+  return null;
+}
+
 /* The token NAME a declaration used, or null if it authored a literal. This is what the
    spacing-scale test asks about — the value alone cannot tell a 1.8vh that came off the
    scale from a 1.8vh somebody typed. */
@@ -219,6 +251,8 @@ module.exports = {
   tokenName: tokenName,
   styleOf: styleOf,
   fontVh: fontVh,
+  arcmin: arcmin,
+  inherited: inherited,
   verticalPadding: verticalPadding,
   boxVh: boxVh
 };

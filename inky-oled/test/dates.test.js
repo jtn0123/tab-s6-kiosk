@@ -99,7 +99,9 @@ test("the clock panel renders the same day-of-year the formatter computes", func
      it agreed with itself no matter how wrong isoWeek got. 2024-08-16 is a Friday in ISO
      week 33 (that week runs Mon 12th to Sun 18th August 2024).
      The label lost the "ISO": the standard's name is for whoever implements the arithmetic,
-     not for whoever reads the wall. */
-  assert.equal(vals[keys.indexOf("Week")], "Week 33");
+     not for whoever reads the wall. And the VALUE lost the word "Week": a cell labelled
+     WEEK whose value reads "Week 33" prints its own label inside itself, which happened in
+     three places (also UPTIME → 22h 33m and CLOCK → 12-hour). */
+  assert.equal(vals[keys.indexOf("Week")], "33");
   app.WP.panels.closeAll();
 });

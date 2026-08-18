@@ -237,7 +237,12 @@ window.WP = (function () {
       clockHours: (C.clockHours === 24) ? 24 : 12,
       seconds:    false,
       burnIn:     b.enabled !== false,
-      sky:        true,
+      /* OFF by default. The animated sky drew specks INSIDE the cards, not just behind
+         them, and at 2-4 m a scatter of dim dots on a black panel does not read as weather,
+         it reads as dust on the glass or as dead pixels — on a display where a dead pixel is
+         a real thing that happens. It also animates 24/7 on a panel whose rule is that lit
+         pixels are data. It is still one tap away in Settings for anybody who wants it. */
+      sky:        false,
       cycle:      false,
       show:       {}
     };
@@ -259,7 +264,7 @@ window.WP = (function () {
         if (saved.clockHours === 12 || saved.clockHours === 24) d.clockHours = saved.clockHours;
         d.seconds = !!saved.seconds;
         d.burnIn = saved.burnIn !== false;
-        d.sky = saved.sky !== false;
+        d.sky = saved.sky === true;   /* opt-in, like the default above */
         d.cycle = saved.cycle === true;
         if (saved.show) {
           WIDGETS.forEach(function (w) {

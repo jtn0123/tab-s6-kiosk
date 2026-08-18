@@ -347,8 +347,7 @@
           + '<span class="tenths" id="tmr-tenths">.' + (Math.floor(e / 100) % 10)
           + "</span></div></div>"
           + '<div class="btn-row">'
-          + btn("sw-toggle", this.sw.running ? "Stop" : "Start",
-                this.sw.running ? "danger" : "primary", null, "timer")
+          + btn("sw-toggle", this.sw.running ? "Stop" : "Start", "", null, "timer")
           + btn("sw-lap", "Lap", this.sw.running ? "" : "off", null, "timer")
           + btn("sw-reset", "Reset", "", null, "timer")
           + "</div></div>";
@@ -367,14 +366,18 @@
                 + '<span class="lap-d mono">+' + fmt.stopwatch(cur - prev, true) + "</span></div>";
             }).join("") + "</div>", "laps-sec");
         } else {
-          /* No laps, no LAPS (0) heading over an empty box: a heading and a count of zero
-             was a label for a thing that is not there, and it pushed one sentence of
-             guidance into the middle of ~900 px of black. With nothing to list, the panel
-             is a stopwatch and nothing else, so the cluster centres itself (see the timer
-             block in style-widgets.css) and the sentence sits under the buttons it is
-             about. The heading comes back with the first lap, which is when it is true. */
-          html += '<div class="laps-hint"><div class="muted">'
-            + "Tap Lap while running to split.</div></div>";
+          /* The laps block is RESERVED, not conditional. Dropping it when the count is zero
+             was meant to avoid labelling a thing that is not there; what it actually did was
+             leave the lower half of the screen as undifferentiated black — measured at a
+             747 device px unbroken band, 29% of the frame, the emptiest screen in the build
+             — and then make the whole layout jump the instant lap 1 landed.
+
+             So the region keeps its heading and its shape, and the shape is the point: the
+             ruled rows are drawn at the pitch a real lap row occupies (see .laps-hint), so
+             what is on screen is a prepared table rather than a hole, and the first lap
+             lands ON the rule that was already waiting for it. */
+          html += section("Laps", '<div class="laps-hint"><div class="muted">'
+            + "Tap Lap while running to split.</div></div>", "laps-sec");
         }
 
       } else {
@@ -390,8 +393,7 @@
           + (this.cd.running || r < this.cd.duration ? " accent" : "") + '"'
           + ' id="tmr-bar" style="width:' + pct.toFixed(1) + '%"></div></div></div>'
           + '<div class="btn-row">'
-          + btn("cd-toggle", this.cd.running ? "Pause" : "Start",
-                this.cd.running ? "danger" : "primary", null, "timer")
+          + btn("cd-toggle", this.cd.running ? "Pause" : "Start", "", null, "timer")
           + btn("cd-bump", "+1 min", "", 60, "timer", "add one minute")
           + btn("cd-bump", "&minus;1 min", "", -60, "timer", "take off one minute")
           + btn("cd-reset", "Reset", "", null, "timer")

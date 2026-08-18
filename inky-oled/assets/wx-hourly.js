@@ -21,6 +21,24 @@
      already in the registry by the time this IIFE runs. */
   var weather = WP.registry.weather;
 
+  /* Which of the three temperature stops a reading falls on, against the DAY's range.
+
+     This replaced `.hrow-bar`: each hour used to be drawn as a fill of a full-width grey
+     track, `12 + ((t - lo) / span) * 78` percent wide. A track implies a maximum, so at 3 m
+     "78 deg" read as "about half full of something" — and thirty pixels above it the same
+     eight hours were already drawn as a warm-to-cool curve. Two grammars for one variable
+     on one screen, and the bar was the one that could not be right: temperature has no
+     zero to fill from. The figure carries the curve's own colour instead, which makes the
+     list a legend for the chart rather than a competitor to it.
+
+     Three buckets, not an interpolation: the app has exactly three temperature tokens and a
+     widget picks a CLASS, never a colour — the same rule the type ramp works by. The stops
+     match the gradient in chart() (hot at the top, warm at 0.55, cold at the bottom). */
+  function tempTone(t, lo, span) {
+    var f = (t - lo) / span;
+    return f > 0.66 ? "t-hot" : f > 0.33 ? "t-warm" : "t-cold";
+  }
+
   var hourly = {
     name: "hourly",
     sel: 0,
@@ -270,8 +288,10 @@
             ["UV index", String(uv.n), uv.label]
           ], 3);
 
-      /* temperature range across the window drives the inline bar width so the list
-         reads as a chart, not just numbers */
+      /* The day's range, and it is the CHART's range: `list` is all 24 hours, not the
+         eight in view. Each row's temperature figure is tinted from it with the same three
+         stops the curve above uses, so the list reads as the chart's legend — 66 deg is
+         the same blue in the row as it is at the bottom of the curve. */
       var temps = list.map(function (k) { return h.temperature_2m[k]; });
       var lo = Math.min.apply(null, temps), hi = Math.max.apply(null, temps);
       var span = (hi - lo) || 1;
@@ -289,7 +309,11 @@
          500, and eight rows in the short one either overflow it or shrink each row below the
          88-device-px target floor. This is the one layout decision the stylesheet cannot
          make, because the count is what is emitted, not how it is drawn. */
-      var ROWS_SHOWN = (window.innerWidth > window.innerHeight) ? 5 : 8;
+      /* Six in portrait, not eight: the type ramp moved a row's temperature to the value
+         tier, and eight of the new rows went 21 px off the bottom of the frame (measured on
+         the device). A row that is half drawn is worse than a row that is not there, and
+         six rows a person on the sofa can read beat eight they cannot. */
+      var ROWS_SHOWN = (window.innerWidth > window.innerHeight) ? 5 : 6;
       var from = Math.max(0, Math.min(list.indexOf(i), list.length - ROWS_SHOWN));
       var visible = list.slice(from, from + ROWS_SHOWN);
       var wet = this.anyRain(visible);
@@ -298,7 +322,7 @@
         var tk = new Date(h.time[k]);
         var ik = WP.wmo(h.weather_code[k], h.is_day && h.is_day[k] === 0);
         var pop = h.precipitation_probability ? Math.round(h.precipitation_probability[k]) : 0;
-        var w = 12 + ((h.temperature_2m[k] - lo) / span) * 78;
+        var tone = tempTone(h.temperature_2m[k], lo, span);
         return '<button class="hrow tappable' + (k === i ? " sel" : "") + '"'
           + ' aria-current="' + (k === i ? "true" : "false") + '"'
           + ' aria-label="' + esc(fmt.hourLabel(tk) + ", " + ik.text + ", "
@@ -306,9 +330,8 @@
           + ' data-ns="hourly" data-act="pick" data-arg="' + k + '">'
           + '<span class="hrow-t">' + esc(fmt.hourLabel(tk)) + "</span>"
           + '<span class="hrow-i" aria-hidden="true">' + WP.wxIcon(h.weather_code[k], h.is_day && h.is_day[k] === 0) + "</span>"
-          + '<span class="hrow-bar" aria-hidden="true"><span style="width:'
-          + w.toFixed(1) + '%"></span></span>'
-          + '<span class="hrow-d">' + fmt.deg(h.temperature_2m[k]) + "</span>"
+          + '<span class="hrow-w">' + esc(ik.text) + "</span>"
+          + '<span class="hrow-d ' + tone + '">' + fmt.deg(h.temperature_2m[k]) + "</span>"
           + (wet ? '<span class="hrow-p' + (pop >= 30 ? " wet" : "") + '">' + pop + "%</span>" : "")
           + "</button>";
       }).join("");

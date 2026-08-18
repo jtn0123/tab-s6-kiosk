@@ -256,6 +256,9 @@ test("the panel lists what fits on the screen, not everything it merged", functi
   }
   app.WP.panels.open("news");
   var rows = app.qsa(".news-row", app.panelBody("news"));
-  assert.equal(rows.length, 8, "the panel is listing " + rows.length + " headlines");
+  /* SIX. The headline is the value this panel exists to show, so it moved to the value
+     tier of the ramp when everything was re-scaled for a 3 m read; six of those fill the
+     panel where eight of the old ones left 453 device px of black under the last row. */
+  assert.equal(rows.length, 6, "the panel is listing " + rows.length + " headlines");
   assert.match(rows[0].textContent, /Headline number 0/, "the newest is still first");
 });

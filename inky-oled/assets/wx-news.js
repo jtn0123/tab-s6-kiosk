@@ -227,7 +227,14 @@
          the twenty-fourth story was never read by anyone. The ticker on the dashboard
          rotates through the first twelve; this is the same news, in the depth a glance from
          3 m can actually use. */
-      var SHOWN = 8;
+      /* SIX, not eight, and the rows share the panel between them.
+
+         Eight headlines at ~23 CSS px — 4 arcminutes of cap height at 3 m — with 453 device
+         px of black under the last one is the worst trade on the wall: the panel had the
+         room to set the news at a size somebody on the sofa could read and it spent that
+         room on nothing. Six at the section-heading tier fill the same screen, and a
+         headline you can read from the sofa is the entire purpose of a news panel. */
+      var SHOWN = 6;
       var rows = this.items.slice(0, SHOWN).map(function (it) {
         return '<div class="news-row">'
           + '<div class="news-row-t">' + esc(it.title) + "</div>"

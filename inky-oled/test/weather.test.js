@@ -308,7 +308,7 @@ test("switching to 24-hour redraws the strip and the status line immediately", f
   var app = h.createApp({ now: now, fetch: wx.serve() });
   return app.flush().then(function () {
     var labels = app.qsa("#hourly .hr-t").map(function (n) { return n.textContent; });
-    assert.equal(labels[1], "10a");
+    assert.equal(labels[1], "10A");   /* one casing everywhere — see fmt.hourLabel */
     app.WP.settings.set("clockHours", 24);
     var after = app.qsa("#hourly .hr-t").map(function (n) { return n.textContent; });
     assert.equal(after[0], "Now");
@@ -326,13 +326,18 @@ test("the hourly panel opens on the hour that was tapped", function () {
     assert.equal(app.registry.hourly.sel, 12);
     var body = app.panelBody("hourly");
     assert.equal(body.querySelector(".big-time").textContent, wx.tempAt(12) + "°");
-    /* EIGHT rows, not 24. The list is windowed to what the panel can actually show: all 24
-       went into a scrollport that fits about four of them, so the panel always ended on a
-       row sliced in half and nineteen of the rows were below a fold nobody on a wall panel
-       ever scrolls past. The 24-hour shape is the chart above. What this test is really
-       about is unchanged and is the line below it: the hour you tapped is in the list and
-       it is the selected one. */
-    assert.equal(app.qsa(".hrow", body).length, 8);
+    /* SEVEN rows, not 24. The list is windowed to what the panel can actually show: all
+       24 went into a scrollport that fits about four of them, so the panel always ended on
+       a row sliced in half and nineteen of the rows were below a fold nobody on a wall
+       panel ever scrolls past. The 24-hour shape is the chart above.
+
+       It was eight until the type ramp was re-scaled for 3 m — a row's temperature is a
+       VALUE and moved to the value tier, which made every row taller and put the eighth
+       one 21 px off the bottom of the frame (measured on the device). Fewer rows at a size
+       that reads beats more rows nobody can. What this test is really about is unchanged
+       and is the line below it: the hour you tapped is in the list and it is selected. */
+    /* SIX */
+    assert.equal(app.qsa(".hrow", body).length, 6);
     assert.equal(app.qsa(".hrow.sel", body).length, 1);
   });
 });
@@ -347,6 +352,36 @@ test("the daily panel opens on the day that was tapped", function () {
     var body = app.panelBody("daily");
     assert.match(body.querySelector(".big-time").textContent, /^80°/);
     assert.equal(app.qsa(".chip.on", body).length, 1);
+
+    /* THREE cells, one row, down from nine. RAIN CHANCE 0% beside PRECIP TOTAL 0 in was
+       two cells to say nothing on a dry day — the zero suppression the other three panels
+       got never reached this one — DAYLIGHT was sunset minus sunrise printed between sunset
+       and sunrise, the two clock times moved onto the hero's own line where they read as
+       the shape of the day, and the two "feels" figures are one fact with two ends exactly
+       like the 93° / 65° above them. A stat row costs ~2vh more now that its value is sized
+       to be read from 3 m; this is what that was paid for with. */
+    assert.deepEqual(app.qsa(".psec .stat-k", body).map(function (n) { return n.textContent; }),
+      ["Feels", "Max wind", "UV max"]);
+    /* the two clock times that used to be two grid cells, on the day's own line */
+    assert.equal(body.querySelector(".big-sub").textContent,
+      "Light rain · 5:42 AM – 8:12 PM");
+    var rain = app.qsa(".psec", body).filter(function (sec) {
+      return sec.querySelector(".psec-t").textContent === "Rain";
+    })[0];
+    assert.ok(rain, "the daily panel no longer answers whether it will rain");
+    /* the fixture's day 2 is a 26% chance with nothing measurable behind it — which is
+       exactly the case the two old cells rendered as "RAIN CHANCE 26%" over "PRECIP TOTAL
+       0 in", a figure and its own contradiction side by side */
+    assert.equal(rain.querySelector(".muted").textContent,
+      "26% chance, none expected to fall.");
+
+    /* and the UV figure wears its WHO band, like every other banded value in the app —
+       it was the plain-white "8.3 / Very high" beside an amber "70 / Moderate" that made
+       the only coloured value on the wall the only harmless one */
+    var uv = app.qsa(".stat", body).filter(function (st) {
+      return st.querySelector(".stat-k").textContent === "UV max";
+    })[0];
+    assert.match(uv.querySelector(".stat-v span").getAttribute("class"), /^band-[1-5]$/);
   });
 });
 

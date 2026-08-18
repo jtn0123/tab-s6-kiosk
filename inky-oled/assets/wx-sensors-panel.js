@@ -15,7 +15,7 @@
   var esc = WP.esc, fmt = WP.fmt, S = WP.settings;
   var ui = WP.ui;
   var statGrid = ui.statGrid, section = ui.section, hero = ui.hero, btn = ui.btn,
-      bar = ui.bar, switchRow = ui.switchRow;
+      bar = ui.bar, switchRow = ui.switchRow, plot = ui.plot;
 
   var sensors = WP.registry.sensors;
 
@@ -49,23 +49,23 @@
     if (hi - lo >= floor) {
       /* a real swing: keep it, with a little headroom so the peak is not on the frame */
       var pad = (hi - lo) * 0.12;
-      return { min: lo - pad, max: hi + pad, flat: false };
+      return { min: lo - pad, max: hi + pad, flat: false, floor: floor };
     }
-    return { min: mid - floor / 2, max: mid + floor / 2, flat: true };
+    return { min: mid - floor / 2, max: mid + floor / 2, flat: true, floor: floor };
   }
 
-  /* The trace with its own axis. There was none: no y-scale, no x-scale, nothing on the
-     screen to say what the line's height meant, which is what let the shape lie unopposed.
-     The labels are HTML over the SVG rather than SVG <text>, for the reason the hourly
-     chart gives: a size inside a scaling viewBox is a size authored outside the ramp. */
-  function plot(svg, dom, unit, dp, binary) {
-    function edge(v) {
+  /* The trace's own axis — see WP.ui.plot for why the labels are HTML over the SVG.
+     These two figures are the top and bottom of the Y-DOMAIN, which after the floor above
+     is not the same thing as the top and bottom of the data, and the panel used to print
+     both: plot corners 76.4 / 72.4 °F sixty pixels above LOWEST 73.9 / HIGHEST 74.9 °F,
+     each pair labelled °F and neither labelled as which. One screen, one series, two
+     different ranges, and the pair drawn on the chart was the one that is not the data.
+     The corners are the scale, so the stat row below is no longer allowed to be a second
+     one — it says mean, spread and net movement instead (see the grid at the end). */
+  function axis(dom, unit, dp, binary) {
+    return function (v) {
       return binary ? (v > 0.5 ? "On" : "Off") : Number(v).toFixed(dp || 0) + " " + unit;
-    }
-    return '<div class="plot">' + svg
-      + '<span class="plot-hi">' + esc(edge(dom.max)) + "</span>"
-      + '<span class="plot-lo">' + esc(edge(dom.min)) + "</span>"
-      + '<div class="plot-x"><span>2h ago</span><span>now</span></div></div>';
+    };
   }
 
   sensors.paintPanel = function () {
@@ -91,6 +91,8 @@
       /* scroll position is preserved: this panel repaints on every tick as values move */
 
       var vals = e.hist.map(function (p) { return sensors.out(e, p.v); });
+      var last = vals.length ? vals[vals.length - 1] : null;
+      var first = vals.length ? vals[0] : null;
       var unit = sensors.outUnit(e);
       var nums = vals.filter(function (v) { return typeof v === "number"; });
       var min = nums.length ? Math.min.apply(null, nums) : null;
@@ -110,7 +112,7 @@
       var control = "";
       if (e.kind === "toggle") {
         control = '<div class="btn-row">'
-          + btn("toggle", e.on ? "Turn off" : "Turn on", e.on ? "danger" : "primary", e.id, "sensors")
+          + btn("toggle", e.on ? "Turn off" : "Turn on", "", e.id, "sensors")
           + "</div>";
       }
 
@@ -124,6 +126,7 @@
           + (e.okAt ? ". It last answered " + esc(fmt.ago(e.okAt)) : "") + ".</div>";
       }
 
+      var ed = axis(dom, unit, e.dp, binary);
       var freshAt = e.hist.length ? e.hist[e.hist.length - 1].t : 0;
 
       WP.repaint(body, chips + note
@@ -134,21 +137,39 @@
            anything the reader can use. It says how fresh the number is instead. */
         + hero(this.glyph(e),
                esc(this.display(e)) + ' <span class="dim">' + esc(unit) + "</span>",
-               esc(e.label) + (freshAt ? " · updated " + esc(fmt.ago(freshAt)) : ""),
+               esc(e.label)
+                 + (freshAt ? " · updated " + esc(fmt.clock(new Date(freshAt), false)) : ""),
                this.isOffish(e) ? "dim" : "")
         + control
         /* "Samples 241" went with the ENTITY grid: it is the length of an internal array,
            and it moves when the poll interval is reconfigured without anything in the room
            having changed. Min / max / mean is the whole of what two hours of a number has
            to say. */
-        + section("Last 2 hours", plot(WP.sparkline(vals, spark), dom, unit, e.dp, binary)
+        /* When the drift is under the floor the chart is a flat line, and a flat line
+           drawn 250 px wide is still a chart implying an event. The VERDICT goes first, in
+           words, at the value tier — which is the tier somebody 3 m away can actually read
+           — and the trace behind it becomes the evidence rather than the claim. */
+        + section("Last 2 hours",
+            (dom.flat && !binary
+              ? '<div class="stat-v">Steady</div><div class="stat-x">less than '
+                + dom.floor + " " + esc(unit) + " either way in two hours</div>"
+              : "")
+            + plot(WP.sparkline(vals, spark),
+                   ed(dom.max), ed(dom.min), "2h ago", "now")
             + (binary
                 ? statGrid([["State now", esc(this.display(e))],
                     ["On", duty == null ? "--" : Math.round(duty * 100) + "% of window"],
                     ["Off", duty == null ? "--" : Math.round((1 - duty) * 100) + "% of window"],
                     ["Last change", changed ? esc(fmt.ago(changed)) : "over 2 h ago"]])
-                : statGrid([["Lowest", r(min) + " " + esc(unit)],
-                    ["Highest", r(max) + " " + esc(unit)],
-                    ["Average", r(avg) + " " + esc(unit)]], 3))));
+                /* Mean, spread, net movement — three facts, none of which is a y-value the
+                   axis above already states. It was Lowest / Highest / Average, i.e. a
+                   second pair of bounds for a series whose bounds are printed in the
+                   corners of the chart directly above them, in the same unit, disagreeing
+                   with them by the width of the domain floor. */
+                : statGrid([["Average", r(avg) + " " + esc(unit)],
+                    ["Range", r(max - min) + " " + esc(unit)],
+                    ["Change", (last != null && first != null && last - first >= 0 ? "+" : "")
+                      + r(last == null || first == null ? null : last - first)
+                      + " " + esc(unit)]], 3))));
     }
 })();

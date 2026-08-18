@@ -321,12 +321,18 @@
        a Source section at the bottom of a screen that had to be scrolled to reach it.
        (The place name itself is never written into a source file: it comes from
        CONFIG.location.name at runtime, and config.js is held out of the repo.) */
+    /* "updated 3s ago" was a string that changed every second, for ever, at 2.8 arcminutes
+       of cap height — churn nobody can read, on the line that is supposed to be the quiet
+       provenance of the screen. A HEALTHY panel says the clock time it was fetched at,
+       which is a fact that sits still. An age is kept for the unhealthy case, because there
+       the point IS that it is growing. */
     panelSub: function () {
       var age = this.fetchedAt ? fmt.ago(this.fetchedAt) : "";
+      var at = this.fetchedAt ? fmt.clock(new Date(this.fetchedAt), false) : "";
       var where = (C.location && C.location.name) ? C.location.name + " · " : "";
       if (!this.data) return where + "waiting for the forecast";
       if (this.stale) return where + (age ? "offline, last reading " + age : "offline");
-      return where + (age ? "updated " + age : "current conditions") + " · Open-Meteo";
+      return where + (at ? "updated " + at : "current conditions") + " · Open-Meteo";
     },
 
     onOpen: function (panel) {
@@ -359,18 +365,28 @@
            the stat grids run three across       (-22vh, the values here are all short)
            Source is folded into the subtitle    (-6vh)
          "Now: Daytime / Night" is the one cell dropped: the hero glyph two lines above it
-         is the sun or the moon, so the cell restated it in words. */
+         is the sun or the moon, so the cell restated it in words.
+
+         Then the values were sized for a 3 m read, which costs about 2vh per stat row, and
+         AIR's second row is the one that paid for it. The three cells that went:
+           CLOUD 0%      — the hero two lines above says "Clear". One fact, two grammars.
+           VISIBILITY    — 40.4 mi in this valley, nearly every day, and there is no action
+                           anybody takes on it.
+           DEW POINT     — a comfort proxy, sitting beside HUMIDITY, which is the reading
+                           people actually use to answer the same question.
+         Cutting a row is the trade the re-scale is paid for with; shrinking the type back
+         until nine fields fit is not. */
       body.innerHTML =
         hero(WP.wxIcon(cur.weather_code, cur.is_day === 0), fmt.deg(cur.temperature_2m),
              esc(info.text) + " · feels " + fmt.deg(cur.apparent_temperature))
 
         + section("Air", statGrid([
             ["Humidity", Math.round(cur.relative_humidity_2m) + "%"],
-            ["Dew point", h && h.dew_point_2m && i >= 0 ? fmt.deg(h.dew_point_2m[i]) : "--"],
-            ["Pressure", fmt.pressure(cur.pressure_msl)],
-            ["Cloud", Math.round(cur.cloud_cover) + "%"],
-            ["Visibility", h && h.visibility && i >= 0 ? fmt.distance(h.visibility[i]) : "--"],
-            ["UV index", uv.n + "", uv.label]
+            /* the unit on its own line, like UV's band and the wind's bearing: "29.92 inHg"
+               is eleven glyphs at the value tier and wrapped a third of a 711 px panel */
+            ["Pressure", fmt.pressure(cur.pressure_msl).replace(/\s*(\S+)$/, ""),
+              fmt.pressure(cur.pressure_msl).split(" ").pop()],
+            ["UV index", '<span class="' + uv.tone + '">' + uv.n + "</span>", uv.label]
           ], 3))
 
         + section("Wind", statGrid([

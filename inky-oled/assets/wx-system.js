@@ -135,9 +135,19 @@
         return;
       }
 
+      /* Uptime is a fact about this device, and the subtitle is where this panel already
+         says what device it is. It had a section of its own — headed UPTIME, holding a cell
+         labelled UPTIME and a cell labelled AWAKE that printed the identical string, because
+         a wall panel never sleeps. One heading and two cells to say one thing twice, on a
+         panel that was 75 px past the bottom of the frame once the values were re-scaled for
+         a 3 m read. The awake share is kept as a share, which is the form in which it can
+         differ from uptime and therefore the form in which it is worth printing. */
+      var awakePct = i.uptimeMs ? Math.round((i.awakeMs || 0) / i.uptimeMs * 100) : null;
       WP.qs("[data-sub]", panel).textContent =
         (i.device && i.device.model ? i.device.model : "device")
-        + " · Android " + (i.device ? i.device.android : "?");
+        + " · Android " + (i.device ? i.device.android : "?")
+        + " · up " + fmt.duration(i.uptimeMs || 0)
+        + (awakePct == null ? "" : ", " + awakePct + "% awake");
 
       var b = i.battery || {}, st = i.storage || {}, mem = i.memory || {}, net = i.network || {};
       var stUsed = (st.total && st.free != null) ? st.total - st.free : 0;
@@ -199,16 +209,7 @@
               + (net.upKbps ? Math.round(net.upKbps / 1000) : "--"), "Mbps down / up"]
           ], 3))
 
-        /* Two cells. ANDROID, SCREEN, BRIGHTNESS and finally TABLET all went the same way:
-           the panel's own subtitle four lines above reads "SM-T860 · Android 16", so the
-           model and the version were already on the screen, and a pixel count and a
-           percentage of a byte are facts about the hardware rather than about the room.
-           What is left is the pair that only this section can answer: how long the wall has
-           been up, and how much of that it spent awake. */
-        + section("Uptime", statGrid([
-            ["Uptime", esc(fmt.duration(i.uptimeMs || 0))],
-            ["Awake", esc(fmt.duration(i.awakeMs || 0))]
-          ], 2)));
+        );
     }
   };
 

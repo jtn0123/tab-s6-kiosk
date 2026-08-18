@@ -87,7 +87,19 @@
    happened to land cleanly on "7 P" and so hid it.) The mask dissolves the last 4vw
    instead of guillotining it, which is the whole convention for "this list continues".
    A mask rather than the gradient overlay used on the panel edges, because a chip may be
-   mid-scroll under it and the .hr.now background is not --bg. */
+   mid-scroll under it and the .hr.now background is not --bg.
+
+   Two changes, for one complaint: the last visible column read as a rendering fault rather
+   than as "there is more this way".
+
+   .scrolls, which relayoutHome() sets, so the fade only exists on a strip that really is
+   wider than its box. (It usually is — the strip carries all 24 hours — but a card wide
+   enough to hold them, or a shorter forecast, must not be dimmed for nothing.)
+
+   2vw, not 4: at 4 the mask was as wide as 80% of a landscape chip, so a whole column — its
+   hour, its glyph and its temperature together — rendered at reduced opacity and read as
+   broken. At 2 it dissolves the EDGE of that column, which is what the convention actually
+   is: a cut that says "continues", not a column that says "failed to draw". */
 .hstrip {
   display: flex;
   gap: 1.1vw;
@@ -95,8 +107,10 @@
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 0.4vh;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 4vw), transparent 100%);
-  mask-image: linear-gradient(to right, #000 calc(100% - 4vw), transparent 100%);
+}
+.hstrip.scrolls {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2vw), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 2vw), transparent 100%);
 }
 .hr {
   flex: 0 0 auto;
@@ -113,7 +127,9 @@
 .hr.now { border-color: var(--card-line2); background: rgba(109, 179, 242, 0.07); }
 .hr-i { font-size: var(--fs-body-lg); line-height: 1.1; }
 .hr-d { font-size: var(--fs-body); font-variant-numeric: tabular-nums; }
-.hr-p { font-size: var(--fs-caption); color: var(--dimmer); font-variant-numeric: tabular-nums; }
+/* --dim, not --dimmer: see THE BAN in style.css. The strip is eight columns across a
+   711 px card, so the size cannot move; the contrast is the half of it that can. */
+.hr-p { font-size: var(--fs-caption); color: var(--dim); font-variant-numeric: tabular-nums; }
 .hr-p.wet { color: var(--accent); }
 
 /* ---------- 5. daily forecast ---------- */
@@ -149,7 +165,10 @@
   min-width: 0;
   position: relative;
 }
-.sensor.on { border-color: rgba(125, 224, 141, 0.35); background: rgba(125, 224, 141, 0.07); }
+/* One "on", one colour. This tile was green while the Settings switch beside the same
+   idea was blue, so the app had two on-states in two hues on two screens. Both are white
+   now; see .switch.on. */
+.sensor.on { border-color: rgba(255, 255, 255, 0.30); background: rgba(255, 255, 255, 0.06); }
 .sensor.alertish { border-color: rgba(242, 180, 109, 0.4); }
 /* line-height is pinned, not `normal`: these labels lead with symbol-font glyphs
    (house / moon / sun / umbrella / bolt / circle / diamond / bar) and a fallback font's
@@ -161,8 +180,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* keep the label clear of the switch pill parked in the tile's top-right corner */
-.sensor.has-sw .sensor-label { padding-right: 3.8vw; }
+/* The pill sits on the VALUE's line, not the label's. Parked in the top-right corner it
+   was level with the word LAMP while the state it sets ("Off") sat on the line below — a
+   control and its own readout on two different baselines, in a tile 102 px wide. Reading
+   the tile meant reading down the left and then back up the right. */
+.sensor.has-sw .sensor-value { padding-right: 3.8vw; }
 .sensor-value {
   font-size: var(--fs-body-lg);
   font-weight: 200;
@@ -185,7 +207,7 @@
 .sensor.stale .sensor-unit { color: var(--dimmer); }
 .sensor-sw {
   position: absolute;
-  top: 0.5vh; right: 0.8vw;
+  bottom: 0.7vh; right: 0.8vw;
   width: 3vw; height: 1.6vh;
   border-radius: 0.8vh;
   background: #222;
@@ -198,8 +220,8 @@
   background: var(--dim);
   transition: transform var(--dur-ui) var(--ease), background-color var(--dur-ui) var(--ease);
 }
-.sensor.on .sensor-sw { background: rgba(125, 224, 141, 0.25); }
-.sensor.on .sensor-sw span { background: var(--ok); transform: translateX(calc(3vw - 1.6vh)); }
+.sensor.on .sensor-sw { background: rgba(255, 255, 255, 0.22); }
+.sensor.on .sensor-sw span { background: var(--fg); transform: translateX(calc(3vw - 1.6vh)); }
 
 /* ---------- 7/2/8. mini tiles ---------- */
 .row3 { flex: 0 0 auto; display: flex; gap: 1.4vw; min-width: 0; }
