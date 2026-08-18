@@ -38,8 +38,16 @@
      cols:  2 (default) or 3. Three is for panels whose values are short — a percentage, a
             temperature, a wind speed. Conditions was 111vh of a 100vh screen on two. */
   function statGrid(items, cols) {
-    return '<div class="stat-grid' + (cols === 3 ? " cols3" : "") + '">' + items.map(function (it) {
-      return '<div class="stat">'
+    var n = cols === 3 ? 3 : 2;
+    /* Cells on the LAST ROW carry no rule under them. Every grid in the app ended with a
+       hairline drawn under its final row with nothing following it, which is the classic
+       unfinished-table tell — and on five panels it was the last thing on the screen. The
+       row is worked out here rather than in CSS because :nth-last-child cannot know how
+       many cells the caller passed, and a grid of four in three columns has a last row of
+       one. */
+    var firstOfLastRow = Math.floor((items.length - 1) / n) * n;
+    return '<div class="stat-grid' + (n === 3 ? " cols3" : "") + '">' + items.map(function (it, i) {
+      return '<div class="stat' + (i >= firstOfLastRow ? " last-row" : "") + '">'
         + '<div class="stat-k">' + esc(it[0]) + "</div>"
         + '<div class="stat-v">' + it[1] + "</div>"
         + (it[2] ? '<div class="stat-x">' + esc(it[2]) + "</div>" : "")

@@ -141,7 +141,19 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
    Ticks and hi/lo callouts are HTML over the SVG so their sizes come off the ramp like
    every other label; the SVG carries only geometry. */
 .hchart-wrap { position: relative; margin: 0.6vh 0 0.2vh; }
-.hchart { width: 100%; display: block; }
+/* The height is DECLARED. With `height: auto` the SVG took it from its own aspect ratio,
+   so the plot was as tall as the panel was wide — 250 CSS px in portrait and 357 px of a
+   711 px-tall landscape screen. That is the landscape bug: the chart pushed the hero and
+   the stat row off the top and its own peak out of view. */
+.hchart { width: 100%; height: 21vh; display: block; }
+/* the selected hour's dot, in HTML so a stretched viewBox cannot turn it into an ellipse */
+.hc-dot {
+  position: absolute;
+  width: 1.1vh; height: 1.1vh;
+  border-radius: 50%;
+  background: var(--fg);
+  transform: translate(-50%, -50%);
+}
 .hc-bars rect { fill: var(--ic-rain); opacity: 0.55; }
 .hc-hi, .hc-lo {
   position: absolute; transform: translate(-50%, -100%);
@@ -158,8 +170,11 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 
 /* rain-chance figures wear rain's colour once they mean something (>= 30%) */
 .hr-p.wet, .hrow-p.wet { color: var(--ic-rain); }
-/* daily lows read cool — hi stays primary text */
-.fc-lo { color: var(--temp-cold); }
+/* Daily lows read cool — hi stays primary text. One rule for every low in the app: the
+   home strip (.fc-lo), the Daily panel's hero (.lo) and the hourly chart's valley callout
+   (.hc-lo). The panel used to render its low as --dim, so the same number was blue on the
+   dashboard and grey one tap later. */
+.fc-lo, .big-time .lo { color: var(--temp-cold); }
 
 /* ---- moon ---- */
 .mini-big.moon-row { display: flex; align-items: center; gap: 1.6vw; }
@@ -221,7 +236,16 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 .news-meta { flex: 0 0 auto; color: var(--dimmer); font-size: var(--fs-caption); }
 .news-row { padding: 1.05vh 0; border-bottom: 1px solid var(--card-line); }
 .news-row:last-child { border-bottom: none; }
-.news-row-t { font-size: var(--fs-body); }
+/* Two lines maximum. A headline that needs three at 2-4 m is not being read from 2-4 m,
+   and in landscape — where a row is half the screen wide and the ramp is 1.45x — a long one
+   ran to four and pushed the list off the panel. */
+.news-row-t {
+  font-size: var(--fs-body);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .news-row-m { font-size: var(--fs-caption); color: var(--dimmer); margin-top: 0.2vh; }
 
 /* ---- calendar ---- */
@@ -297,13 +321,62 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   .row3 { align-items: stretch; }
   .card.mini { justify-content: center; }
 
+  /* ---- a panel in landscape is TWO COLUMNS of sections ----
+     Landscape is 1138 x 711: a body that is 1.6x wider and 0.6x shorter than portrait's.
+     Stacking the sections down it did the worst of both — Conditions ran AIR across all six
+     columns, then left the right half of WIND and SUN empty with their hairlines stopping
+     dead mid-screen, and pushed RAIN off the bottom entirely. Two columns of section
+     groups (AIR | WIND over SUN | RAIN) fills the width, keeps every rule the full width of
+     its own grid, and halves the height of every panel that is a list of sections.
+
+     The hero, the chart and the timer's pinned block span both columns: they are the one
+     thing the screen is about, and a half-width hero beside a stat grid is not a hierarchy.
+     Panels with their own body layout (timer, sensors, hourly, and the short trio) out-rank
+     this rule on specificity and keep it — deliberately: those are single-subject screens,
+     not lists of sections. */
+  .panel-body {
+    display: grid;
+    /* minmax(0, 1fr), not 1fr: a plain fr has a min-content floor, so the daily panel's
+       24-column hour chart demanded 1059 px of the 1138 and squeezed the day chips beside
+       it into a 102 px column of stacked single characters. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 3.5vw;
+    align-content: start;
+  }
+  /* Full width: the thing the screen is about, and any control that selects WHICH thing. */
+  .panel-body > .big-readout,
+  .panel-body > .hchart-wrap,
+  .panel-body > .chip-row,
+  .panel-body > .bar,
+  .panel-body > .stick,
+  .panel-body > .pfoot { grid-column: 1 / -1; }
+  /* a list of rows fills the width the same way a grid of sections does */
+  .news-list { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 3.5vw; }
+  .news-row:nth-last-child(-n+2) { border-bottom: none; }
+  /* 18vh, not 21: the plot is the same fraction of a screen that is 0.6x as tall, and the
+     eight rows under it in portrait are five here. */
+  .hchart { height: 18vh; }
+
   .hr { min-width: 6vw; }
   .sensors { grid-template-columns: repeat(5, 1fr); }
-  .stat-grid { grid-template-columns: repeat(4, 1fr); }
-  .stat-grid.cols3 { grid-template-columns: repeat(6, 1fr); }
-  .wc-grid { grid-template-columns: repeat(5, 1fr); }
+  /* the grids keep their portrait shape, because a section is half the screen wide now */
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid.cols3 { grid-template-columns: repeat(3, 1fr); }
+  .wc-grid { grid-template-columns: repeat(3, 1fr); }
   .switch { width: 6vw; }
   .switch.on span { transform: translateX(calc(6vw - 3.6vh)); }
+  /* A vw is worth 1.6x more across the long axis, so the widget grid's pill has to come
+     down or it takes the room its label needs — "Next days" was wrapping to two lines and
+     making that section a row taller than the panel had. */
+  .srows.cols3 .switch { width: 5.5vw; }
+  .srows.cols3 .switch.on span { transform: translateX(calc(5.5vw - 3.6vh)); }
+  /* A section marked .wide takes the whole width rather than a column of the two — the
+     widget checklist is twelve items, and as a half-width column of four rows it was the
+     38 px this panel was overflowing by. Across the full width it is four across and three
+     rows, with 267 px per cell, which is more room for a label than portrait has. */
+  .panel-body > .psec.wide { grid-column: 1 / -1; }
+  .psec.wide .srows.cols3 { grid-template-columns: repeat(4, 1fr); }
+  .psec.wide .srows.cols3 .srow:nth-last-child(-n+4) { border-bottom: none; }
   .sensor-sw { width: 2.6vw; }
   .sensor.on .sensor-sw span { transform: translateX(calc(2.6vw - 2vh)); }
   .moon-disc { width: 22vh; height: 22vh; }
@@ -326,3 +399,20 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 .panel[data-panel="moon"] .moon-hero { padding: 0; }
 .panel[data-panel="moon"] .moon-disc { width: 22vh; height: 22vh; }
 .panel[data-panel="calendar"] .cal-grid { row-gap: 1.1vh; }
+
+/* Clock and Conditions are the same story one size down: both fit comfortably and both
+   left what was over — 272 px and 232 px, measured on the device — as one slab under the
+   last row. Space it through the sections instead. (Conditions gained its slab honestly:
+   its RAIN section collapsed from nine zeros to one line.)
+
+   PORTRAIT ONLY, and that is the point of the media query: in landscape these two are two
+   columns of sections, and a flex column here would out-rank that grid on specificity and
+   quietly undo it. */
+@media (orientation: portrait) {
+  .panel[data-panel="clock"] [data-body],
+  .panel[data-panel="weather"] [data-body] {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+  }
+}

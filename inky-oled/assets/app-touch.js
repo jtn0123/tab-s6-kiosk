@@ -64,7 +64,7 @@
         /* is-open carries pointer-events (see style.css), so touch is handed back to the
            dashboard on this line rather than 240ms later when the fade finishes. While it
            was tied to is-mounted, the invisible fading panel ate any tap inside that
-           window — tap "← Dashboard" then immediately tap a card and nothing happened.
+           window — tap the close ✕ then immediately tap a card and nothing happened.
            The one thing that must *not* become live again is whatever was hiding under the
            close button itself; that is handled by the close shadow in runHit, not here. */
         el.classList.remove("is-open");

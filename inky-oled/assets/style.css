@@ -275,11 +275,20 @@ button {
    different places. Previously each was authored separately and they drifted to five sizes
    (1.5 / 1.6 / 1.65 / 1.7 vh), four trackings (0.06 / 0.08 / 0.1 / 0.2 em) and two weights.
 
-   Exactly two tiers, and the difference between them IS the hierarchy:
-     .psec-t   a panel's section heading — one ramp step up, one shade brighter
-     the rest   a field or card label — smaller, dimmer, subordinate to its own value
-   Before this, a section heading and the field label under it were 1.7vh and 1.6vh of the
-   same colour, which is not a hierarchy, it is a rounding error. */
+   Three tiers, and the difference between them IS the hierarchy:
+     .psec-t   a panel's section heading — two ramp steps up, one shade brighter
+     .stat-k   a panel's FIELD label — one step up, and the same shade as the heading
+     the rest  a card label on the home screen, where the card's own shape does half the
+               work of saying what it is — smallest, dimmest, subordinate to its value
+
+   Why .stat-k was pulled out. It carried the meaning of every number on every panel and
+   it was set at the smallest step in the ramp AND the lowest contrast in the palette:
+   1.6vh is 41 device px and --dimmer is 4.9:1, which at the 2-4 m this panel is read from
+   is about 6 arcmin of low-contrast small caps — i.e. gone. What reached the viewer was an
+   unlabelled sheet of numbers (55%, 63°, 29.91 inHg, 0%, 33.4 mi) beside a 74-device-px
+   white value it was supposed to explain. The label tier is the tier that has to be
+   readable; the value is the tier you can guess. Raising it costs one grid row per panel,
+   and the field cuts in the panels below are what paid for it. */
 .psec-t,
 .card-label, .mini-head, .stat-k, .fc-name, .hr-t, .wc-city, .sensor-label, .daybar-t {
   font-size: var(--fs-label);
@@ -288,7 +297,8 @@ button {
   text-transform: uppercase;
   color: var(--dimmer);
 }
-.psec-t { font-size: var(--fs-note); color: var(--dim); }
+.psec-t { font-size: var(--fs-body); color: var(--dim); }
+.stat-k { font-size: var(--fs-note); color: var(--dim); }
 /* The two dense grids run their labels a step down: five HA tiles across a 711px viewport
    and 24 hour-bars across a panel simply do not have the width, and an ellipsised label is
    worse than a small one. Same weight, same tracking, same colour — same object. */
@@ -300,10 +310,14 @@ button {
   gap: 1.6vw;
   margin-bottom: 0.5vh;
 }
+/* WHITE, not --accent. The accent is the same hex as --temp-cold, so blue on this screen
+   meant both "this number is a low" and "this thing opens something" — 65° 64° 64° in blue
+   two centimetres from "Details ›" in blue. Colour is spent on data; an affordance is
+   spelled out by the box, the chevron and the words. */
 .link-btn {
   margin-left: auto;
   font-size: var(--fs-note);
-  color: var(--accent);
+  color: var(--fg);
   padding: var(--pad-inline) 1.6vw;   /* ~3.9vh tall = 95 device px */
   border-radius: 0.9vh;
   border: 1px solid var(--card-line2);
@@ -319,6 +333,10 @@ button {
   border: 1px solid currentColor;
   transition: color var(--dur-ui) var(--ease), border-color var(--dur-ui) var(--ease);
 }
-.badge-demo  { color: var(--warn); }
+/* NEUTRAL. The demo badge and "AIR 68 Moderate" were the same amber 200 px apart on the
+   same screen — one a note about where the numbers come from, the other a value on the
+   EPA's own scale. The scale keeps the colour, since there it IS the datum; provenance
+   gets an outline. --warn stays for the stale badge, which is a genuine warning. */
+.badge-demo  { color: var(--dimmer); }
 .badge-live  { color: var(--ok); }
 .badge-stale { color: var(--warn); }

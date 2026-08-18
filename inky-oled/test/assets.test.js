@@ -258,14 +258,15 @@ test("every data-open target has a panel, and every panel has a widget", functio
   });
 });
 
-test("every panel has both close affordances and a body", function () {
+test("every panel has a way out, a body and a subtitle", function () {
   /* The Android back button is intentionally dead on this kiosk, so a panel with no visible
-     way out would strand the wall. */
+     way out would strand the wall. It used to be checked here that there were TWO ways out;
+     the footer bar is gone (see panels.test.js for why it cost more than it was worth) and
+     the header ✕ is the one that must never be missing. */
   var app = h.createApp({});
   app.qsa("[data-panel]").forEach(function (panel) {
     var name = panel.getAttribute("data-panel");
     assert.ok(panel.querySelector(".panel-head [data-close]"), name + " has no header close");
-    assert.ok(panel.querySelector(".panel-foot [data-close]"), name + " has no footer close");
     assert.ok(panel.querySelector("[data-body]"), name + " has no body");
     assert.ok(panel.querySelector("[data-sub]"), name + " has no subtitle");
   });

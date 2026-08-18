@@ -92,8 +92,11 @@
       if (!cur) { sub.textContent = "waiting for data…"; return; }
       var b = band(cur.us_aqi);
       big.innerHTML = '<span class="' + b.cls + '">' + Math.round(cur.us_aqi) + "</span>";
-      sub.textContent = (this.stale ? "stale · " : "")
-        + b.label + " · PM2.5 " + Math.round(cur.pm2_5);
+      /* The band alone. "Moderate · PM2.5 15" needed 146 px of the tile's 80 and printed
+         "Moderate…", which is the ellipsis telling you the tile was designed for a width it
+         does not have. The pollutant driving the index belongs on the panel, where there is
+         room to say which one it is. */
+      sub.textContent = (this.stale ? "stale · " : "") + b.label;
     },
 
     onOpen: function (panel) { this.panel = panel; this.paintPanel(); },

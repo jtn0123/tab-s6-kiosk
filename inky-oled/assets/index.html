@@ -41,6 +41,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="style-home.css">
 <link rel="stylesheet" href="style-panels.css">
+<link rel="stylesheet" href="style-widgets.css">
 <link rel="stylesheet" href="style-theme.css">
 </head>
 <body>
@@ -166,18 +167,19 @@
                role="button" tabindex="0" aria-label="Stopwatch and timer">
         <div class="mini-head">Timer</div>
         <div id="tmr-big" class="mini-big">00:00</div>
-        <div id="tmr-sub" class="mini-sub">tap to open</div>
+        <div id="tmr-sub" class="mini-sub">ready</div>
       </section>
 
-      <!-- The value line here is a glyph where its two neighbours hold digits. A glyph's ink
-           box is nothing like a digit's, so it carries `glyph` (see .mini-big.glyph): the
-           line box stays identical across all three tiles — which is what keeps the third
-           line on one baseline — and the gear gets the ~12% it needs to match a digit's cap
-           height optically. It is decorative: "Settings" is already the tile's heading. -->
+      <!-- The value line used to be a gear glyph, in the one slot on the home screen where
+           the eye is scanning a strip of numbers: 83% / 00:00 / ⚙ / 24% / 70 / 17. Five
+           tiles answered "what is it now" and the sixth answered "what am I", which the
+           heading directly above it had already said. The unit setting IS this tile's
+           value — it is the thing on this screen the tile changes — so it is where a value
+           goes, and the clock format moved down to the sub-line beside anything hidden. -->
       <section class="card mini tappable" data-widget="settings" data-open="settings"
                role="button" tabindex="0" aria-label="Settings">
         <div class="mini-head">Setup</div>
-        <div class="mini-big glyph" aria-hidden="true">&#9881;</div>
+        <div id="set-big" class="mini-big">&deg;F</div>
         <div id="set-sub" class="mini-sub">&nbsp;</div>
       </section>
     </div>
@@ -229,9 +231,17 @@
 <!-- ============================================================================
      PANEL LAYER
      One full-screen panel per widget. Shells are authored here (so the markup stays
-     readable); bodies are filled by each plugin's onOpen(). Every panel has two close
-     affordances — the big X in the header and the full-width bar at the bottom —
-     because the Android back button is intentionally dead on this kiosk.
+     readable); bodies are filled by each plugin's onOpen().
+
+     ONE exit: the circled X in the header. There used to be a full-width "← Dashboard"
+     bar under every panel as well, and it was the most expensive 113 CSS px in the app —
+     it duplicated an affordance already in the header, it sat at the bottom edge where a
+     standing viewer's thumb is furthest away, and its gradient fade turned every panel
+     that ran long into one that looked half-drawn. Four screens ended on a chopped row
+     because of it and four pooled 400-900 px of black above it. Swiping left/right still
+     moves between screens (wx-carousel.js), and the Android back button is intentionally
+     dead on this kiosk, so the X is the way out and it is in the corner the eye already
+     goes to for a title.
      ============================================================================ -->
 <div id="panels">
 
@@ -241,7 +251,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="timer">
@@ -250,7 +259,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="weather">
@@ -259,7 +267,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="hourly">
@@ -268,7 +275,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="daily">
@@ -277,7 +283,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="sensors">
@@ -286,7 +291,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="system">
@@ -295,7 +299,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="moon">
@@ -304,7 +307,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="air">
@@ -313,7 +315,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="calendar">
@@ -322,7 +323,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="news">
@@ -331,7 +331,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
   <section class="panel" data-panel="settings">
@@ -340,7 +339,6 @@
       <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
     </header>
     <div class="panel-body" data-body></div>
-    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
 </div>

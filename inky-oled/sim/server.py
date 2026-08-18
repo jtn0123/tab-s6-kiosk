@@ -15,6 +15,8 @@
 
 import http.server
 import os
+import re
+import time
 import urllib.parse
 import urllib.request
 
@@ -28,6 +30,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+    def end_headers(self):
+        # The whole point of this server is that a source edit shows on the next reload.
+        # Static assets went out of SimpleHTTPRequestHandler with only Last-Modified on
+        # them, so Chrome heuristically cached wx-*.js and went on running the previous
+        # version of a widget after the file on disk had changed — a measurement loop that
+        # silently measures the old build is worse than no measurement loop.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
 
     def do_GET(self):
         if self.path.startswith("/__proxy"):
@@ -61,10 +72,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def send_index(self):
         with open(os.path.join(ASSETS, "index.html"), encoding="utf-8") as f:
             html = f.read()
+        # Cache-Control: no-store on the assets themselves was not enough — a reload with
+        # the pane still open kept serving the previous wx-*.js out of the memory cache, so
+        # a measurement was of the build before the edit. Stamp every asset URL with the
+        # page's load time and the question cannot arise.
         html = html.replace(
             '<script src="config.js"></script>',
             '<script src="/sim-bridge.js"></script>\n<script src="config.js"></script>')
         html = html.replace("</body>", '<script src="/sim-harness.js"></script>\n</body>')
+        # ...and the stamp goes on last, so the two injections above are still matching
+        # the markup as authored rather than a URL this function has already rewritten.
+        stamp = str(int(time.time()))
+        html = re.sub(r'(<script src="|<link rel="stylesheet" href=")([^"?]+)"',
+                      lambda m: '%s%s?v=%s"' % (m.group(1), m.group(2), stamp), html)
         self.send_bytes(200, html.encode("utf-8"), "text/html; charset=utf-8")
 
     def proxy(self, method):

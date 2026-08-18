@@ -59,12 +59,28 @@
     return "";
   }
 
+  /* A feed's <title> is written for a feed reader's sidebar, not for a wall: NPR's world
+     feed calls itself "NPR Topics: News" and printed exactly that beside every headline.
+     What belongs there is who said it, so everything after the first separator goes — that
+     is the section, and the section is not news to anyone — and so does a trailing
+     "Topics", which is a word about the feed rather than a word in the publisher's name.
+
+     Deliberately NOT stripped: a trailing "News". "BBC News" is the name of the
+     organisation, and a feed called "Example World News" is not the "Example World"
+     anything. Cutting there was a rule that fixed one feed and renamed others.
+     Anything that reduces to nothing keeps what it started with. */
+  function sourceName(raw) {
+    var s = String(raw || "").split(/\s+[-–—|]\s+|:\s+/)[0].trim();
+    s = s.replace(/\s+topics$/i, "").trim();
+    return s || String(raw || "").trim();
+  }
+
   /* xml -> { source, items: [{title, at}] }, newest first. Bad input -> empty items. */
   function parseFeed(xml) {
     xml = String(xml || "");
     var isAtom = /<feed[\s>]/i.test(xml) && !/<rss[\s>]/i.test(xml);
     var head = xml.split(isAtom ? /<entry[\s>]/i : /<item[\s>]/i)[0];
-    var source = decodeEntities(firstTag(head, ["title"]));
+    var source = sourceName(decodeEntities(firstTag(head, ["title"])));
 
     var blocks = xml.match(isAtom
       ? /<entry[\s>][\s\S]*?<\/entry>/gi
@@ -205,7 +221,14 @@
         body.innerHTML = '<div class="muted">No headlines yet.</div>';
         return;
       }
-      var rows = this.items.map(function (it) {
+      /* SHOWN headlines, not all of them. Every merged item went into a scrollport that
+         holds eight, so the panel always ended on a headline sliced through the middle of
+         its own words ("…over Iran deal", fading out) — and nobody scrolls a wall panel, so
+         the twenty-fourth story was never read by anyone. The ticker on the dashboard
+         rotates through the first twelve; this is the same news, in the depth a glance from
+         3 m can actually use. */
+      var SHOWN = 8;
+      var rows = this.items.slice(0, SHOWN).map(function (it) {
         return '<div class="news-row">'
           + '<div class="news-row-t">' + esc(it.title) + "</div>"
           + '<div class="news-row-m">' + esc((it.source ? it.source + " · " : "") + ago(it.at)) + "</div>"

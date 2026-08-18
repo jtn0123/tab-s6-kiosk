@@ -241,3 +241,21 @@ test("the news card is in the home column and hides with its widget switch", fun
   app.WP.settings.setShow("news", true);
   assert.equal(card.style.display, "");
 });
+
+test("the panel lists what fits on the screen, not everything it merged", function () {
+  /* All 24 merged headlines used to go into a scrollport that holds eight, so the panel
+     always ended on a headline sliced through the middle of its own words and the last
+     sixteen were below a fold nobody on a wall ever scrolls past. The merge still keeps
+     24 — the ticker rotates through them — but the panel shows the depth a glance from
+     3 m can use. */
+  var app = h.createApp({});
+  var news = app.registry.news;
+  news.items = [];
+  for (var i = 0; i < 24; i++) {
+    news.items.push({ title: "Headline number " + i, at: Date.now() - i * 60000, source: "Test" });
+  }
+  app.WP.panels.open("news");
+  var rows = app.qsa(".news-row", app.panelBody("news"));
+  assert.equal(rows.length, 8, "the panel is listing " + rows.length + " headlines");
+  assert.match(rows[0].textContent, /Headline number 0/, "the newest is still first");
+});

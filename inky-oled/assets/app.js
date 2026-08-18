@@ -192,11 +192,18 @@ window.WP = (function () {
      SharedPreferences and used as a fallback if localStorage comes back empty. */
   var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air", "calendar",
                  "news", "sensors", "system", "timer", "settings"];
+  /* What each widget is called in the Widgets list on the Settings panel. These are the
+     words printed on the CARD each switch controls — "Now", "Next days", "Home", "Setup" —
+     rather than a second, longer name for the same thing ("Weather now", "Daily forecast",
+     "Home Assistant", "Settings tile"). Two reasons: somebody turning a card off is looking
+     at the dashboard behind the panel and can match the label to what disappears, and the
+     twelve switches fit a three-across grid at this length, which is what took that section
+     from twelve full-width rows (1005 CSS px, more than the whole panel) down to four. */
   var WIDGET_LABELS = {
-    clock: "Clock", weather: "Weather now", hourly: "Hourly forecast",
-    daily: "Daily forecast", moon: "Moon phase", air: "Air quality",
-    calendar: "Calendar", news: "News headlines", sensors: "Home Assistant", system: "Device",
-    timer: "Stopwatch & timer", settings: "Settings tile"
+    clock: "Clock", weather: "Now", hourly: "Hourly",
+    daily: "Next days", moon: "Moon", air: "Air",
+    calendar: "Date", news: "News", sensors: "Home", system: "Device",
+    timer: "Timer", settings: "Setup"
   };
 
   var store = {

@@ -170,30 +170,36 @@
          which beats something merely parked. A stopwatch running through an alarm has to
          keep the tile — it is the live number. */
       var trace = this.trace();
+      /* Every one of these strings has to SET in about eleven characters: six tiles share
+         one line of the home column, so this one is 102 CSS px wide and "stopwatch running"
+         needed 124 of its 80. The big line above already says which mode is showing — a
+         clock reading 00:00.0 is the stopwatch and 04:59 counting down is the timer — so
+         the word "stopwatch" was the tile spending its whole width on the thing it was
+         least able to be wrong about. */
       var bigText, subText;
       if (this.ringing) {
         bigText = "00:00";
         subText = "TIMER DONE";
       } else if (this.cd.running) {
         bigText = fmt.countdown(this.cdRemain());
-        subText = "counting down";
+        subText = "counting";
       } else if (this.sw.running) {
         bigText = fmt.stopwatch(this.swElapsed(), false);
-        subText = "stopwatch running";
+        subText = "running";
       } else if (trace != null) {
         /* the quiet trace: it fired, here is roughly when, and it expires by itself */
         bigText = "00:00";
         subText = trace < 60000 ? "just finished"
-          : "finished " + fmt.durationShort(trace) + " ago";
+          : "done " + fmt.durationShort(trace) + " ago";
       } else if (this.cd.remain > 0 && this.cd.remain < this.cd.duration) {
         bigText = fmt.countdown(this.cd.remain);
         subText = "paused";
       } else if (this.swElapsed() > 0) {
         bigText = fmt.stopwatch(this.swElapsed(), false);
-        subText = "stopwatch paused";
+        subText = "paused";
       } else {
         bigText = "00:00";
-        subText = "tap to open";
+        subText = "ready";
       }
       if (bigText !== this.shownBig) { this.shownBig = bigText; big.textContent = bigText; }
       if (subText !== this.shownSub) { this.shownSub = subText; sub.textContent = subText; }
@@ -293,7 +299,12 @@
       var disp = $("tmr-disp");
       if (!disp) { this.renderPanel(); return; }
       if (this.mode === "stopwatch") {
-        disp.textContent = fmt.stopwatch(this.swElapsed(), true);
+        var ms = this.swElapsed();
+        var core = $("tmr-core"), tenths = $("tmr-tenths");
+        if (!core || !tenths) { this.renderPanel(); return; }
+        var c = fmt.stopwatch(ms, false), t = "." + (Math.floor(ms / 100) % 10);
+        if (core.textContent !== c) core.textContent = c;
+        if (tenths.textContent !== t) tenths.textContent = t;
       } else {
         var r = this.cdRemain();
         disp.textContent = fmt.countdown(r);
@@ -326,8 +337,15 @@
 
       if (this.mode === "stopwatch") {
         var e = this.swElapsed();
+        /* The tenths are their own span, a ramp step down and a shade dimmer. At the same
+           size as the minutes they were a 130 px digit changing ten times a second, for
+           ever, on an AMOLED panel — the brightest strobing object in the app, and the
+           least useful glyph on the screen: nobody reads tenths from 3 m, they watch them
+           move. Small enough to still say "this is running", small enough not to shout. */
         html += '<div class="big-readout"><div class="big-time mono" id="tmr-disp">'
-          + fmt.stopwatch(e, true) + "</div></div>"
+          + '<span id="tmr-core">' + fmt.stopwatch(e, false) + "</span>"
+          + '<span class="tenths" id="tmr-tenths">.' + (Math.floor(e / 100) % 10)
+          + "</span></div></div>"
           + '<div class="btn-row">'
           + btn("sw-toggle", this.sw.running ? "Stop" : "Start",
                 this.sw.running ? "danger" : "primary", null, "timer")
@@ -340,15 +358,24 @@
            yet its one line of guidance is centred in that space. D2: this screen was ~55%
            dead black below that sentence, which at 2-4 m reads as content that failed to
            load rather than as a stopwatch waiting for you. */
-        html += section("Laps (" + this.sw.laps.length + ")", this.sw.laps.length
-          ? '<div class="laps">' + this.sw.laps.map(function (t, i, arr) {
+        if (this.sw.laps.length) {
+          html += section("Laps (" + this.sw.laps.length + ")",
+            '<div class="laps">' + this.sw.laps.map(function (t, i, arr) {
               var cur = fmt.swQuantise(t), prev = fmt.swQuantise(arr[i + 1] || 0);
               return '<div class="lap"><span class="lap-n">#' + (arr.length - i) + "</span>"
                 + '<span class="lap-t mono">' + fmt.stopwatch(cur, true) + "</span>"
                 + '<span class="lap-d mono">+' + fmt.stopwatch(cur - prev, true) + "</span></div>";
-            }).join("") + "</div>"
-          : '<div class="laps-hint"><div class="muted">Tap Lap while running to split.</div></div>',
-          "laps-sec");
+            }).join("") + "</div>", "laps-sec");
+        } else {
+          /* No laps, no LAPS (0) heading over an empty box: a heading and a count of zero
+             was a label for a thing that is not there, and it pushed one sentence of
+             guidance into the middle of ~900 px of black. With nothing to list, the panel
+             is a stopwatch and nothing else, so the cluster centres itself (see the timer
+             block in style-widgets.css) and the sentence sits under the buttons it is
+             about. The heading comes back with the first lap, which is when it is true. */
+          html += '<div class="laps-hint"><div class="muted">'
+            + "Tap Lap while running to split.</div></div>";
+        }
 
       } else {
         var r = this.cdRemain();

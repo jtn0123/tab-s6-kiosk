@@ -183,11 +183,18 @@ test("a localStorage that throws does not take the panel down", function () {
 });
 
 test("the settings tile summarises the current state", function () {
+  /* CHANGED in the fit round: the unit moved up to the tile's VALUE line, which used to
+     hold a gear glyph — the one slot in a row of six tiles where the eye is scanning for a
+     number, spent on a picture of the word already printed above it. The sub-line keeps the
+     clock format and the count of hidden widgets, shortened because the tile is 102 CSS px
+     wide and "°C · 24h · 1 hidden" needed nearly twice its content box. */
   var app = boot();
-  assert.equal(app.text("set-sub"), "°F · 12h");
+  assert.equal(app.text("set-big"), "°F");
+  assert.equal(app.text("set-sub"), "12h");
   app.WP.settings.set("units", "celsius");
   app.WP.settings.set("clockHours", 24);
-  assert.equal(app.text("set-sub"), "°C · 24h");
+  assert.equal(app.text("set-big"), "°C");
+  assert.equal(app.text("set-sub"), "24h");
   app.WP.settings.setShow("daily", false);
-  assert.equal(app.text("set-sub"), "°C · 24h · 1 hidden");
+  assert.equal(app.text("set-sub"), "24h · 1 off");
 });

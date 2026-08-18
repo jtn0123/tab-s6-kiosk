@@ -16,6 +16,28 @@
   var ui = WP.ui;
   var statGrid = ui.statGrid, section = ui.section, hero = ui.hero, bar = ui.bar;
 
+  /* A battery that is as full as the battery is. Drawn rather than typed, because no text
+     glyph carries a level: the shell (the same 1px hairline the cards use), a terminal nub,
+     and a fill whose WIDTH is the charge. Colour follows the one rule the app has for it —
+     danger under 20%, the accent while charging, otherwise the same grey as any other
+     supporting mark. It is decorative in the a11y sense: the number beside it says the
+     same thing in words, so the hero hides it from the reader. */
+  function batteryIcon(b) {
+    var pct = Math.max(0, Math.min(100, b.level == null ? 0 : b.level));
+    var fill = b.charging ? "var(--accent)" : (pct < 20 ? "var(--danger)" : "var(--dim)");
+    var w = (pct / 100) * 40;
+    return '<svg class="wxi" viewBox="0 0 64 64">'
+      + '<rect x="8" y="20" width="44" height="24" rx="4" fill="none"'
+      + ' stroke="var(--card-line2)" stroke-width="3"/>'
+      + '<rect x="54" y="28" width="4" height="8" rx="1.5" fill="var(--card-line2)"/>'
+      + '<rect class="bat-fill" x="10" y="22" width="' + w.toFixed(1)
+      + '" height="20" rx="2" fill="' + fill + '"/>'
+      + (b.charging
+          ? '<path d="M34 22 L24 34 L31 34 L28 42 L38 30 L31 30 Z" fill="var(--bg)"/>'
+          : "")
+      + "</svg>";
+  }
+
   var system = {
     name: "system",
     info: null,
@@ -71,12 +93,15 @@
       this.put(big, sub,
         (i.battery && i.battery.level != null ? i.battery.level : "--") + "%"
           + (i.battery && i.battery.charging ? " ↯" : ""),
-        /* The tile is a third of the panel wide — short units only, or it ellipsises. */
-        [
-          fmt.bytes(i.storage && i.storage.free),
-          fmt.durationShort(i.uptimeMs || 0) + " up",
-          (i.network && i.network.type) || "offline"
-        ].join(" · "));
+        /* ONE fact, not three. Six tiles share one line of the home column, so a tile is
+           102 CSS px wide and its sub-line has room for about eleven characters —
+           "104 GB · 21h up · Wi-Fi" needed 152 px of an 80 px box and rendered as
+           "104 GB · …", which is a tile with no content strategy, only a clamp. Uptime and
+           the network are one tap away on this widget's own panel; free storage is the one
+           of the three that can actually go wrong quietly. Even "104 GB free" measured 82 px
+           of that 80 — the word went and the figure stayed, because under a heading that
+           says DEVICE and a value that says 83%, a figure in GB is not ambiguous. */
+        fmt.bytes(i.storage && i.storage.free));
     },
 
     /* Dirty-checked tile write. A poll that finds nothing changed — which is most of them,
@@ -121,69 +146,69 @@
       var memPct = mem.total ? (memUsed / mem.total) * 100 : 0;
 
       WP.repaint(body,
-        /* monochrome hero: charging bolt, or the battery outline that the fill bar
-           immediately below fills in. Both are text-presentation glyphs. */
-        hero(b.charging ? "↯" : "▭",
+        /* The hero glyph is DRAWN from the level (see batteryIcon). It used to be the
+           text glyph "▭" — a hollow rectangle, no fill and no terminal, sitting beside
+           "83%". At a glance the icon won and the tablet read as flat. An icon whose whole
+           job is to show a level, showing no level, is worse than no icon. */
+        hero(batteryIcon(b),
              (b.level != null ? b.level : "--") + "%",
              esc(b.status || "") + (b.plugged ? " · " + esc(b.plugged) : ""))
-        + bar(b.level || 0, b.charging ? "accent" : (b.level < 20 ? "danger" : ""), "battery")
+        /* No battery BAR. The icon is drawn to the level, the number beside it says the
+           level, and a bar underneath was the same fact a third time — 40 px of a panel
+           that was overflowing, spent on repetition. Storage and memory keep their bars,
+           because there the bar is the only picture of the figure. */
 
-        /* Four cells, down from eight. The four that went were all the hero again in other
-           words: LEVEL restated the 74% two lines up, CHARGING: No restated
-           STATUS: Discharging, and PLUGGED: not plugged restated both. A grid whose first
-           row tells you nothing you have not already read is a grid nobody reads. What is
-           left is the four things the hero cannot say, and where the battery is plugged in
-           when it actually is. */
+        /* Two cells, down from eight. The four that went first were the hero again in other
+           words (LEVEL, CHARGING, STATUS, PLUGGED). VOLTAGE and CELLS went next: 4.095 V is
+           a figure nobody owning a tablet can act on, and "Li-ion" is the same word every
+           day for the life of the device. Temperature and health are the two that can
+           actually change your mind about the thing on your wall. */
         + section("Battery", statGrid([
             ["Temperature", b.tempC != null
               ? (S.isMetric() ? (Math.round(b.tempC * 10) / 10) + " °C"
                               : (Math.round((b.tempC * 9 / 5 + 32) * 10) / 10) + " °F") : "--"],
-            ["Voltage", b.voltageMv != null ? (b.voltageMv / 1000).toFixed(3) + " V" : "--"],
-            ["Health", esc(b.health || "--")],
-            ["Cells", esc(b.technology || "--")]
+            ["Health", esc(b.health || "--")]
           ], 2))
 
-        /* Three across, exactly one row. Four cells in a three-across grid left USED %
-           alone on a second row — which on first open was the row the footer cut in half,
-           so the panel opened showing the top of a line of glyphs. The bar directly above
-           already IS the percentage. */
-        + section("Storage", bar(stPct, "", "storage used") + statGrid([
+        /* All three bars on this screen fill with what is LEFT, so more is better on every
+           one of them. Storage and memory used to fill with what was USED while the battery
+           filled with what remained: three grey bars at three lengths, two of them meaning
+           the opposite of the one above, and no way to tell from across the room which
+           direction was healthy. */
+        + section("Storage", bar(100 - stPct, "", "storage free") + statGrid([
             ["Free", fmt.bytes(st.free)],
             ["Used", fmt.bytes(stUsed)],
             ["Total", fmt.bytes(st.total)]
           ], 3))
 
-        + section("Memory", bar(memPct, "", "memory used") + statGrid([
+        + section("Memory", bar(100 - memPct, "", "memory free") + statGrid([
             ["Free", fmt.bytes(mem.free)],
             ["Used", fmt.bytes(memUsed)],
             ["Total", fmt.bytes(mem.total)]
           ], 3))
 
         /* "Interface wlan0" is the kernel's name for the radio. Dropped — TRANSPORT above
-           it already says Wi-Fi, which is the same fact in a word people use. */
+           it already says Wi-Fi, which is the same fact in a word people use. Down and up
+           are one cell for the same reason a hi/lo is one cell: they are one measurement of
+           one link, and as two cells they spilled the grid onto a second row that the
+           screen did not have. */
         + section("Network", statGrid([
             ["Transport", esc(net.type || "none")],
             ["Internet", net.validated ? "Working" : "No connection"],
-            ["Metered", net.metered ? "Yes" : "No"],
-            ["Down", net.downKbps ? Math.round(net.downKbps / 1000) + " Mbps" : "--"],
-            ["Up", net.upKbps ? Math.round(net.upKbps / 1000) + " Mbps" : "--"]
+            ["Speed", (net.downKbps ? Math.round(net.downKbps / 1000) : "--") + " / "
+              + (net.upKbps ? Math.round(net.upKbps / 1000) : "--"), "Mbps down / up"]
           ], 3))
 
-        /* Six cells, two full rows. Manufacturer and model were two cells holding one
-           answer to "what is this thing", so they are one cell now — which is also what
-           takes the grid off a seven-cell 3+3+1. */
-        + section("Uptime & device", statGrid([
+        /* Two cells. ANDROID, SCREEN, BRIGHTNESS and finally TABLET all went the same way:
+           the panel's own subtitle four lines above reads "SM-T860 · Android 16", so the
+           model and the version were already on the screen, and a pixel count and a
+           percentage of a byte are facts about the hardware rather than about the room.
+           What is left is the pair that only this section can answer: how long the wall has
+           been up, and how much of that it spent awake. */
+        + section("Uptime", statGrid([
             ["Uptime", esc(fmt.duration(i.uptimeMs || 0))],
-            ["Awake", esc(fmt.duration(i.awakeMs || 0))],
-            ["Tablet", esc([(i.device || {}).manufacturer, (i.device || {}).model]
-              .filter(Boolean).join(" ") || "--")],
-            /* "(API 33)" was a build number for whoever writes the app, beside a version
-               number for whoever owns the tablet. */
-            ["Android", esc((i.device || {}).android || "--")],
-            ["Screen", esc((i.device || {}).screen || "--") + " pixels"],
-            ["Brightness", i.brightness != null
-              ? Math.round(i.brightness / 255 * 100) + "%" : "--"]
-          ], 3)));
+            ["Awake", esc(fmt.duration(i.awakeMs || 0))]
+          ], 2)));
     }
   };
 

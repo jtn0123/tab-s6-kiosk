@@ -17,7 +17,8 @@ var test = require("node:test");
 var assert = require("node:assert/strict");
 var h = require("./lib/harness.js");
 
-var CSS = ["style.css", "style-home.css", "style-panels.css", "style-theme.css"]
+var CSS = ["style.css", "style-home.css", "style-panels.css", "style-widgets.css",
+           "style-theme.css"]
   .map(h.readAsset).join("\n");
 var HTML = h.readAsset("index.html");
 /* every widget file, concatenated — the rule below is about the whole widget layer, and
@@ -188,12 +189,33 @@ test("every small-caps label is drawn from one recipe", function () {
 
 test("a section heading outranks the field labels under it", function () {
   /* .psec-t was 1.7vh and .stat-k 1.6vh, both --dimmer: a 0.1vh difference is not a
-     hierarchy, and the Conditions panel read as one flat wall of small caps. */
+     hierarchy, and the Conditions panel read as one flat wall of small caps.
+     The heading then moved to --fs-note and the field label stayed put, which fixed the
+     heading and left the tier that actually carries the meaning at the bottom of the ramp.
+     Both moved up a step in the label-tier round: a heading is --fs-body, a field label is
+     --fs-note, and the gap between them is a full ramp step rather than a rounding error. */
   var r = ramp();
   var psec = ruleFor(".psec-t", "font-size");
-  assert.equal(decl(psec.body, "font-size"), "var(--fs-note)");
+  assert.equal(decl(psec.body, "font-size"), "var(--fs-body)");
   assert.equal(decl(psec.body, "color"), "var(--dim)");
-  assert.ok(r["fs-note"] > r["fs-label"], "a heading must be a step above a field label");
+  var statk = ruleFor(".stat-k", "font-size");
+  assert.equal(decl(statk.body, "font-size"), "var(--fs-note)");
+  assert.ok(r["fs-body"] > r["fs-note"], "a heading must be a step above a field label");
+});
+
+test("a panel's field label is legible from across the room", function () {
+  /* The property, not the token: a field label is what tells you whether 29.91 is a
+     pressure or a price, and at 1.6vh / --dimmer it measured ~41 device px at 4.9:1 — the
+     smallest step in the ramp at the lowest contrast in the palette, which at 2-4 m is
+     not small, it is absent. Pinned as a FLOOR on both axes so a later round cannot walk
+     it back down one step at a time: at least --fs-note, and no dimmer than --dim (8.2:1),
+     which is the same shade the section heading above it uses. */
+  var r = ramp();
+  var statk = ruleFor(".stat-k", "font-size");
+  assert.ok(css.vh(decl(statk.body, "font-size")) >= r["fs-note"],
+    ".stat-k is below --fs-note: " + decl(statk.body, "font-size"));
+  assert.equal(decl(statk.body, "color"), "var(--dim)",
+    ".stat-k is back on a dimmer grey than its own section heading");
 });
 
 /* ---------------- one idiom per concept (D1) ---------------- */
@@ -382,12 +404,22 @@ test("the three home tiles are one object repeated", function () {
     "the tiles do not have the same three lines: " + shape.join(" | "));
   assert.equal(shape[0], "mini-head,mini-big,mini-sub");
 
-  /* the value line's BOX is pinned, so the third line sits on one baseline across all
-     three even though one of them holds a glyph where the others hold digits */
+  /* the value line's BOX is pinned, so the third line sits on one baseline across all six
+     whatever the value happens to be */
   var big = ruleFor(".mini-big", "height");
   assert.match(decl(big.body, "height") || "", /calc\(var\(--fs-title-sm\)/);
-  assert.match(decl(ruleFor(".mini-big.glyph", "font-size").body, "font-size") || "",
-    /calc\(var\(--fs-title-sm\)/);
+
+  /* And every one of the six value lines carries a VALUE. The Setup tile used to put a gear
+     glyph here — decorative, aria-hidden, in the one row of the home screen the eye scans
+     as a strip of numbers, and directly under a heading that already said "Setup". Five
+     tiles answered "what is it now" and the sixth answered "what am I". */
+  tiles.forEach(function (t) {
+    var v = t.querySelector(".mini-big");
+    assert.equal(v.getAttribute("aria-hidden"), null,
+      t.querySelector(".mini-head").textContent + "'s value line is decorative");
+    assert.equal((v.getAttribute("class") || "").indexOf("glyph"), -1,
+      t.querySelector(".mini-head").textContent + " is back to a glyph where a value goes");
+  });
 });
 
 /* ---------------- motion (D7) ---------------- */
@@ -694,5 +726,33 @@ test("ARIA did not arrive by turning controls into non-buttons", function () {
   app.qsa('[data-panel="settings"] .srow').forEach(function (r) {
     assert.equal(r.tagName, "BUTTON", "a switch row stopped being a button");
     assert.ok(r.getAttribute("data-act"), "a switch row left the pointer delegation");
+  });
+});
+
+test("the cold extreme of the day chart is not painted with the hot token", function () {
+  /* The confirmed inversion: .peak marked BOTH the warmest and the coldest hour and painted
+     both var(--temp-hot), so the day's minimum was the same red-orange as its maximum on a
+     screen whose whole colour language is warm=hot / blue=cold. Colour was being used to
+     mean "extreme"; every viewer read it as "hot". */
+  var cold = rules().filter(function (r) { return /\.daybar\.peak\.cold\b/.test(r.sel); });
+  assert.ok(cold.length >= 2, "the cold extreme has no colour of its own again");
+  var fill = cold.filter(function (r) { return /daybar-c/.test(r.sel); })[0];
+  assert.ok(fill, "the cold extreme's BAR is not being repainted, only its number");
+  assert.match(fill.body, /--temp-cold/);
+  assert.equal(/--temp-hot/.test(fill.body), false, "the cold extreme is hot again");
+
+  /* and the widget still marks both extremes, so the fix is a colour and not a deletion */
+  var app = h.createApp({});
+  assert.match(stripComments(h.readAsset("wx-daily.js")), /n === iCold \? " cold" : ""/);
+});
+
+test("an affordance is not painted in the colour of a temperature", function () {
+  /* --accent and --temp-cold are the same hex. On the home screen that meant blue marked
+     both "this number is a low" (65° 64° 64°) and "this thing opens something"
+     ("Details ›"), two centimetres apart. Data keeps the colour. */
+  [".link-btn", ".wide-btn"].forEach(function (sel) {
+    var r = ruleFor(sel, "color");
+    assert.equal(decl(r.body, "color"), "var(--fg)",
+      sel + " is drawn in " + decl(r.body, "color") + ", which is the cold-temperature blue");
   });
 });

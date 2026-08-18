@@ -154,7 +154,7 @@ test("the resting timer tile is not rewritten ten times a second", function () {
      to say costs no DOM writes. */
   var app = h.createApp({});
   /* The widget's first tick is 100 ms after boot and is the one paint that legitimately
-     writes — index.html ships "00:00 / tap to open" as static text and the widget has not
+     writes — index.html ships "00:00 / ready" as static text and the widget has not
      yet claimed it. Let that land before measuring the steady state. */
   app.advance(1000);
   var writes = countWrites([app.$("tmr-big"), app.$("tmr-sub")], "textContent");

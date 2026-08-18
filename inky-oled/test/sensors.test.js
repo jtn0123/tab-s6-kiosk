@@ -362,3 +362,89 @@ test("the live poll interval is configurable but floored at 5 s", function () {
   assert.equal(pollMs(undefined), 60000);
   assert.equal(pollMs("30"), 30000, "a string from a hand-edited config still works");
 });
+
+/* ---------------- the trace's y-domain ----------------
+   The panel's worst defect, and the reason these tests exist: the sparkline autoscaled to
+   whatever range its history happened to contain, so a living room that drifted one degree
+   over two hours was drawn as an alpine profile filling a 500 px plot, with no axis on the
+   screen to correct the impression. On the only screen that reports on the reader's own
+   house, the default state was a false alarm — every day, for ever. */
+
+function traceSpan(app) {
+  /* the fraction of the plot's height the drawn line actually uses, 0..1 */
+  var line = app.qs('[data-panel="sensors"] .spark-line');
+  assert.ok(line, "the trace is not being drawn at all");
+  var ys = line.getAttribute("points").split(" ").map(function (p) {
+    return parseFloat(p.split(",")[1]);
+  });
+  return (Math.max.apply(null, ys) - Math.min.apply(null, ys)) / 70;   // viewBox height
+}
+
+/* Replace an entity's two hours with a series that swings by `swing` around `base`. */
+function drive(app, id, base, swing) {
+  var s = app.registry.sensors;
+  var e = s.find(id);
+  var t = app.clock.now - 7200000;
+  e.hist = [];
+  for (var i = 0; i <= 240; i++) {
+    e.hist.push({ t: t + i * 30000, v: base + (i % 2 ? swing / 2 : -swing / 2) });
+  }
+  e.value = base;
+  app.WP.panels.closeAll();
+  app.WP.panels.open("sensors", id);      // onOpen takes the entity as its argument
+  return e;
+}
+
+test("a degree of drift is drawn as a degree of drift, not as a mountain range", function () {
+  var app = boot();
+  drive(app, "sensor.living_room_temperature", 75, 1);
+  var span = traceSpan(app);
+  assert.ok(span <= 0.3,
+    "1 °F of movement fills " + Math.round(span * 100) + "% of the plot; the floor for a"
+    + " temperature is 4 °F, so it must fill about a quarter of it");
+});
+
+test("a real swing still fills the plot — the floor is a floor, not a clamp", function () {
+  var app = boot();
+  drive(app, "sensor.living_room_temperature", 75, 20);
+  var span = traceSpan(app);
+  assert.ok(span >= 0.6,
+    "a 20 °F swing only reached " + Math.round(span * 100) + "% of the plot");
+});
+
+test("the floor is per unit, so 1% of humidity and 10 ppm of CO2 read as flat too", function () {
+  /* One number would be wrong for at least two of these: 4 is a real change in °F, nothing
+     in ppm, and most of the useful range of a percentage. */
+  var app = boot();
+  drive(app, "sensor.living_room_humidity", 46, 1);
+  assert.ok(traceSpan(app) <= 0.3, "1 point of humidity is drawn as movement");
+  drive(app, "sensor.living_room_co2", 640, 10);
+  assert.ok(traceSpan(app) <= 0.3, "10 ppm of CO2 is drawn as movement");
+});
+
+test("the plot prints the range it is drawn at, at both edges", function () {
+  /* Without an axis the shape is unopposed: whatever the line does reads as what happened.
+     The two figures are the top and the bottom of the y-domain, in the entity's own unit
+     and its own decimals, and the ends say which two moments the line spans. */
+  var app = boot();
+  drive(app, "sensor.living_room_temperature", 75, 1);
+  var body = app.panelBody("sensors");
+  var hi = parseFloat(body.querySelector(".plot-hi").textContent);
+  var lo = parseFloat(body.querySelector(".plot-lo").textContent);
+  assert.ok(hi > lo, "the top of the plot is not above the bottom of it");
+  assert.ok(Math.abs((hi - lo) - 4) < 0.2,
+    "the axis says " + (hi - lo).toFixed(1) + " °F, the floor is 4");
+  assert.match(body.querySelector(".plot-hi").textContent, /°F/, "the range carries no unit");
+  assert.equal(body.querySelector(".plot-x").textContent, "2h agonow");
+});
+
+test("an on/off trace keeps its fixed 0..1 domain and says On / Off on the axis", function () {
+  /* A switch has no range to floor: it is high or it is low, and a domain taken from the
+     data would redraw a lamp that never moved as noise. */
+  var app = boot();
+  app.WP.panels.closeAll();
+  app.WP.panels.open("sensors", "light.living_room_lamp");
+  var body = app.panelBody("sensors");
+  assert.equal(body.querySelector(".plot-hi").textContent, "On");
+  assert.equal(body.querySelector(".plot-lo").textContent, "Off");
+});

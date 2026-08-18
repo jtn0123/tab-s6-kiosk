@@ -32,7 +32,11 @@ function stats(body, sectionTitle) {
 test("the tile reports real battery, storage, uptime and network", function () {
   var app = h.createApp({ bridge: fake.make({}) });
   assert.equal(app.text("sys-big"), "74%");
-  assert.equal(app.text("sys-sub"), "41 GB · 3d up · Wi-Fi");
+  /* CHANGED in the fit round: every home-tile sub-line has to SET in about eleven
+     characters. Six tiles share one line of the home column, so a tile is 102 CSS px
+     wide with an 80 px content box, and three of the six were ellipsising against
+     empty space beside them. See the comments at each tile's renderer. */
+  assert.equal(app.text("sys-sub"), "41 GB");
 });
 
 test("charging adds the bolt", function () {
@@ -55,14 +59,24 @@ test("the panel renders every section from one snapshot", function () {
   assert.equal(body.querySelector(".big-time").textContent, "74%");
   assert.equal(body.querySelector(".big-sub").textContent, "Discharging");
 
+  /* the level is also DRAWN: the hero glyph is a battery filled to the charge, which is
+     what the hollow "▭" beside "74%" was not */
+  var icon = body.querySelector(".big-icon .bat-fill");
+  assert.ok(icon, "the battery hero lost its drawn level");
+  assert.equal(Math.round(parseFloat(icon.getAttribute("width")) / 40 * 100), 74,
+    "the battery icon is not drawn at the level it is reporting");
+
   var bat = stats(body, "Battery");
   assert.equal(bat["Health"], "Good");
-  assert.equal(bat["Voltage"], "4.102 V");
   assert.equal(bat["Temperature"], "83.1 °F");
-  assert.equal(bat["Cells"], "Li-ion");
+  /* CHANGED in the fit round: VOLTAGE and CELLS are gone. 4.102 V is a figure the owner of
+     a tablet cannot act on and "Li-ion" is the same word every day for the life of the
+     device — prime space on the one screen that answers "is the panel on my wall healthy".
+     Asserted absent rather than merely un-asserted, so trivia cannot drift back in. */
   assert.deepEqual(Object.keys(bat).filter(function (k) {
-    return k === "Level" || k === "Charging" || k === "Status";
-  }), [], "the battery grid is restating the hero again");
+    return k === "Level" || k === "Charging" || k === "Status"
+        || k === "Voltage" || k === "Cells";
+  }), [], "the battery grid is restating the hero, or back to reporting trivia");
 
   var st = stats(body, "Storage");
   assert.equal(st["Free"], "41 GB");
@@ -74,19 +88,23 @@ test("the panel renders every section from one snapshot", function () {
   assert.equal(mem["Total"], "6 GB");
   assert.equal(mem["Used"], "4 GB");
 
+  /* CHANGED in the fit round: DOWN and UP are one cell, because they are one measurement
+     of one link and as two cells they spilled a three-across grid onto a second row the
+     screen did not have. METERED went with them — it is a property of the plan, not of the
+     wall. The figures themselves are still asserted, in the cell that now carries them. */
   var net = stats(body, "Network");
   assert.equal(net["Transport"], "Wi-Fi");
   assert.equal(net["Internet"], "Working");
-  assert.equal(net["Metered"], "No");
-  assert.equal(net["Down"], "144 Mbps");
+  assert.equal(net["Speed"], "144 / 72");
 
-  var dev = stats(body, "Uptime & device");
+  /* ANDROID, SCREEN, BRIGHTNESS and TABLET went the same way: the panel's own subtitle
+     says "TEST-PANEL · Android 13" four lines above, so the model and the version were
+     already on the screen, and a pixel count and a percentage of a byte are facts about
+     the hardware rather than about the room. The subtitle assertion below is what keeps
+     the model and the Android version asserted at all. */
+  var dev = stats(body, "Uptime");
   assert.equal(dev["Uptime"], "3d 4h 0m");
   assert.equal(dev["Awake"], "2d 0h 0m");
-  assert.equal(dev["Tablet"], "testco TEST-PANEL", "manufacturer and model, one answer");
-  assert.equal(dev["Android"], "13");
-  assert.equal(dev["Screen"], "1600x2560 pixels");
-  assert.equal(dev["Brightness"], "50%");
   assert.match(app.qs('[data-panel="system"] [data-sub]').textContent, /TEST-PANEL · Android 13/);
 });
 
@@ -110,7 +128,14 @@ test("storage and memory percentages come out of the snapshot's own numbers", fu
      fourth cell of a three-across grid and so sat alone on the row the footer cut in half.
      It was also the bar directly above it, written out. Assert the BAR now — both the
      width it is drawn at and the percentage it announces — which is a strictly better
-     check, because the bar is the thing on the screen and the cell never was. */
+     check, because the bar is the thing on the screen and the cell never was.
+
+     CHANGED AGAIN in the colour round: all three bars on this panel fill with what is
+     LEFT. Storage and memory filled with what was USED while the battery bar right above
+     them filled with what REMAINED — three identical grey bars at three lengths, two of
+     them meaning the opposite of the third, with nothing on the screen to say which way
+     round any of them ran. 25 of 100 bytes free is a quarter-full bar now, and every bar
+     on the screen means "more is better". */
   function pct(label) {
     var b = body.querySelectorAll(".bar").filter(function (n) {
       return (n.getAttribute("aria-label") || "").indexOf(label) === 0;
@@ -119,10 +144,13 @@ test("storage and memory percentages come out of the snapshot's own numbers", fu
     return { width: b.querySelector(".bar-fill").getAttribute("style"),
              said: b.getAttribute("aria-label") };
   }
-  assert.equal(pct("storage used").width, "width:75.0%");
-  assert.equal(pct("storage used").said, "storage used 75 percent");
-  assert.equal(pct("memory used").width, "width:75.0%");
-  assert.equal(pct("memory used").said, "memory used 75 percent");
+  assert.equal(pct("storage free").width, "width:25.0%");
+  assert.equal(pct("storage free").said, "storage free 25 percent");
+  assert.equal(pct("memory free").width, "width:25.0%");
+  assert.equal(pct("memory free").said, "memory free 25 percent");
+  assert.equal(body.querySelectorAll(".bar").filter(function (n) {
+    return /used/.test(n.getAttribute("aria-label") || "");
+  }).length, 0, "a bar on this panel still fills with what is used");
 });
 
 test("no bridge at all degrades to an explicit message, not a blank card", function () {
@@ -168,15 +196,17 @@ test("a partial snapshot renders what it has and dashes the rest", function () {
     bridge: { deviceInfo: function () { return JSON.stringify({ uptimeMs: 5000 }); } }
   });
   assert.equal(app.text("sys-big"), "--%");
-  assert.equal(app.text("sys-sub"), "-- · 5s up · offline");
+  assert.equal(app.text("sys-sub"), "--");
   app.WP.panels.open("system");
   var body = app.panelBody("system");
-  /* CHANGED with the copy sweep: level moved to the hero and Model/Manufacturer merged
-     into one "Tablet" cell. Same assertion — a missing field must dash, never print
-     "undefined" or vanish — against the elements that carry it now. */
+  /* CHANGED with the copy sweep: level moved to the hero. CHANGED again in the fit round:
+     the TABLET cell went entirely (the subtitle already carries the model), so the missing
+     field asserted here is one of the ones still on the screen. Same assertion — a missing
+     field must dash, never print "undefined" or vanish. */
   assert.equal(body.querySelector(".big-time").textContent, "--%");
   var s = stats(body);
-  assert.equal(s["Tablet"], "--");
+  assert.equal(s["Health"], "--");
+  assert.equal(s["Speed"], "-- / --");
   assert.equal(s["Transport"], "none");
   assert.equal(/undefined|NaN|null/.test(body.textContent), false,
     "a missing field leaked a JS value onto the wall");
@@ -274,15 +304,21 @@ test("the Settings panel reports whether the bridge is attached", function () {
   /* CHANGED with the copy sweep: the About block said "device sensors: connected · screen
      711 × 1138". The screen figure was the CSS viewport rather than the screen and was
      jargon either way; the rest is now a sentence. Same fact, still asserted both ways
-     round, and the viewport figure is asserted GONE so it cannot come back. */
+     round, and the viewport figure is asserted GONE so it cannot come back.
+
+     CHANGED AGAIN in the fit round: the sentence lost its ABOUT heading and half its
+     words, because Settings was overflowing its screen by 1157 px and a heading over one
+     sentence is a heading spent on nothing. The fact this test exists for — that the panel
+     says out loud whether the tablet's own sensors are readable — is unchanged, and it is
+     still the closest thing the wall has to "am I still alive". */
   var withBridge = h.createApp({ bridge: fake.make({}) });
   withBridge.WP.panels.open("settings");
   var on = withBridge.panelBody("settings").textContent;
-  assert.match(on, /battery and storage are being read/);
+  assert.match(on, /tablet sensors connected/);
   assert.equal(/\d+ ?[×x] ?\d+/.test(on), false, "the viewport measurement is back");
 
   var without = h.createApp({});
   without.WP.panels.open("settings");
   assert.match(without.panelBody("settings").textContent,
-    /battery and storage are not readable right now/);
+    /tablet sensors not readable/);
 });

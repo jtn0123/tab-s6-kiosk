@@ -108,7 +108,11 @@ test("REGRESSION: Reset after an alarm reloads the full duration, not 00:00", fu
   assert.equal(app.registry.timer.cd.remain, 60000, "Reset must reload the whole duration");
   assert.equal(app.text("tmr-disp"), "01:00", "Reset parked the display at 00:00");
   assert.equal(app.text("tmr-big"), "00:00");
-  assert.equal(app.text("tmr-sub"), "tap to open", "a reset timer is not 'paused'");
+  /* CHANGED in the fit round: the tile is 102 CSS px wide and these strings were
+     ellipsising in it ("stopwatch running" needed 124 px of an 80 px box). The big
+     line above already says which mode is showing, so the mode word went and the
+     state stayed. */
+  assert.equal(app.text("tmr-sub"), "ready", "a reset timer is not 'paused'");
 });
 
 test("Reset from a paused countdown also reloads the duration", function () {
@@ -206,9 +210,9 @@ test("the tile keeps a 30-minute trace that then expires by itself", function ()
   app.advance(2000);
   assert.equal(app.text("tmr-sub"), "just finished");
   app.advance(5 * 60000);
-  assert.equal(app.text("tmr-sub"), "finished 5m ago");
+  assert.equal(app.text("tmr-sub"), "done 5m ago");
   app.advance(25 * 60000);
-  assert.equal(app.text("tmr-sub"), "tap to open", "the trace must expire after 30 minutes");
+  assert.equal(app.text("tmr-sub"), "ready", "the trace must expire after 30 minutes");
   assert.equal(app.text("tmr-big"), "00:00");
 });
 
@@ -225,7 +229,7 @@ test("a running stopwatch outranks the memory of a finished countdown", function
   app.WP.panels.closeAll();
   app.advance(1000);
 
-  assert.equal(app.text("tmr-sub"), "stopwatch running", "the live number must own the tile");
+  assert.equal(app.text("tmr-sub"), "running", "the live number must own the tile");
   assert.notEqual(app.text("tmr-big"), "00:00");
 });
 
@@ -356,12 +360,12 @@ test("stopwatch Reset clears the laps and the elapsed time", function () {
 
 test("the home tile tracks the timer with the panel closed", function () {
   var app = h.createApp({});
-  assert.equal(app.text("tmr-sub"), "tap to open");
+  assert.equal(app.text("tmr-sub"), "ready");
   app.tap(app.qs('[data-open="timer"]'));
   app.tap(primary(app));
   app.WP.panels.closeAll();
   app.advance(65000);
-  assert.equal(app.text("tmr-sub"), "stopwatch running");
+  assert.equal(app.text("tmr-sub"), "running");
   /* The tile repaints at ~1 Hz with the panel closed and the stopwatch did not start on a
      tick boundary, so it is allowed to be up to a second behind — but no more than that. */
   assert.ok(["01:04", "01:05"].indexOf(app.text("tmr-big")) !== -1,

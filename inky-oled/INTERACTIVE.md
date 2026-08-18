@@ -318,10 +318,12 @@ the right place. Details that matter in use:
 - `pointer-events` is tied to the *open* class, not the *mounted* one, so a closing panel hands
   touch back to the dashboard immediately instead of eating taps for the 240 ms of its fade-out.
   Verified: closing a panel and tapping a card 81 ms later opens that card.
-- **The close shadow.** Both close affordances sit on top of something tappable — the footer bar
-  covers the DEVICE / TIMER / SETTINGS tile row, the header ✕ covers the topbar gear — so once
-  touch is handed back immediately, the second tap of a human double-tap on a close button landed
-  on whatever was underneath and re-opened a panel (the ✕ silently opened Settings). A close tap
+- **The close shadow.** The close ✕ sits on top of something tappable — it covers the topbar
+  gear — so once touch is handed back immediately, the second tap of a human double-tap on it
+  landed on whatever was underneath and re-opened a panel (the ✕ silently opened Settings).
+  This used to be true of a second close control as well, the full-width `← Dashboard` bar over
+  the DEVICE / TIMER / SETTINGS tile row; that bar is gone (it cost 113 CSS px on every panel
+  for an action already in the header), so the ✕ is the only exit and the only shadow. A close tap
   therefore leaves a 600 ms *shadow* at the point it landed, and a `data-open` element is refused
   only while its current rect still contains that point. Note what this deliberately is **not**:
   a post-close cooldown, which would put back exactly the dead window the line above removed. A
@@ -869,10 +871,10 @@ question. See [Residual risk: the devtools socket](#residual-risk-the-devtools-s
 Behaviours worth exercising by hand, because the suite cannot reach them:
 
 - **Long press.** Hold any card for 700 ms. It must open, not just light up.
-- **Close then immediately tap.** Tap `← Dashboard`, then tap a card within ~100 ms. It must
+- **Close then immediately tap.** Tap the header ✕, then tap a card within ~100 ms. It must
   open; the closing panel must not eat the tap.
 - **Finished countdown, unattended.** Timer → 1 min → Start → walk away. The alarm fires, and
-  about a minute later the dashboard is back by itself with `finished 1m ago` on the TIMER tile.
+  about a minute later the dashboard is back by itself with `done 1m ago` on the TIMER tile.
 - **Idle panel.** Open any panel and leave it. Gone in 90 s. Tap it every 20 s instead and it
   stays — the timeout must not fire mid-read.
 - **Power cycle.** `input keyevent KEYCODE_POWER` twice. The dashboard comes back on its own,

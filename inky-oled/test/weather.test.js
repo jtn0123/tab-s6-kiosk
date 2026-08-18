@@ -326,7 +326,13 @@ test("the hourly panel opens on the hour that was tapped", function () {
     assert.equal(app.registry.hourly.sel, 12);
     var body = app.panelBody("hourly");
     assert.equal(body.querySelector(".big-time").textContent, wx.tempAt(12) + "°");
-    assert.equal(app.qsa(".hrow", body).length, 24);
+    /* EIGHT rows, not 24. The list is windowed to what the panel can actually show: all 24
+       went into a scrollport that fits about four of them, so the panel always ended on a
+       row sliced in half and nineteen of the rows were below a fold nobody on a wall panel
+       ever scrolls past. The 24-hour shape is the chart above. What this test is really
+       about is unchanged and is the line below it: the hour you tapped is in the list and
+       it is the selected one. */
+    assert.equal(app.qsa(".hrow", body).length, 8);
     assert.equal(app.qsa(".hrow.sel", body).length, 1);
   });
 });
@@ -341,5 +347,104 @@ test("the daily panel opens on the day that was tapped", function () {
     var body = app.panelBody("daily");
     assert.match(body.querySelector(".big-time").textContent, /^80°/);
     assert.equal(app.qsa(".chip.on", body).length, 1);
+  });
+});
+
+/* ---------------- the zero columns ----------------
+   El Cajon is dry for months at a time, and the panels said so eighteen times per screenful:
+   seven "0%" under the home strip, seven more down the hourly panel, and a RAIN section
+   reading 0 in / 0% / 0 in + 0% chance. A column whose every cell says the same thing is not
+   data, and on a wall panel it is the difference between a screen that is answering and a
+   screen that is filling itself in. */
+
+/* the fixture with every drop of rain taken out of it, optionally putting one back */
+function dry(opts) {
+  opts = opts || {};
+  return function (url, init, clock) {
+    var body = wx.build({ now: clock.now });
+    body.current.precipitation = 0;
+    body.hourly.precipitation_probability = body.hourly.time.map(function () { return 0; });
+    body.hourly.precipitation = body.hourly.time.map(function () { return 0; });
+    body.daily.precipitation_sum = body.daily.time.map(function () { return 0; });
+    body.daily.precipitation_probability_max = body.daily.time.map(function () { return 0; });
+    if (opts.dayWithRain != null) {
+      body.daily.precipitation_probability_max[opts.dayWithRain] = 60;
+    }
+    if (opts.hourWithRain != null) {
+      body.hourly.precipitation_probability[opts.hourWithRain] = 70;
+    }
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); } });
+  };
+}
+
+test("a dry week says so in one line instead of printing nine zeros", function () {
+  var now = at(2025, 5, 10, 9, 30);
+  var app = h.createApp({ now: now, fetch: dry() });
+  return app.flush().then(function () {
+    app.WP.panels.open("weather");
+    var body = app.panelBody("weather");
+    var rain = app.qsa(".psec", body).filter(function (s) {
+      return s.querySelector(".psec-t").textContent === "Rain";
+    })[0];
+    assert.ok(rain, "the Rain section disappeared entirely");
+    assert.equal(rain.querySelectorAll(".stat").length, 0,
+      "a dry week is still being printed as a grid of zeros");
+    assert.match(rain.textContent, /None forecast/);
+  });
+});
+
+test("when rain is coming the section says which day, not which zeros", function () {
+  var now = at(2025, 5, 10, 9, 30);
+  var app = h.createApp({ now: now, fetch: dry({ dayWithRain: 3 }) });
+  return app.flush().then(function () {
+    app.WP.panels.open("weather");
+    var body = app.panelBody("weather");
+    var rain = app.qsa(".psec", body).filter(function (s) {
+      return s.querySelector(".psec-t").textContent === "Rain";
+    })[0];
+    /* day 3 of the fixture's week, named the way a person would name it */
+    var day = new Date(now + 3 * 86400000)
+      .toLocaleDateString(undefined, { weekday: "long" });
+    assert.match(rain.textContent, new RegExp("Next rain: " + day));
+    assert.match(rain.textContent, /60% chance/);
+  });
+});
+
+test("rain that is actually falling brings the three figures back", function () {
+  /* The collapse is about zeros, not about hiding rain: the moment there is something to
+     compare, the cells that let you compare it come back. */
+  var now = at(2025, 5, 10, 9, 30);
+  var app = h.createApp({ now: now, fetch: dry({ hourWithRain: 9 }) });
+  return app.flush().then(function () {
+    app.WP.panels.open("weather");
+    var body = app.panelBody("weather");
+    var rain = app.qsa(".psec", body).filter(function (s) {
+      return s.querySelector(".psec-t").textContent === "Rain";
+    })[0];
+    assert.equal(rain.querySelectorAll(".stat").length, 3);
+    assert.match(rain.textContent, /Next hour/);
+  });
+});
+
+test("the hourly strip drops its rain column when every hour in view is dry", function () {
+  var now = at(2025, 5, 10, 9, 30);
+  var app = h.createApp({ now: now, fetch: dry() });
+  return app.flush().then(function () {
+    assert.ok(app.qsa("#hourly .hr").length >= 12, "the strip did not render");
+    assert.equal(app.qsa("#hourly .hr-p").length, 0,
+      "the strip is still printing a column of identical zeros");
+    app.WP.panels.open("hourly");
+    assert.equal(app.qsa(".hrow-p", app.panelBody("hourly")).length, 0,
+      "the panel list is still printing a column of identical zeros");
+  });
+});
+
+test("one wet hour brings the whole column back, so the figures can be compared", function () {
+  var now = at(2025, 5, 10, 9, 30);
+  var app = h.createApp({ now: now, fetch: dry({ hourWithRain: 14 }) });
+  return app.flush().then(function () {
+    var chips = app.qsa("#hourly .hr");
+    assert.equal(app.qsa("#hourly .hr-p").length, chips.length,
+      "the column came back for some hours but not all of them");
   });
 });

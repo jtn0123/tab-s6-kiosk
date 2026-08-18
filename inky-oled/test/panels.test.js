@@ -13,57 +13,61 @@ var h = require("./lib/harness.js");
 /* the wall panel's frame, in CSS px */
 var W = 800, H = 1280;
 
-/* Lay the footer close bar over the tile row, the way the real stylesheet does. */
+/* Lay the header ✕ over the topbar gear, the way the real stylesheet does.
+
+   This used to lay a full-width "← Dashboard" bar over the bottom tile row as well, and
+   the close-shadow tests were written against that overlap. The bar is gone (it cost
+   113 CSS px on every panel and duplicated this ✕), so the one place a close control sits
+   on top of another control is here: the ✕ at the top right, the settings gear underneath
+   it. The shadow is what stops the second half of a double-tap falling through. */
 function layout(app, panelName) {
   var panel = app.qs('[data-panel="' + panelName + '"]');
-  var foot = panel.querySelector(".panel-foot [data-close]");
   var x = panel.querySelector(".panel-head [data-close]");
-  foot.setRect({ left: 0, top: H - 160, right: W, bottom: H });
   x.setRect({ left: W - 120, top: 0, right: W, bottom: 120 });
 
-  /* the three tiles sit under the footer bar */
+  /* the tile row, well clear of the ✕ — a tap here must never be shadowed */
   app.qs('[data-open="system"]').setRect({ left: 0, top: H - 190, right: 260, bottom: H - 30 });
   app.qs('[data-open="timer"]').setRect({ left: 270, top: H - 190, right: 530, bottom: H - 30 });
   app.qs('.row3 [data-open="settings"]').setRect({ left: 540, top: H - 190, right: W, bottom: H - 30 });
   /* the gear in the topbar sits under the header ✕ */
   app.qs("#topbar [data-open]").setRect({ left: W - 110, top: 10, right: W - 10, bottom: 110 });
-  return { foot: foot, x: x };
+  return { x: x, gear: app.qs("#topbar [data-open]") };
 }
 
-test("tapping a card opens its panel; the close bar closes it", function () {
+/* the point that is inside BOTH the header ✕ and the topbar gear under it */
+var X_PT = { x: W - 60, y: 60 };
+
+test("tapping a card opens its panel; the header ✕ closes it", function () {
   var app = h.createApp({});
   app.tap(app.qs('[data-open="system"]'));
   assert.deepEqual(app.stack(), ["system"]);
   assert.equal(app.qs('[data-panel="system"]').classList.contains("is-open"), true);
   assert.equal(app.doc.body.classList.contains("panel-open"), true);
 
-  app.tap(app.qs('[data-panel="system"] .panel-foot [data-close]'));
+  app.tap(app.qs('[data-panel="system"] .panel-head [data-close]'));
   assert.deepEqual(app.stack(), []);
   assert.equal(app.qs('[data-panel="system"]').classList.contains("is-open"), false);
   assert.equal(app.doc.body.classList.contains("panel-open"), false);
 });
 
-test("REGRESSION: double-tapping the close bar does not reopen the tile under it", function () {
-  /* pointer-events is released the instant a panel closes, so a tap ~80 ms later still
-     reaches a card — that is deliberate. The cost was that the second tap of a human
-     double-tap on the close bar landed on whatever was underneath. The ✕ variant silently
-     opened Settings, which is where widgets can be hidden. */
+test("every panel offers exactly one way out, and it is the header ✕", function () {
+  /* The second exit — a full-width "← Dashboard" bar pinned under every panel — was the
+     single most expensive thing on these screens: 113 CSS px of a 1138 px viewport, on all
+     twelve, for an action already available in the header, and the further of the two from
+     the thumb of somebody standing at the wall. Four panels ended on a row chopped in half
+     under its gradient fade and four pooled 400-900 px of black above it. Anything that
+     puts a second exit back has to answer for that height. */
   var app = h.createApp({});
-  var tile = app.qs('[data-open="system"]');
-  app.tap(tile);
-  var els = layout(app, "system");
-
-  var pt = { x: 130, y: H - 100 };            // inside the close bar AND inside the Device tile
-  assert.ok(pt.x >= 0 && pt.x <= 260 && pt.y >= H - 190 && pt.y <= H - 30,
-    "the fixture must have the tile under the close bar");
-
-  app.tap(els.foot, pt);
-  assert.deepEqual(app.stack(), [], "first tap should close");
-
-  app.clock.advance(80);
-  app.tap(tile, pt);                          // the second half of the double-tap
-  assert.deepEqual(app.stack(), [],
-    "the second tap of a double-tap reopened the panel underneath");
+  var panels = app.qsa("[data-panel]");
+  assert.ok(panels.length >= 12, "only " + panels.length + " panels");
+  panels.forEach(function (panel) {
+    var name = panel.getAttribute("data-panel");
+    var closers = panel.querySelectorAll("[data-close]");
+    assert.equal(closers.length, 1, name + " has " + closers.length + " close controls");
+    assert.ok(panel.querySelector(".panel-head [data-close]"),
+      name + "'s exit is not in its header");
+    assert.equal(panel.querySelectorAll(".panel-foot").length, 0, name + " grew a footer again");
+  });
 });
 
 test("REGRESSION: double-tapping the header ✕ does not open Settings", function () {
@@ -88,29 +92,28 @@ test("close-then-tap-a-DIFFERENT-card at ~100 ms still opens", function () {
   app.tap(app.qs('[data-open="system"]'));
   var els = layout(app, "system");
 
-  app.tap(els.foot, { x: 130, y: H - 100 });
+  app.tap(els.x, X_PT);
   app.clock.advance(100);
   app.tap(app.qs('[data-open="timer"]'));      // a different tile, not under that point
   assert.deepEqual(app.stack(), ["timer"], "close-then-tap-elsewhere must still work");
 });
 
-test("the same tile opens normally once the shadow has expired", function () {
+test("the control under the ✕ opens normally once the shadow has expired", function () {
   var app = h.createApp({});
   app.tap(app.qs('[data-open="system"]'));
   var els = layout(app, "system");
-  var pt = { x: 130, y: H - 100 };
 
-  app.tap(els.foot, pt);
+  app.tap(els.x, X_PT);
   app.clock.advance(700);                      // past CLOSE_SHADOW_MS
-  app.tap(app.qs('[data-open="system"]'), pt);
-  assert.deepEqual(app.stack(), ["system"], "the shadow outlived its 600 ms");
+  app.tap(els.gear, X_PT);
+  assert.deepEqual(app.stack(), ["settings"], "the shadow outlived its 600 ms");
 });
 
 test("a close leaves no shadow anywhere else on the screen", function () {
   var app = h.createApp({});
   app.tap(app.qs('[data-open="system"]'));
   var els = layout(app, "system");
-  app.tap(els.foot, { x: 130, y: H - 100 });
+  app.tap(els.x, X_PT);
   app.tap(app.qs('.row3 [data-open="settings"]'), { x: 600, y: H - 100 });
   assert.deepEqual(app.stack(), ["settings"]);
 });
@@ -120,7 +123,7 @@ test("a panel closed and reopened inside the unmount window stays mounted", func
      panel loses visibility in the middle of being opened. */
   var app = h.createApp({});
   app.tap(app.qs('[data-open="timer"]'));
-  app.tap(app.qs('[data-panel="timer"] .panel-foot [data-close]'));
+  app.tap(app.qs('[data-panel="timer"] .panel-head [data-close]'));
   app.clock.advance(100);
   app.WP.panels.open("timer");
   app.clock.advance(300);

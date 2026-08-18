@@ -49,9 +49,7 @@
       }, 15000);
 
       WP.onAction("hourly", function (act, arg) {
-        /* no re-scroll on pick: the row the user just tapped is by definition on screen,
-           and yanking the list under their finger would feel broken */
-        if (act === "pick") { self.sel = parseInt(arg, 10); self.paintPanel(false); }
+        if (act === "pick") { self.sel = parseInt(arg, 10); self.paintPanel(); }
       });
 
       /* The strip is index 0 = now, so "scrolled to the end" means the panel is showing a
@@ -89,6 +87,12 @@
 
       var h = d.hourly, now = weather.nowIndex();
       this.lastNow = now;                 // what the hour tick above compares against
+      /* The rain column is suppressed when every hour in view reads 0%. It was seven
+         identical zeros under the strip and seven more down the panel, and in El Cajon
+         that column is zeros for months at a time: a column that says the same thing in
+         every row is not data, it is texture. When any hour has a chance, the whole column
+         comes back so the figures can be compared against each other. */
+      var wet = this.anyRain(this.window24());
       box.innerHTML = this.window24().map(function (i) {
         var t = new Date(h.time[i]);
         var info = WP.wmo(h.weather_code[i], h.is_day && h.is_day[i] === 0);
@@ -105,16 +109,26 @@
           + '<div class="hr-t">' + esc(when) + "</div>"
           + '<div class="hr-i" aria-hidden="true">' + WP.wxIcon(h.weather_code[i], h.is_day && h.is_day[i] === 0) + "</div>"
           + '<div class="hr-d">' + fmt.deg(h.temperature_2m[i]) + "</div>"
-          + '<div class="hr-p' + (pop >= 30 ? " wet" : "") + '">' + pop + "%</div>"
+          + (wet ? '<div class="hr-p' + (pop >= 30 ? " wet" : "") + '">' + pop + "%</div>" : "")
           + "</button>";
       }).join("");
+    },
+
+    /* Is there anything to say about rain across these indices? Used to decide whether the
+       precipitation column is drawn at all — see the note in render(). */
+    anyRain: function (list) {
+      var h = weather.data && weather.data.hourly;
+      if (!h || !h.precipitation_probability) return false;
+      return list.some(function (k) {
+        return Math.round(h.precipitation_probability[k] || 0) > 0;
+      });
     },
 
     onOpen: function (panel, arg) {
       this.panel = panel;
       var n = parseInt(arg, 10);
       this.sel = isNaN(n) ? Math.max(0, weather.nowIndex()) : n;
-      this.paintPanel(true);
+      this.paintPanel();
     },
     onClose: function () { this.panel = null; },
 
@@ -168,14 +182,18 @@
         }
       });
 
-      /* dot + hairline on the selected hour so the chart and the list agree on focus */
-      var si = list.indexOf(sel);
+      /* Hairline on the selected hour so the chart and the list agree on focus. The dot on
+         the curve is HTML (see dot below), for the same reason the ticks are: the plot is
+         stretched to a declared box now rather than scaling with its own aspect ratio, so
+         anything drawn round inside the viewBox would come out as an ellipse — badly so in
+         landscape, where the box is more than twice as wide for its height. */
+      var si = list.indexOf(sel), dot = "";
       if (si >= 0) {
         var sp = pts[si];
         marks = '<line x1="' + sp[0].toFixed(1) + '" y1="' + T + '" x2="' + sp[0].toFixed(1)
-          + '" y2="' + barBase + '" stroke="var(--card-line2)" stroke-width="1"/>'
-          + '<circle cx="' + sp[0].toFixed(1) + '" cy="' + sp[1].toFixed(1)
-          + '" r="3.5" fill="var(--fg)"/>';
+          + '" y2="' + barBase + '" stroke="var(--card-line2)" stroke-width="1"'
+          + ' vector-effect="non-scaling-stroke"/>';
+        dot = '<span class="hc-dot" style="left:' + pctX(sp[0]) + ";top:" + pctY(sp[1]) + '"></span>';
       }
 
       /* hi / lo callouts pinned to the curve's own extremes, not an axis */
@@ -185,7 +203,15 @@
         + '<span class="hc-lo" style="left:' + pctX(pts[loN][0])
         + ";top:" + pctY(pts[loN][1] + 5) + '">' + Math.round(lo) + "&#176;</span>";
 
-      return '<div class="hchart-wrap" aria-hidden="true"><svg class="hchart" viewBox="0 0 ' + W + " " + H + '">'
+      /* preserveAspectRatio="none": the plot's HEIGHT is declared in the stylesheet (.hchart)
+         and its width is the panel's. Left to scale with its own aspect ratio it took its
+         height from whatever width it happened to have — 250 CSS px in portrait and 357 in
+         a 711 px-tall landscape viewport, i.e. half the screen, which is what pushed the
+         hero and the stat row off the top in landscape and left the curve running out of
+         the plot. Stretching means the strokes need vector-effect, or the line would be
+         2.25x thicker across than down on the same screen. */
+      return '<div class="hchart-wrap" aria-hidden="true"><svg class="hchart" viewBox="0 0 '
+        + W + " " + H + '" preserveAspectRatio="none">'
         + '<defs><linearGradient id="hc-t" x1="0" y1="' + T + '" x2="0" y2="' + B
         + '" gradientUnits="userSpaceOnUse">'
         + '<stop offset="0" stop-color="var(--temp-hot)"/>'
@@ -199,13 +225,14 @@
         + '<g class="hc-bars">' + bars + "</g>"
         + '<path d="' + area + '" fill="url(#hc-a)"/>'
         + '<path d="' + line + '" fill="none" stroke="url(#hc-t)" stroke-width="2.5"'
+        + ' vector-effect="non-scaling-stroke"'
         + ' stroke-linecap="round" stroke-linejoin="round"/>'
         + "</svg>"
-        + labels
+        + labels + dot
         + '<div class="hc-ticks">' + ticks + "</div></div>";
     },
 
-    paintPanel: function (scrollToSel) {
+    paintPanel: function () {
       var panel = this.panel || WP.panels.el("hourly");
       if (!panel) return;
       var body = WP.qs("[data-body]", panel);
@@ -221,21 +248,26 @@
       WP.qs("[data-sub]", panel).textContent =
         t.toLocaleDateString(undefined, { weekday: "long" }) + " · " + fmt.clock(t, false);
 
-      /* readout for the selected hour, then the full pickable list underneath */
+      /* Readout for the selected hour, then the pickable list underneath.
+
+         THREE fields, down from eight. Eight was two and a half grid rows of a screen that
+         has to hold a chart and a list as well, and it was the reason this panel opened
+         scrolled — which in turn is why the top row used to render as three naked numbers
+         (63° / 5 mph / 0.8) with their labels above the fold, and why in landscape the
+         temperature curve was clipped off the top of its own plot. The four that went are
+         all one tap away on Conditions, which is the screen for exactly this; rain per hour
+         is the list's own right-hand column; and "feels like" is already in the hero.
+         What is left is the three that change hour to hour and are not stated anywhere
+         else on this screen. */
+      var uv = fmt.uv(h.uv_index[i]);
       var readout = hero(WP.wxIcon(h.weather_code[i], h.is_day && h.is_day[i] === 0),
             fmt.deg(h.temperature_2m[i]),
             esc(info.text) + " · feels " + fmt.deg(h.apparent_temperature[i]))
         + statGrid([
-            ["Rain chance", (h.precipitation_probability
-              ? Math.round(h.precipitation_probability[i]) : 0) + "%"],
-            ["Precip", (Math.round((h.precipitation[i] || 0) * 100) / 100) + " " + fmt.precipUnit()],
             ["Humidity", Math.round(h.relative_humidity_2m[i]) + "%"],
-            ["Dew point", fmt.deg(h.dew_point_2m[i])],
             ["Wind", Math.round(h.wind_speed_10m[i]) + " " + fmt.speedUnit(),
               fmt.compass(h.wind_direction_10m[i])],
-            ["UV index", String(fmt.uv(h.uv_index[i]).n), fmt.uv(h.uv_index[i]).label],
-            ["Cloud", Math.round(h.cloud_cover[i]) + "%"],
-            ["Visibility", fmt.distance(h.visibility ? h.visibility[i] : null)]
+            ["UV index", String(uv.n), uv.label]
           ], 3);
 
       /* temperature range across the window drives the inline bar width so the list
@@ -244,7 +276,25 @@
       var lo = Math.min.apply(null, temps), hi = Math.max.apply(null, temps);
       var span = (hi - lo) || 1;
 
-      var rows = list.map(function (k) {
+      /* The list shows ROWS_SHOWN hours, not all 24, and the panel does not scroll.
+         All 24 used to be emitted into a scrollport that could show four of them, so the
+         panel's last visible row was always a row sliced in half — the loudest "this is
+         unfinished" signal a wall panel has. The 24-hour shape is not lost: it is the chart
+         directly above, which is a better way to read a day than 24 rows are. The window
+         starts at whatever hour was tapped, so opening the panel on 9p still shows 9p and
+         what follows it, and it slides back from the end so the last hours of the forecast
+         are reachable rather than being a one-row list. */
+      /* Five in landscape. The number of rows a fixed canvas can show is a property of the
+         canvas: a 711 px-tall screen has 300 px left under the chart where a 1138 px one has
+         500, and eight rows in the short one either overflow it or shrink each row below the
+         88-device-px target floor. This is the one layout decision the stylesheet cannot
+         make, because the count is what is emitted, not how it is drawn. */
+      var ROWS_SHOWN = (window.innerWidth > window.innerHeight) ? 5 : 8;
+      var from = Math.max(0, Math.min(list.indexOf(i), list.length - ROWS_SHOWN));
+      var visible = list.slice(from, from + ROWS_SHOWN);
+      var wet = this.anyRain(visible);
+
+      var rows = visible.map(function (k) {
         var tk = new Date(h.time[k]);
         var ik = WP.wmo(h.weather_code[k], h.is_day && h.is_day[k] === 0);
         var pop = h.precipitation_probability ? Math.round(h.precipitation_probability[k]) : 0;
@@ -259,45 +309,20 @@
           + '<span class="hrow-bar" aria-hidden="true"><span style="width:'
           + w.toFixed(1) + '%"></span></span>'
           + '<span class="hrow-d">' + fmt.deg(h.temperature_2m[k]) + "</span>"
-          + '<span class="hrow-p' + (pop >= 30 ? " wet" : "") + '">' + pop + "%</span>"
+          + (wet ? '<span class="hrow-p' + (pop >= 30 ? " wet" : "") + '">' + pop + "%</span>" : "")
           + "</button>";
       }).join("");
 
-      /* Scroll-preserving: tapping a row in the list must not throw the list back to the
-         top, which is the whole reason picking an hour does not re-scroll. */
-      /* "Next 24 hours", not "Next 24 hours — tap to inspect". Every other small-caps
-         heading in the app names its section; this one was the only one carrying an
-         instruction, which made it read as a different KIND of thing at a glance and put
-         a sentence into a row of labels. The rows are buttons with a pressed state and a
-         selected row already highlighted — the affordance is the control, not a caption. */
+      /* The heading names the window the list is actually showing. "Next 24 hours" over a
+         list of eight would be a caption that disagrees with the thing under it — and the
+         24-hour claim belongs to the chart above, which does cover the whole day. */
+      var headFirst = new Date(h.time[visible[0]]);
       WP.repaint(body, readout
         + this.chart(h, list, i)
-        + section("Next 24 hours",
+        + section(visible[0] === Math.max(0, weather.nowIndex())
+            ? "Next " + visible.length + " hours"
+            : "From " + fmt.hourLabel(headFirst),
         '<div class="hrows">' + rows + "</div>"));
-
-      /* Opening on hour 21 of 24 used to highlight a row 21 rows below the fold. Put the
-         selected row on screen. Measured with rects rather than offsetTop because the
-         scroller (.panel-body) is not the offset parent — the .panel is.
-
-         The factor works the opposite way round to how it reads: scrollTop += delta -
-         clientHeight * f, so a LARGER f scrolls less and keeps more of what is above.
-
-         It was 0.42 while the readout block was ~45vh of a ~79vh scrollport — at that size
-         no scroll position that also showed row 21 of 24 could include the headline, so the
-         factor only decided how much of it was lost. The row hero and the three-across
-         grids took that block down to ~26vh, and 0.42 then landed the first few hours a few
-         vh down the page, slicing the hero glyph in half at the top of a freshly opened
-         panel — content cut off mid-glyph reads as broken, not as scrolled. At 0.5 the
-         selected row sits mid-scrollport, which for hour 0-2 computes to a negative offset,
-         clamps to zero, and leaves the panel opening at its top. A late hour is unchanged:
-         the body is pinned at maximum scroll either way. */
-      if (scrollToSel) {
-        var sel = WP.qs(".hrow.sel", body);
-        if (sel) {
-          var delta = sel.getBoundingClientRect().top - body.getBoundingClientRect().top;
-          body.scrollTop = Math.max(0, body.scrollTop + delta - body.clientHeight * 0.5);
-        }
-      }
     }
   };
 

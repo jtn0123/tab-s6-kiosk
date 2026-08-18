@@ -272,5 +272,24 @@
     return chain;
   };
 
+  /* ?open=timer opens that screen a moment after boot. This exists so a screenshot can be
+     taken of a PANEL and not just the dashboard: headless Chrome can only ask for a URL,
+     and every panel in this app is opened by a tap. Anything a reviewer has to drive by
+     hand is a screen that stops being looked at. */
+  var want = /[?&]open=([a-z0-9]+)/.exec(window.location.search);
+  if (want) {
+    setTimeout(function () {
+      try {
+        WP.panels.closeAll();
+        WP.panels.open(want[1]);
+        /* and land it, rather than leaving it mid-fade: headless Chrome's virtual clock
+           does not run CSS transitions, so every screenshot came out with the dashboard
+           showing through the panel at about half opacity. */
+        var el = document.querySelector(".panel.is-open");
+        if (el) { el.style.transition = "none"; el.style.opacity = "1"; el.style.transform = "none"; }
+      } catch (e) { /* not a screen */ }
+    }, 250);
+  }
+
   console.log("[sim] harness ready — SIM.sweep(), SIM.tap(), SIM.swipe(), SIM.set()");
 })();

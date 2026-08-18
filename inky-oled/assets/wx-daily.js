@@ -131,8 +131,14 @@
             + '">'
             + idx.map(function (k, n) {
             var h = 14 + ((d.hourly.temperature_2m[k] - lo) / span) * 86;
+            /* The two extremes carry their number and a full-strength cap — and the cold
+               one is COLD-coloured. Both used to take .peak alone, which paints
+               var(--temp-hot), so the day's minimum was the same red-orange as its maximum
+               and the 6a bar read as another afternoon. Colour was being used to mean
+               "extreme" while every viewer read it as "hot". */
             var peak = (n === iHot || n === iCold);
-            return '<div class="daybar' + (peak ? " peak" : "") + '">'
+            return '<div class="daybar' + (peak ? " peak" : "")
+              + (n === iCold ? " cold" : "") + '">'
               + '<div class="daybar-v">'
                 + (peak ? fmt.deg(d.hourly.temperature_2m[k]) : "") + "</div>"
               + '<div class="daybar-c"><div style="height:' + h.toFixed(1) + '%"></div></div>'
@@ -144,8 +150,12 @@
 
       WP.repaint(body, tabs
         + hero(WP.wxIcon(day.weather_code[i], false),
+               /* The low wears the COLD colour, the same as every other low in the app —
+                  the home strip's .fc-lo and the hourly chart's valley callout. It was
+                  --dim here, so the identical datum was blue on the dashboard and grey on
+                  the screen the dashboard opens into. */
                fmt.deg(day.temperature_2m_max[i])
-                 + ' <span class="dim">/ ' + fmt.deg(day.temperature_2m_min[i]) + "</span>",
+                 + ' <span class="lo">/ ' + fmt.deg(day.temperature_2m_min[i]) + "</span>",
                esc(info.text))
 
         /* Nine cells, three full rows. It was ten, which in a three-across grid left SUNSET

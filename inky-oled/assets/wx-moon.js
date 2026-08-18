@@ -35,10 +35,19 @@
       p < 0.52 ? "Full moon" :
       p < 0.73 ? "Waning gibbous" :
       p < 0.77 ? "Last quarter" : "Waning crescent";
+    /* The tile is 102 CSS px wide and its sub-line holds about eleven characters, so
+       "Waxing crescent" rendered there as "Waxing cr…". Half of a phase name is worse than
+       the half that fits: waxing/waning is the half that says which way the moon is going,
+       and crescent-or-gibbous is already answered by the percentage printed beside it. The
+       panel keeps the full name. */
+    var shortName =
+      (p < 0.02 || p > 0.98) ? "New moon" :
+      p < 0.48 ? "Waxing" :
+      p < 0.52 ? "Full moon" : "Waning";
     var toFull = ((p < 0.5 ? 0.5 : 1.5) - p) * SYNODIC;
     var toNew = (1 - p) * SYNODIC;
     return {
-      age: age, p: p, frac: frac, name: name,
+      age: age, p: p, frac: frac, name: name, shortName: shortName,
       nextFull: ms + toFull * 86400000,
       nextNew: ms + toNew * 86400000
     };
@@ -72,7 +81,7 @@
       var m = calc(Date.now());
       big.innerHTML = disc(m.p, "moon-mini")
         + "<span>" + Math.round(m.frac * 100) + "%</span>";
-      sub.textContent = m.name;
+      sub.textContent = m.shortName;
     },
 
     onOpen: function (panel) { this.panel = panel; this.paintPanel(); },

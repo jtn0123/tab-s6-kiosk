@@ -24,7 +24,8 @@
 var fs = require("node:fs");
 var path = require("node:path");
 
-var SHEETS = ["style.css", "style-home.css", "style-panels.css", "style-theme.css"];
+var SHEETS = ["style.css", "style-home.css", "style-panels.css", "style-widgets.css",
+              "style-theme.css"];
 var RAW = SHEETS.map(function (n) {
   return fs.readFileSync(path.join(__dirname, "..", "..", "assets", n), "utf8");
 }).join("\n");

@@ -76,12 +76,17 @@
       this.resetTimer = null;
     },
 
+    /* The tile's value line is the unit, because that is the setting this dashboard wears
+       everywhere else and the one somebody walks up to change. The sub-line carries the
+       clock format and, only when there is one, the count of switched-off widgets — which
+       is the answer to "why is the moon gone", and the only reason this tile is ever
+       urgent. Eleven characters is the whole budget: the tile is 102 CSS px wide. */
     renderCard: function () {
-      var el = $("set-sub");
+      var big = $("set-big"), el = $("set-sub");
       if (!el) return;
       var hidden = WP.WIDGETS.filter(function (w) { return !S.get("show")[w]; }).length;
-      el.textContent = (S.isMetric() ? "°C" : "°F") + " · " + S.get("clockHours") + "h"
-        + (hidden ? " · " + hidden + " hidden" : "");
+      if (big) big.textContent = S.isMetric() ? "°C" : "°F";
+      el.textContent = S.get("clockHours") + "h" + (hidden ? " · " + hidden + " off" : "");
     },
 
     onOpen: function (panel) { this.panel = panel; this.disarmReset(); this.paintPanel(); },
@@ -103,63 +108,72 @@
       var b = C.burnInProtection || {};
 
       WP.repaint(body,
-        /* Segmented for the two settings that are a choice between named values... */
-        section("Units", segmented("settings", "units",
-            [["fahrenheit", "°F  mph  inHg"], ["celsius", "°C  km/h  hPa"]],
-            S.get("units"), "Units"))
-
-        /* ...and a switch for everything that is merely on or off, including the one that
-           used to sit here as "Hide seconds | Show seconds" — a pair of buttons for a
-           boolean, two rows above a column of switches for the same thing (D1). */
-        + section("Clock", segmented("settings", "hours",
-            [[12, "12-hour"], [24, "24-hour"]], S.get("clockHours"), "Clock format")
+        /* Units and Clock share one section and one line. They were two sections, one under
+           the other, each with its own heading over a single pair of buttons — 314 CSS px
+           of a screen that was overflowing by 1157. They are the same KIND of thing (a
+           choice between two named values), which is exactly why they belong on one row.
+           A switch for everything that is merely on or off, including the one that used to
+           sit here as "Hide seconds | Show seconds" — a pair of buttons for a boolean, two
+           rows above a column of switches for the same thing (D1). */
+        section("Units & clock", '<div class="seg-pair">'
+          /* Two glyphs and two figures, not "°F  mph  inHg" and "12-hour": three controls
+             share this line and a label that wraps to two lines inside a button makes the
+             whole row taller than the thing it is labelling. The units each choice implies
+             are on screen already, on every panel behind this one. */
+          + segmented("settings", "units",
+              [["fahrenheit", "°F"], ["celsius", "°C"]], S.get("units"), "Units")
+          + segmented("settings", "hours",
+              [[12, "12h"], [24, "24h"]], S.get("clockHours"), "Clock format")
           + '<div class="srows">'
-          + switchRow("settings", "secs", "Show seconds", !!S.get("seconds"))
-          + "</div>")
+          + switchRow("settings", "secs", "Seconds", !!S.get("seconds"))
+          + "</div></div>")
 
         /* D5 — one line, not five. The five-line version explained AMOLED ghosting, the
            nudge distance, the interval, the finger rule and the 90 s idle unwind, on a
            settings screen. All of it is still in INTERACTIVE.md, where somebody who wants
-           it will look. */
+           it will look. Each note is now short enough to SET on one line as well: three
+           notes wrapping to two lines each was 84 px, and this panel had none to spare. */
+        /* Two of the three notes are gone into their own labels: a note that restates its
+           switch is a line of type doing nothing, and this panel is a height budget. Only
+           drifting the layout still needs a reason, because "Drift the layout" does not on
+           its own explain why anybody would want it. */
         + section("Display", '<div class="srows">'
-          + switchRow("settings", "sky", "Weather in the background", S.get("sky") !== false, null,
-              "Stars, rain, snow and clouds drawn behind the dashboard, matching outside.")
-          + switchRow("settings", "cycle", "Cycle screens", !!S.get("cycle"), null,
-              "Slides to the next screen every "
-              + Math.round((C.cycle && C.cycle.seconds) || 20)
-              + " seconds — the InkyPi playlist, on glass.")
+          + switchRow("settings", "sky", "Weather behind the cards", S.get("sky") !== false)
+          + switchRow("settings", "cycle", "Cycle screens every "
+              + Math.round((C.cycle && C.cycle.seconds) || 20) + "s", !!S.get("cycle"))
           + switchRow("settings", "burn", "Drift the layout", !!S.get("burnIn"), null,
-              "Nudges everything a few pixels every "
-              + Math.round((b.intervalSeconds || 120) / 60) + " minutes so nothing burns in.")
+              "A few pixels every "
+              + Math.round((b.intervalSeconds || 120) / 60) + " minutes, so nothing burns in.")
           + "</div>")
 
         /* WP.repaint, not body.innerHTML: replacing the content outright drops the scroll
-           offset, so toggling "Daily forecast" jumped the panel back to UNITS and the next
-           tap landed on a control the user was not aiming at. Same reason the sensors and
+           offset, so toggling "Next days" jumped the panel back to UNITS and the next tap
+           landed on a control the user was not aiming at. Same reason the sensors and
            device panels use it. */
-        + section("Widgets", '<div class="srows">' + rows + "</div>")
+        /* cols3: twelve full-width switch rows were 1005 px — a whole screen for a section
+           that is a checklist. Same switch row, same target height, three across, and the
+           labels are the words printed on the cards they control (see WIDGET_LABELS). */
+        + section("Widgets", '<div class="srows cols3">' + rows + "</div>", "wide")
 
-        + section("Maintenance",
-            '<div class="btn-row">'
+        /* The bottom strip: the one destructive control, and the one line saying what this
+           dashboard is actually connected to. Both used to be sections with headings of
+           their own — MAINTENANCE over a single button and ABOUT over two sentences, 108 px
+           of headings for two objects that fit on one line together. When the reset is
+           armed, the line beside it becomes what the button is about to do, which is the
+           only moment either of them is worth reading. */
+        + '<div class="pfoot"><div class="btn-row">'
             + btn("reset", this.resetArmed ? "Tap again to confirm" : "Reset to defaults",
                   "danger", null, "settings")
             + "</div>"
             + (this.resetArmed
                 ? '<div class="muted">This clears units, clock format, burn-in and which '
                   + "widgets are shown. Tap anything else to cancel.</div>"
-                : ""))
-
-        /* Two sentences about what this dashboard is currently connected to, which is the
-           only thing an About section on a wall panel can usefully say.
-           "screen 711 × 1138" is gone: it was the CSS-pixel viewport, so it was a rendering
-           detail rather than a fact about the room, AND it was not the screen — the panel
-           is 1600 × 2560. A number that is jargon and also wrong is the easiest kind to
-           delete. */
-        + section("About", '<div class="muted">Home readings are '
-            + (WP.registry.sensors.mode === "demo" ? "simulated" : "live from Home Assistant")
-            + ". This tablet's own battery and storage are "
-            + (WP.bridge.present() ? "being read" : "not readable right now")
-            + ".</div>"));
+                : '<div class="muted">Home readings '
+                  + (WP.registry.sensors.mode === "demo" ? "simulated" : "live")
+                  + "; tablet sensors "
+                  + (WP.bridge.present() ? "connected" : "not readable")
+                  + ".</div>")
+            + "</div>");
     }
   };
 

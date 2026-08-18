@@ -205,13 +205,16 @@
 .row3 { flex: 0 0 auto; display: flex; gap: 1.4vw; min-width: 0; }
 .card.mini { flex: 1 1 0; min-width: 0; padding: var(--pad-tile) 1.4vw; align-items: flex-start; }
 .mini-head { line-height: 1.2; }
-/* D8 — the three tiles are one object repeated, so their three lines are pinned rather than
-   left to whatever each happens to contain. The value line carries a percentage, a clock and
-   a gear glyph, and a glyph's ink box is nothing like a digit's: the LINE BOX is fixed here
-   (so the sub-line underneath sits on one baseline across all three tiles regardless), and
-   the glyph is separately given the ~12% it needs to match a digit's cap height optically.
-   Without the fixed box the settings tile's third line drifted whenever the gear's font
-   fell back to a different family. */
+/* D8 — the six tiles are one object repeated, so their three lines are pinned rather than
+   left to whatever each happens to contain. The LINE BOX is fixed here, so the sub-line
+   underneath sits on one baseline across all six whatever the value happens to be — a
+   percentage, a clock, a moon disc beside a figure, a date.
+
+   There is no .glyph variant any more. It existed for the Setup tile, which put a gear
+   where its five siblings put a number: the one row on the home screen the eye reads as a
+   strip of values, with a picture in the middle of it. The tile shows the unit setting
+   instead, so the box no longer has to accommodate an ink box that is nothing like a
+   digit's. */
 .mini-big {
   font-size: var(--fs-title-sm);
   font-weight: 200;
@@ -220,7 +223,6 @@
   align-items: center;
   font-variant-numeric: tabular-nums;
 }
-.mini-big.glyph { font-size: calc(var(--fs-title-sm) * 1.12); line-height: 1; }
 .mini-big.alert { color: var(--danger); animation: pulse var(--dur-pulse) infinite; }
 .mini-head { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-big { white-space: nowrap; }

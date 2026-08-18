@@ -20,6 +20,53 @@
 
   var WX_CACHE = "inky.wx.v2";
 
+  /* ---------------- the rain section ----------------
+     On a dry week this section printed "0 in", "0%", "0 in / 0% chance" — nine zeros in
+     three cells, under a heading, on a panel read from across a room. In El Cajon that is
+     the state of the screen for months at a time. Three cells of zero are not three facts;
+     they are one fact, and the fact is "no". So when there is nothing falling and nothing
+     forecast, the section says the one thing worth saying and gives its height back — and
+     when there IS something, it says WHEN, which is what the zeros never did.
+
+     The grid comes back the moment rain is real (falling now, likely within the hour, or
+     any measured total today), because then the three figures genuinely differ. */
+  function rainSection(cur, h, day, i) {
+    var nextHour = (h && h.precipitation_probability && i >= 0)
+      ? Math.round(h.precipitation_probability[i]) : 0;
+    var todaySum = (day && day.precipitation_sum) ? (day.precipitation_sum[0] || 0) : 0;
+    var wet = (cur.precipitation || 0) > 0 || nextHour >= 30 || todaySum > 0;
+
+    if (!wet) {
+      var pops = (day && day.precipitation_probability_max) || [];
+      for (var k = 1; k < pops.length; k++) {
+        if (Math.round(pops[k] || 0) >= 30) {
+          /* "T12:00:00", like every other reader of daily.time in this app: the API sends
+             a bare date ("2025-06-13"), which JavaScript parses as UTC midnight and then
+             renders in local time — one day EARLIER anywhere west of Greenwich. The rain
+             day would have been named Thursday for a Friday, on a panel in California. */
+          var when = new Date(day.time[k] + "T12:00:00");
+          return section("Rain", '<div class="muted">Next rain: '
+            + esc(when.toLocaleDateString(undefined, { weekday: "long" }))
+            + ", " + Math.round(pops[k]) + "% chance.</div>");
+        }
+      }
+      return section("Rain", '<div class="muted">None forecast in the next '
+        + Math.max(1, pops.length) + " days.</div>");
+    }
+
+    /* Three cells, not four. Four in a three-across grid left one cell alone on a second
+       row with a hairline stopping at a third of the width, which reads as a section that
+       failed to finish. The two "today" facts are one thought, so they are one cell: the
+       total on the value line, the chance on the line under it. */
+    return section("Rain", statGrid([
+      ["Right now", (cur.precipitation || 0) + " " + fmt.precipUnit()],
+      ["Next hour", nextHour + "%"],
+      ["Today", (Math.round(todaySum * 100) / 100) + " " + fmt.precipUnit(),
+        (day && day.precipitation_probability_max)
+          ? Math.round(day.precipitation_probability_max[0]) + "% chance" : ""]
+    ], 3));
+  }
+
   var weather = {
     name: "weather",
     data: null,
@@ -321,7 +368,7 @@
             ["Humidity", Math.round(cur.relative_humidity_2m) + "%"],
             ["Dew point", h && h.dew_point_2m && i >= 0 ? fmt.deg(h.dew_point_2m[i]) : "--"],
             ["Pressure", fmt.pressure(cur.pressure_msl)],
-            ["Cloud cover", Math.round(cur.cloud_cover) + "%"],
+            ["Cloud", Math.round(cur.cloud_cover) + "%"],
             ["Visibility", h && h.visibility && i >= 0 ? fmt.distance(h.visibility[i]) : "--"],
             ["UV index", uv.n + "", uv.label]
           ], 3))
@@ -348,19 +395,7 @@
             ["Daylight", esc(dayLen)]
           ], 3))
 
-        /* Three cells, not four. Four in a three-across grid left one cell alone on a
-           second row with a hairline stopping at a third of the width, which reads as a
-           section that failed to finish. The two "today" facts are one thought, so they
-           are one cell: the total on the value line, the chance on the line under it. */
-        + section("Rain", statGrid([
-            ["Right now", (cur.precipitation || 0) + " " + fmt.precipUnit()],
-            ["Next hour", h && h.precipitation_probability && i >= 0
-              ? Math.round(h.precipitation_probability[i]) + "%" : "--"],
-            ["Today", day ? (Math.round(day.precipitation_sum[0] * 100) / 100)
-              + " " + fmt.precipUnit() : "--",
-              day && day.precipitation_probability_max
-                ? Math.round(day.precipitation_probability_max[0]) + "% chance" : ""]
-          ], 3));
+        + rainSection(cur, h, day, i);
     }
   };
 
