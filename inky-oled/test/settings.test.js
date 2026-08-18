@@ -10,7 +10,8 @@ var h = require("./lib/harness.js");
 var fakeBridge = require("./lib/fake-bridge.js");
 
 var KEY = "inky.settings.v2";
-var WIDGETS = ["clock", "weather", "hourly", "daily", "sensors", "system", "timer", "settings"];
+var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air", "calendar",
+               "sensors", "system", "timer", "settings"];
 
 function boot(opts) { return h.createApp(opts || {}); }
 
@@ -124,7 +125,9 @@ test("hiding every widget shows the empty state and drops the tile row", functio
   var app = boot();
   WIDGETS.forEach(function (w) { app.WP.settings.setShow(w, false); });
   assert.equal(app.$("empty").hidden, false, "empty state must appear");
-  assert.equal(app.qs("#home > .row3").style.display, "none", "empty tile row must not stay");
+  app.qsa("#home > .row3").forEach(function (r) {
+    assert.equal(r.style.display, "none", "empty tile row must not stay");
+  });
 
   app.WP.settings.setShow("timer", true);
   assert.equal(app.$("empty").hidden, true);

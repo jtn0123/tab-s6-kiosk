@@ -42,6 +42,11 @@
 </head>
 <body>
 
+<!-- The weather, drawn: stars / rain / snow / fog / cloud banks behind the dashboard,
+     chosen from the same Open-Meteo payload the cards read. Fixed, pointer-events:none,
+     z-index under #drift. Everything on it moves, so it cannot burn in. -->
+<canvas id="sky" aria-hidden="true"></canvas>
+
 <!-- ============================================================================
      HOME VIEW
      #drift wraps the home view. Burn-in drift nudges it a few pixels every couple of
@@ -160,9 +165,30 @@
            line on one baseline — and the gear gets the ~12% it needs to match a digit's cap
            height optically. It is decorative: "Settings" is already the tile's heading. -->
       <section class="card mini tappable" data-widget="settings" data-open="settings">
-        <div class="mini-head">Settings</div>
+        <div class="mini-head">Setup</div>
         <div class="mini-big glyph" aria-hidden="true">&#9881;</div>
         <div id="set-sub" class="mini-sub">&nbsp;</div>
+      </section>
+    </div>
+
+    <!-- ---- 9 / 10 / 11. moon, air quality, calendar ---- -->
+    <div class="row3">
+      <section class="card mini tappable" data-widget="moon" data-open="moon">
+        <div class="mini-head">Moon</div>
+        <div id="moon-big" class="mini-big moon-row">&nbsp;</div>
+        <div id="moon-sub" class="mini-sub">&nbsp;</div>
+      </section>
+
+      <section class="card mini tappable" data-widget="air" data-open="air">
+        <div class="mini-head">Air</div>
+        <div id="air-big" class="mini-big">--</div>
+        <div id="air-sub" class="mini-sub">waiting&hellip;</div>
+      </section>
+
+      <section class="card mini tappable" data-widget="calendar" data-open="calendar">
+        <div class="mini-head">Date</div>
+        <div id="cal-big" class="mini-big">&nbsp;</div>
+        <div id="cal-sub" class="mini-sub">&nbsp;</div>
       </section>
     </div>
 
@@ -251,6 +277,33 @@
     <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
+  <section class="panel" data-panel="moon">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Moon</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="air">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Air Quality</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
+  <section class="panel" data-panel="calendar">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Calendar</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
   <section class="panel" data-panel="settings">
     <header class="panel-head">
       <div><h1 class="panel-title">Settings</h1><p class="panel-sub" data-sub></p></div>
@@ -301,6 +354,7 @@
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script src="wx-ui.js"></script>
+<script src="wx-icons.js"></script>
 <script src="wx-clock.js"></script>
 <script src="wx-timer.js"></script>
 <script src="wx-weather.js"></script>
@@ -308,6 +362,10 @@
 <script src="wx-daily.js"></script>
 <script src="wx-sensors.js"></script>
 <script src="wx-system.js"></script>
+<script src="wx-moon.js"></script>
+<script src="wx-air.js"></script>
+<script src="wx-calendar.js"></script>
 <script src="wx-settings.js"></script>
+<script src="wx-sky.js"></script>
 </body>
 </html>

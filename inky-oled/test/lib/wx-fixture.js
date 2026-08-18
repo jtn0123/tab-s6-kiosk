@@ -148,7 +148,28 @@ function serve(opts) {
 /* what the *hourly* bucket says for a given hour — the wall panel's source of truth */
 function feelsAt(hourIndex) { return tempAt(hourIndex) - 2; }
 
+
+/* A small Open-Meteo air-quality payload, shaped like the real endpoint answers.
+   AQI 42 = "Good": green, and low enough that no health-warning copy renders. */
+function aqi(opts) {
+  opts = opts || {};
+  var now = opts.now || Date.now();
+  var t0 = new Date(now); t0.setMinutes(0, 0, 0);
+  var times = [], vals = [];
+  for (var i = 0; i < 48; i++) {
+    times.push(new Date(t0.getTime() + i * 3600000).toISOString().slice(0, 16));
+    vals.push(40 + (i % 7));
+  }
+  return {
+    current: {
+      us_aqi: opts.us_aqi != null ? opts.us_aqi : 42,
+      pm2_5: 8.1, pm10: 15.2, ozone: 61, nitrogen_dioxide: 9.3,
+      sulphur_dioxide: 1.2, carbon_monoxide: 143
+    },
+    hourly: { time: times, us_aqi: vals }
+  };
+}
+
 module.exports = {
   build: build, serve: serve, tempAt: tempAt, feelsAt: feelsAt, localIso: localIso,
-  CURRENT_SKEW: CURRENT_SKEW
-};
+  CURRENT_SKEW: CURRENT_SKEW, aqi: aqi };

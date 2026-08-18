@@ -265,7 +265,7 @@ test("burn-in protection is explained in one line, not a paragraph", function ()
   assert.ok(note.textContent.length < 90,
     "the burn-in note is " + note.textContent.length + " characters: " + note.textContent);
   var sec = app.qsa('[data-panel="settings"] .psec').filter(function (s) {
-    return s.querySelector(".psec-t").textContent === "Burn-in protection";
+    return s.querySelector(".psec-t").textContent === "Display";
   })[0];
   assert.equal(sec.querySelectorAll(".muted").length, 0,
     "the burn-in paragraph is back");
@@ -320,6 +320,7 @@ test("nothing the wall says is written for whoever built the app", function () {
   var wx = require("./lib/wx-fixture.js");
   app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
   app.registry.weather.publish();
+  app.registry.air.data = wx.aqi({ now: app.clock.now });
 
   var offenders = [];
   function sweep(where, label) {
@@ -349,6 +350,7 @@ test("the copy sweep can actually see a panel body", function () {
   var wx = require("./lib/wx-fixture.js");
   app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
   app.registry.weather.publish();
+  app.registry.air.data = wx.aqi({ now: app.clock.now });
   app.qsa("[data-panel]").forEach(function (p) {
     var name = p.getAttribute("data-panel");
     app.WP.panels.open(name);
@@ -370,12 +372,12 @@ test("the copy sweep can actually see a panel body", function () {
 test("the three home tiles are one object repeated", function () {
   var app = h.createApp({});
   var tiles = app.qsa("#home .row3 .card.mini");
-  assert.equal(tiles.length, 3);
+  assert.equal(tiles.length, 6);   // device/timer/settings + moon/air/calendar
   var shape = tiles.map(function (t) {
     return t.children.filter(function (c) { return c.nodeType === 1; })
       .map(function (c) { return c.getAttribute("class").split(" ")[0]; }).join(",");
   });
-  assert.deepEqual(shape, [shape[0], shape[0], shape[0]],
+  assert.deepEqual(shape, shape.map(function () { return shape[0]; }),
     "the tiles do not have the same three lines: " + shape.join(" | "));
   assert.equal(shape[0], "mini-head,mini-big,mini-sub");
 

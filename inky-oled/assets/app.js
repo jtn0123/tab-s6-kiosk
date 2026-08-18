@@ -97,10 +97,12 @@ window.WP = (function () {
      localStorage is the source of truth (spec), but a wall panel gets force-stopped and
      wiped more than a phone browser does, so every write is also mirrored into Android
      SharedPreferences and used as a fallback if localStorage comes back empty. */
-  var WIDGETS = ["clock", "weather", "hourly", "daily", "sensors", "system", "timer", "settings"];
+  var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air", "calendar",
+                 "sensors", "system", "timer", "settings"];
   var WIDGET_LABELS = {
     clock: "Clock", weather: "Weather now", hourly: "Hourly forecast",
-    daily: "Daily forecast", sensors: "Home Assistant", system: "Device",
+    daily: "Daily forecast", moon: "Moon phase", air: "Air quality",
+    calendar: "Calendar", sensors: "Home Assistant", system: "Device",
     timer: "Stopwatch & timer", settings: "Settings tile"
   };
 
@@ -135,6 +137,7 @@ window.WP = (function () {
       clockHours: (C.clockHours === 24) ? 24 : 12,
       seconds:    false,
       burnIn:     b.enabled !== false,
+      sky:        true,
       show:       {}
     };
     /* Every widget ships visible. CONFIG.plugins is the old on/off list and is honoured
@@ -155,6 +158,7 @@ window.WP = (function () {
         if (saved.clockHours === 12 || saved.clockHours === 24) d.clockHours = saved.clockHours;
         d.seconds = !!saved.seconds;
         d.burnIn = saved.burnIn !== false;
+        d.sky = saved.sky !== false;
         if (saved.show) {
           WIDGETS.forEach(function (w) {
             if (typeof saved.show[w] === "boolean") d.show[w] = saved.show[w];
@@ -675,51 +679,25 @@ window.WP = (function () {
     resume: function () { drift.paused = false; }
   };
 
-  /* ---------------- WMO weather codes -> icon + words ----------------
-     Open-Meteo returns WMO codes; map them to something readable at 2-4 m. `night`
-     swaps the handful of icons where day/night actually looks different.
-
-     Every glyph here is a *text-presentation* symbol (U+2600 block) so Android renders
-     them from the monochrome symbol font. Two codepoints in this table default to EMOJI
-     presentation and landed as full-colour sprites among otherwise white glyphs --
-     U+26C5 (sun behind cloud) and U+26C8 (thunder cloud) -- so both carry U+FE0E, the
-     text-presentation selector. The rest (U+2600 sun, U+2601 cloud, U+2602 umbrella,
-     U+263D moon, U+2744 snowflake) are text-default already. */
-  var PARTLY = "⛅︎";
-  var STORM  = "⛈︎";
+  /* ---------------- WMO weather codes -> words ----------------
+     Open-Meteo returns WMO codes; the words come from this table and the picture comes
+     from WP.wxIcon (wx-icons.js) — our own coloured SVG, drawn per code. This table used
+     to also carry text-presentation glyph pairs chosen to dodge Android's emoji sprites;
+     drawing the icons ourselves retired that whole constraint. */
   var WMO = {
-    0:  ["☀", "☽", "Clear"],
-    1:  ["☀", "☽", "Mostly clear"],
-    2:  [PARTLY, "☁", "Partly cloudy"],
-    3:  ["☁", "☁", "Overcast"],
-    45: ["☁", "☁", "Fog"],
-    48: ["☁", "☁", "Rime fog"],
-    51: ["☂", "☂", "Light drizzle"],
-    53: ["☂", "☂", "Drizzle"],
-    55: ["☂", "☂", "Heavy drizzle"],
-    56: ["❄", "❄", "Freezing drizzle"],
-    57: ["❄", "❄", "Freezing drizzle"],
-    61: ["☂", "☂", "Light rain"],
-    63: ["☂", "☂", "Rain"],
-    65: ["☂", "☂", "Heavy rain"],
-    66: ["❄", "❄", "Freezing rain"],
-    67: ["❄", "❄", "Freezing rain"],
-    71: ["❄", "❄", "Light snow"],
-    73: ["❄", "❄", "Snow"],
-    75: ["❄", "❄", "Heavy snow"],
-    77: ["❄", "❄", "Snow grains"],
-    80: ["☂", "☂", "Showers"],
-    81: ["☂", "☂", "Showers"],
-    82: [STORM, STORM, "Heavy showers"],
-    85: ["❄", "❄", "Snow showers"],
-    86: ["❄", "❄", "Snow showers"],
-    95: [STORM, STORM, "Thunderstorm"],
-    96: [STORM, STORM, "Thunderstorm"],
-    99: [STORM, STORM, "Thunderstorm"]
+    0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Rime fog",
+    51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+    56: "Freezing drizzle", 57: "Freezing drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain",
+    66: "Freezing rain", 67: "Freezing rain",
+    71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains",
+    80: "Showers", 81: "Showers", 82: "Heavy showers",
+    85: "Snow showers", 86: "Snow showers",
+    95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"
   };
   function wmo(code, night) {
-    var e = WMO[code] || ["·", "·", "Unknown"];
-    return { icon: night ? e[1] : e[0], text: e[2] };
+    return { text: WMO[code] || "Unknown", night: !!night };
   }
 
   /* ---------------- shared formatting ---------------- */

@@ -224,14 +224,23 @@ button {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  flex-direction: column;
+  /* row wrap, not column: every card takes a full line (flex-basis 100%), so this reads
+     as the same single column — EXCEPT the two tile rows, whose basis is half a line, so
+     DEVICE/TIMER/SETTINGS and MOON/AIR/CALENDAR sit side by side. Six tiles on one line
+     is the whole portrait height budget for the second trio: as a full-width row they
+     cost 110px the column did not have (measured overflow=100 on device). */
+  flex-flow: row wrap;
+  align-content: stretch;
   justify-content: flex-start;
-  gap: var(--gap);
+  gap: var(--gap) 2vw;
   overflow-y: auto;
   padding-bottom: 0.25vh;
 }
 /* Direct children only — .card.mini lives inside .row3 and is laid out on the other axis. */
-#home > .card, #home > .row3 { flex-grow: 1; flex-shrink: 0; }
+#home > .card { flex: 1 1 100%; flex-shrink: 0; }
+/* the tile rows MAY shrink — six tiles sharing a line ellipsize their sub-lines rather
+   than push the last tile off the screen edge (measured overflowX=27 without this) */
+#home > .row3 { flex: 1 1 calc(50% - 2vw); min-width: 0; }
 
 /* ---------- empty state (every widget hidden) ---------- */
 .empty {
@@ -512,8 +521,8 @@ button {
 .sensor.on .sensor-sw span { background: var(--ok); transform: translateX(calc(3vw - 1.6vh)); }
 
 /* ---------- 7/2/8. mini tiles ---------- */
-.row3 { flex: 0 0 auto; display: flex; gap: 2vw; }
-.card.mini { flex: 1 1 0; padding: var(--pad-tile) 1.4vw; align-items: flex-start; }
+.row3 { flex: 0 0 auto; display: flex; gap: 1.4vw; min-width: 0; }
+.card.mini { flex: 1 1 0; min-width: 0; padding: var(--pad-tile) 1.4vw; align-items: flex-start; }
 .mini-head { line-height: 1.2; }
 /* D8 — the three tiles are one object repeated, so their three lines are pinned rather than
    left to whatever each happens to contain. The value line carries a percentage, a clock and
@@ -532,6 +541,8 @@ button {
 }
 .mini-big.glyph { font-size: calc(var(--fs-title-sm) * 1.12); line-height: 1; }
 .mini-big.alert { color: var(--danger); animation: pulse var(--dur-pulse) infinite; }
+.mini-head { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-big { white-space: nowrap; }
 .mini-sub {
   font-size: var(--fs-caption);
   color: var(--dim);
@@ -959,14 +970,14 @@ button {
 .daybar-c div {
   width: 100%;
   background: linear-gradient(to bottom,
-    var(--accent) 0, var(--accent) 0.35vh, rgba(109, 179, 242, 0.16) 0.35vh);
+    var(--temp-warm) 0, var(--temp-warm) 0.35vh, rgba(255, 201, 84, 0.14) 0.35vh);
   border-radius: 0.4vh 0.4vh 0 0;
 }
 /* the warmest and coldest hours carry their number, and their cap is at full strength so
    the annotation and the bar it belongs to are obviously the same object */
 .daybar.peak .daybar-v { color: var(--fg); }
 .daybar.peak .daybar-c div { background: linear-gradient(to bottom,
-    var(--accent) 0, var(--accent) 0.35vh, rgba(109, 179, 242, 0.3) 0.35vh); }
+    var(--temp-hot) 0, var(--temp-hot) 0.35vh, rgba(255, 138, 80, 0.3) 0.35vh); }
 .daybar-t { text-align: center; height: 2vh; }
 
 /* world clocks */
@@ -1083,37 +1094,164 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
    The device currently renders portrait, but if it is ever rotated the panel must not
    look broken: two columns, shorter type, same touch targets.
    ============================================================================ */
+/* ============================= THE COLOUR LAYER =============================
+   The app was monochrome because Android's emoji font made colour uncontrollable, not
+   because the panel wanted to be grey. The icons are our own SVG now, so colour is ours
+   to spend — and it is spent by meaning, not decoration: sun things are warm, rain
+   things are blue, snow is ice, AQI wears the EPA's own scale, and temperature always
+   reads hot=warm-colour / cold=blue. Text stays monochrome; colour marks DATA. */
+:root {
+  --ic-sun:      #ffcf54;
+  --ic-ray:      #ffb347;
+  --ic-moon:     #e9e5ff;
+  --ic-moon-dk:  #232a3a;   /* the unlit part of the moon disc */
+  --ic-star:     #cfd4ff;
+  --ic-cloud:    #aebfd4;
+  --ic-cloud-dk: #71829a;
+  --ic-rain:     #5aa9ff;
+  --ic-snow:     #d6efff;
+  --ic-bolt:     #ffd75a;
+  --ic-fog:      #9aa8b8;
+
+  --temp-hot:    #ff8a50;
+  --temp-warm:   #ffc954;
+  --temp-cold:   #6db3f2;
+
+  /* EPA AQI bands — this scale is a public convention, so the hues are theirs */
+  --aqi-good:    #6fdc7f;
+  --aqi-mod:     #ffd75a;
+  --aqi-usg:     #ffa04d;
+  --aqi-bad:     #ff6d6d;
+  --aqi-vbad:    #b48cff;
+  --aqi-haz:     #d97a7a;
+}
+
+/* the sky canvas sits between the body background and the dashboard */
+#sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#drift { position: relative; z-index: 1; }
+
+/* An icon is sized by the type ramp exactly like the glyph it replaced: 1em-ish, from
+   the container's font-size. Slightly over 1em because SVG art carries its own internal
+   padding where a font glyph's ink box does not. */
+.wxi { width: 1.18em; height: 1.18em; display: block; margin: 0 auto; }
+.big-icon .wxi, .wx-icon .wxi { width: 1.1em; height: 1.1em; }
+
+/* ---- AQI colour classes: text takes the band's hue ---- */
+.aqi-good { color: var(--aqi-good); }
+.aqi-mod  { color: var(--aqi-mod); }
+.aqi-usg  { color: var(--aqi-usg); }
+.aqi-bad  { color: var(--aqi-bad); }
+.aqi-vbad { color: var(--aqi-vbad); }
+.aqi-haz  { color: var(--aqi-haz); }
+.aqi-na   { color: var(--dimmer); }
+.aqi-spark .spark-line { stroke: currentColor; }
+.aqi-spark .spark-fill { fill: currentColor; opacity: 0.10; }
+
+/* ---- hourly panel chart ----
+   Ticks and hi/lo callouts are HTML over the SVG so their sizes come off the ramp like
+   every other label; the SVG carries only geometry. */
+.hchart-wrap { position: relative; margin: 0.6vh 0 0.2vh; }
+.hchart { width: 100%; display: block; }
+.hc-bars rect { fill: var(--ic-rain); opacity: 0.55; }
+.hc-hi, .hc-lo {
+  position: absolute; transform: translate(-50%, -100%);
+  font-size: var(--fs-caption); font-variant-numeric: tabular-nums;
+}
+.hc-hi { color: var(--temp-warm); }
+.hc-lo { color: var(--temp-cold); transform: translate(-50%, 0); }
+.hc-ticks { position: relative; height: 2vh; }
+.hc-ticks span {
+  position: absolute; transform: translateX(-50%);
+  font-size: var(--fs-caption); color: var(--dimmer);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* rain-chance figures wear rain's colour once they mean something (>= 30%) */
+.hr-p.wet, .hrow-p.wet { color: var(--ic-rain); }
+/* daily lows read cool — hi stays primary text */
+.fc-lo { color: var(--temp-cold); }
+
+/* ---- moon ---- */
+.mini-big.moon-row { display: flex; align-items: center; gap: 1.6vw; }
+.moon-mini { width: 1.05em; height: 1.05em; flex: 0 0 auto; }
+.moon-hero { display: flex; align-items: center; gap: 5vw; padding: 1.2vh 0 0.6vh; }
+.moon-disc {
+  width: 15vh; height: 15vh; flex: 0 0 auto;
+  filter: drop-shadow(0 0 2.5vh rgba(233, 229, 255, 0.16));
+}
+
+/* ---- calendar ---- */
+.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 2vw; margin: 0.4vh 0 0.8vh; }
+.cal-title { font-size: var(--fs-title); font-weight: 300; text-align: center; flex: 1 1 auto; }
+.cal-nav .btn { flex: 0 0 auto; min-width: 12vw; }
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 0.35vh 0; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.cal-dow {
+  font-size: var(--fs-label); color: var(--dimmer);
+  letter-spacing: var(--label-track); font-weight: var(--label-weight);
+  padding-bottom: 0.5vh;
+}
+.cal-day { font-size: var(--fs-body-lg); padding: 1.05vh 0; border-radius: 1vh; }
+.cal-day.out { color: var(--dimmer); opacity: 0.45; }
+.cal-day.today { background: rgba(109, 179, 242, 0.16); color: var(--accent); font-weight: 600; }
+
+/* ============================= LANDSCAPE =============================
+   The tablet can hang either way. Portrait is a single column; landscape is a real
+   two-column composition, not the portrait column squeezed — the old fallback left the
+   lower-left third of the screen black and clipped the sensors card off the bottom.
+
+   Areas, not auto-flow: the clock anchors top-left, the weather trio stacks on the
+   right where the eye lands from a doorway, the six small tiles fill under the clock,
+   and Home Assistant takes the full base line. Every row is an fr of the same grid, so
+   the composition fills exactly 100% of the screen with zero dead space.
+
+   A vh is worth ~1.6x less across the short axis, so the type ramp is restated once at
+   ~1.45x — under parity on purpose: the grid rows are sized by the cards' own
+   content, and parity-sized chips made the rows total ~40px more than the screen. */
 @media (orientation: landscape) {
-  /* A vh is worth roughly half as much across the short axis, so the ramp is restated once
-     here rather than re-declaring twenty font-sizes. Same nine steps, same ratios, ~1.75x —
-     which is what the hand-tuned landscape sizes were already approximating, inconsistently
-     (.time was 2.2x, .wx-temp 2.1x, .big-icon 1.5x). One multiplier, one ramp, both
-     orientations. */
   :root {
-    --fs-caption:    2.45vh;
-    --fs-label:      2.8vh;
-    --fs-note:       3.25vh;
-    --fs-body:       3.75vh;
-    --fs-body-lg:    4.3vh;
-    --fs-title-sm:   5.1vh;
-    --fs-title:      5.95vh;
-    --fs-hero:       9.1vh;
-    --fs-display:    13.3vh;
-    --fs-display-xl: 18.4vh;
+    --fs-caption:    2.05vh;
+    --fs-label:      2.3vh;
+    --fs-note:       2.7vh;
+    --fs-body:       3.1vh;
+    --fs-body-lg:    3.55vh;
+    --fs-title-sm:   4.2vh;
+    --fs-title:      4.95vh;
+    --fs-hero:       7.5vh;
+    --fs-display:    11vh;
+    --fs-display-xl: 15.2vh;
   }
+
+  #drift { padding: 1.3vh 1.8vw; }
 
   #home {
     display: grid;
-    grid-template-columns: 1.1fr 1fr;
-    grid-auto-rows: min-content;
-    gap: 1.6vh 2.5vw;
-    align-content: start;
+    grid-template-columns: 1fr 1.22fr;
+    grid-template-rows: 1.15fr 1fr 1fr 1.5fr;
+    grid-template-areas:
+      "clock   weather"
+      "row3a   hourly"
+      "row3b   daily"
+      "sensors sensors";
+    gap: 1.1vh 1.8vw;
   }
-  .card[data-widget="clock"] { grid-row: span 2; justify-content: center; }
-  .card[data-widget="sensors"] { grid-column: 1 / -1; }
-  .row3 { grid-column: 1 / -1; }
+  #home > .card[data-widget="clock"]   { grid-area: clock; justify-content: center; }
+  #home > .card[data-widget="weather"] { grid-area: weather; }
+  #home > .card[data-widget="hourly"]  { grid-area: hourly; }
+  #home > .card[data-widget="daily"]   { grid-area: daily; }
+  #home > .card[data-widget="sensors"] { grid-area: sensors; }
+  #home > .row3:nth-of-type(1) { grid-area: row3a; }
+  #home > .row3:nth-of-type(2) { grid-area: row3b; }
+  #home > .empty { grid-area: 1 / 1 / -1 / -1; }
 
-  .hr { min-width: 7vw; }
+  /* tiles stretch to their grid row instead of hugging content */
+  .row3 { align-items: stretch; }
+  .card.mini { justify-content: center; }
+
+  .hr { min-width: 6vw; }
   .sensors { grid-template-columns: repeat(5, 1fr); }
   .stat-grid { grid-template-columns: repeat(4, 1fr); }
   .stat-grid.cols3 { grid-template-columns: repeat(6, 1fr); }
@@ -1122,4 +1260,5 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   .switch.on span { transform: translateX(calc(6vw - 3.6vh)); }
   .sensor-sw { width: 2.6vw; }
   .sensor.on .sensor-sw span { transform: translateX(calc(2.6vw - 2vh)); }
+  .moon-disc { width: 22vh; height: 22vh; }
 }

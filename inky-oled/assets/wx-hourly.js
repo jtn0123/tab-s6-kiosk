@@ -103,7 +103,7 @@
           + ' aria-label="' + esc(when + ", " + info.text + ", "
               + fmt.deg(h.temperature_2m[i]) + ", " + pop + "% chance of rain") + '">'
           + '<div class="hr-t">' + esc(when) + "</div>"
-          + '<div class="hr-i" aria-hidden="true">' + info.icon + "</div>"
+          + '<div class="hr-i" aria-hidden="true">' + WP.wxIcon(h.weather_code[i], h.is_day && h.is_day[i] === 0) + "</div>"
           + '<div class="hr-d">' + fmt.deg(h.temperature_2m[i]) + "</div>"
           + '<div class="hr-p' + (pop >= 30 ? " wet" : "") + '">' + pop + "%</div>"
           + "</button>";
@@ -117,6 +117,93 @@
       this.paintPanel(true);
     },
     onClose: function () { this.panel = null; },
+
+
+    /* The InkyPi-style overview: one SVG, temperature as a line whose colour follows its
+       height (a vertical gradient in user space — peaks literally read warm, valleys
+       cool), rain probability as blue bars on the baseline. Decorative by contract
+       (aria-hidden): every number in it is also in the pickable list below, which is the
+       accessible surface.
+
+       The hour ticks and the hi/lo callouts are HTML positioned over the chart, not SVG
+       <text>: text in a scaling viewBox would need its own font-size, and the design
+       system's one hard rule is that no size is authored outside the ramp. */
+    chart: function (h, list, sel) {
+      var W = 320, H = 104;
+      var L = 8, R = 312, T = 14, B = 68;         // temp plot area
+      var barBase = 100, barMax = 24;             // precip bars
+      var temps = list.map(function (k) { return h.temperature_2m[k]; });
+      var lo = Math.min.apply(null, temps), hi = Math.max.apply(null, temps);
+      var span = (hi - lo) || 1;
+      var step = (R - L) / (list.length - 1);
+
+      function xy(n) {
+        var x = L + n * step;
+        var y = B - ((temps[n] - lo) / span) * (B - T);
+        return [x, y];
+      }
+      function pctX(x) { return (x / W * 100).toFixed(2) + "%"; }
+      function pctY(y) { return (y / H * 100).toFixed(2) + "%"; }
+
+      var pts = list.map(function (_, n) { return xy(n); });
+      var line = pts.map(function (p2, n) {
+        return (n ? "L " : "M ") + p2[0].toFixed(1) + " " + p2[1].toFixed(1);
+      }).join(" ");
+      var area = line + " L " + R + " " + (B + 2) + " L " + L + " " + (B + 2) + " Z";
+
+      var bars = "", ticks = "", marks = "";
+      var bw = step * 0.5;
+      var now = weather.nowIndex();
+      list.forEach(function (k, n) {
+        var pop = h.precipitation_probability ? (h.precipitation_probability[k] || 0) : 0;
+        if (pop > 0) {
+          var bh = (pop / 100) * barMax;
+          bars += '<rect x="' + (L + n * step - bw / 2).toFixed(1) + '" y="' + (barBase - bh).toFixed(1)
+            + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1"/>';
+        }
+        if (n % 3 === 0) {
+          var tt = new Date(h.time[k]);
+          ticks += '<span style="left:' + pctX(L + n * step) + '">'
+            + esc(k === now ? "Now" : fmt.hourLabel(tt)) + "</span>";
+        }
+      });
+
+      /* dot + hairline on the selected hour so the chart and the list agree on focus */
+      var si = list.indexOf(sel);
+      if (si >= 0) {
+        var sp = pts[si];
+        marks = '<line x1="' + sp[0].toFixed(1) + '" y1="' + T + '" x2="' + sp[0].toFixed(1)
+          + '" y2="' + barBase + '" stroke="var(--card-line2)" stroke-width="1"/>'
+          + '<circle cx="' + sp[0].toFixed(1) + '" cy="' + sp[1].toFixed(1)
+          + '" r="3.5" fill="var(--fg)"/>';
+      }
+
+      /* hi / lo callouts pinned to the curve's own extremes, not an axis */
+      var hiN = temps.indexOf(hi), loN = temps.indexOf(lo);
+      var labels = '<span class="hc-hi" style="left:' + pctX(pts[hiN][0])
+        + ";top:" + pctY(pts[hiN][1] - 5) + '">' + Math.round(hi) + "&#176;</span>"
+        + '<span class="hc-lo" style="left:' + pctX(pts[loN][0])
+        + ";top:" + pctY(pts[loN][1] + 5) + '">' + Math.round(lo) + "&#176;</span>";
+
+      return '<div class="hchart-wrap" aria-hidden="true"><svg class="hchart" viewBox="0 0 ' + W + " " + H + '">'
+        + '<defs><linearGradient id="hc-t" x1="0" y1="' + T + '" x2="0" y2="' + B
+        + '" gradientUnits="userSpaceOnUse">'
+        + '<stop offset="0" stop-color="var(--temp-hot)"/>'
+        + '<stop offset="0.55" stop-color="var(--temp-warm)"/>'
+        + '<stop offset="1" stop-color="var(--temp-cold)"/></linearGradient>'
+        + '<linearGradient id="hc-a" x1="0" y1="' + T + '" x2="0" y2="' + B
+        + '" gradientUnits="userSpaceOnUse">'
+        + '<stop offset="0" stop-color="var(--temp-warm)" stop-opacity="0.18"/>'
+        + '<stop offset="1" stop-color="var(--temp-cold)" stop-opacity="0.02"/></linearGradient></defs>'
+        + marks
+        + '<g class="hc-bars">' + bars + "</g>"
+        + '<path d="' + area + '" fill="url(#hc-a)"/>'
+        + '<path d="' + line + '" fill="none" stroke="url(#hc-t)" stroke-width="2.5"'
+        + ' stroke-linecap="round" stroke-linejoin="round"/>'
+        + "</svg>"
+        + labels
+        + '<div class="hc-ticks">' + ticks + "</div></div>";
+    },
 
     paintPanel: function (scrollToSel) {
       var panel = this.panel || WP.panels.el("hourly");
@@ -135,7 +222,8 @@
         t.toLocaleDateString(undefined, { weekday: "long" }) + " · " + fmt.clock(t, false);
 
       /* readout for the selected hour, then the full pickable list underneath */
-      var readout = hero(info.icon, fmt.deg(h.temperature_2m[i]),
+      var readout = hero(WP.wxIcon(h.weather_code[i], h.is_day && h.is_day[i] === 0),
+            fmt.deg(h.temperature_2m[i]),
             esc(info.text) + " · feels " + fmt.deg(h.apparent_temperature[i]))
         + statGrid([
             ["Rain chance", (h.precipitation_probability
@@ -167,7 +255,7 @@
               + fmt.deg(h.temperature_2m[k]) + ", " + pop + "% chance of rain") + '"'
           + ' data-ns="hourly" data-act="pick" data-arg="' + k + '">'
           + '<span class="hrow-t">' + esc(fmt.hourLabel(tk)) + "</span>"
-          + '<span class="hrow-i" aria-hidden="true">' + ik.icon + "</span>"
+          + '<span class="hrow-i" aria-hidden="true">' + WP.wxIcon(h.weather_code[k], h.is_day && h.is_day[k] === 0) + "</span>"
           + '<span class="hrow-bar" aria-hidden="true"><span style="width:'
           + w.toFixed(1) + '%"></span></span>'
           + '<span class="hrow-d">' + fmt.deg(h.temperature_2m[k]) + "</span>"
@@ -182,7 +270,9 @@
          instruction, which made it read as a different KIND of thing at a glance and put
          a sentence into a row of labels. The rows are buttons with a pressed state and a
          selected row already highlighted — the affordance is the control, not a caption. */
-      WP.repaint(body, readout + section("Next 24 hours",
+      WP.repaint(body, readout
+        + this.chart(h, list, i)
+        + section("Next 24 hours",
         '<div class="hrows">' + rows + "</div>"));
 
       /* Opening on hour 21 of 24 used to highlight a row 21 rows below the fold. Put the

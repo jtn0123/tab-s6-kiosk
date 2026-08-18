@@ -86,7 +86,7 @@ test("the real config boots the dashboard", function () {
   var app = h.createApp({ config: loadConfig() });
   assert.deepEqual(app.logs.error, []);
   assert.deepEqual(app.logs.warn, []);
-  assert.equal(Object.keys(app.registry).length, 8);
+  assert.equal(Object.keys(app.registry).length, 12);   // 11 widgets + the sky layer
 });
 
 /* ---------------- packaging invariants ---------------- */
@@ -118,9 +118,11 @@ test("index.html loads exactly the scripts that exist, in the order they need", 
   var html = h.readAsset("index.html");
   var srcs = h.scriptOrder(html);
   assert.deepEqual(srcs, [
-    "config.js", "app.js", "wx-ui.js",
+    "config.js", "app.js", "wx-ui.js", "wx-icons.js",
     "wx-clock.js", "wx-timer.js", "wx-weather.js", "wx-hourly.js",
-    "wx-daily.js", "wx-sensors.js", "wx-system.js", "wx-settings.js"
+    "wx-daily.js", "wx-sensors.js", "wx-system.js",
+    "wx-moon.js", "wx-air.js", "wx-calendar.js",
+    "wx-settings.js", "wx-sky.js"
   ]);
   srcs.forEach(function (s) {
     assert.ok(fs.existsSync(path.join(h.ASSETS, s)), "index.html loads a missing file: " + s);
@@ -154,7 +156,8 @@ test("one widget, one file, and each file registers exactly the widget it is nam
     assert.match(src, new RegExp('name:\\s*"' + name + '"'),
       file + " does not define the widget it is named after");
   });
-  assert.equal(Object.keys(app.registry).length, app.WP.WIDGETS.length);
+  /* +1: the sky layer registers for init() but is not a widget (no card, no panel) */
+  assert.equal(Object.keys(app.registry).length, app.WP.WIDGETS.length + 1);
   assert.equal(fs.existsSync(path.join(h.ASSETS, "widgets.js")), false,
     "the monolith is back");
 });

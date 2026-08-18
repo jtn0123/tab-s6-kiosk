@@ -44,6 +44,7 @@
           case "hours":  S.set("clockHours", parseInt(arg, 10)); break;
           case "secs":   S.set("seconds", !S.get("seconds")); break;
           case "burn":   S.set("burnIn", !S.get("burnIn")); break;
+          case "sky":    S.set("sky", !S.get("sky")); break;
           case "widget": S.setShow(arg, !S.get("show")[arg]); break;
           /* Two-step. This panel is mounted on a wall where anyone walking past can reach
              it, and one tap on a red button used to wipe every preference with no warning
@@ -119,7 +120,9 @@
            nudge distance, the interval, the finger rule and the 90 s idle unwind, on a
            settings screen. All of it is still in INTERACTIVE.md, where somebody who wants
            it will look. */
-        + section("Burn-in protection", '<div class="srows">'
+        + section("Display", '<div class="srows">'
+          + switchRow("settings", "sky", "Weather in the background", S.get("sky") !== false, null,
+              "Stars, rain, snow and clouds drawn behind the dashboard, matching outside.")
           + switchRow("settings", "burn", "Drift the layout", !!S.get("burnIn"), null,
               "Nudges everything a few pixels every "
               + Math.round((b.intervalSeconds || 120) / 60) + " minutes so nothing burns in.")

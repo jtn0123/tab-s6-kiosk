@@ -240,7 +240,7 @@
       var cur = this.nowReading();
       var info = WP.wmo(cur.weather_code, cur.is_day === 0);
 
-      $("wx-icon").textContent = info.icon;
+      $("wx-icon").innerHTML = WP.wxIcon(cur.weather_code, cur.is_day === 0);
       $("wx-temp").textContent = fmt.deg(cur.temperature_2m);
       $("wx-desc").textContent = info.text;
       $("wx-badge").hidden = !this.stale;
@@ -314,7 +314,7 @@
          "Now: Daytime / Night" is the one cell dropped: the hero glyph two lines above it
          is the sun or the moon, so the cell restated it in words. */
       body.innerHTML =
-        hero(info.icon, fmt.deg(cur.temperature_2m),
+        hero(WP.wxIcon(cur.weather_code, cur.is_day === 0), fmt.deg(cur.temperature_2m),
              esc(info.text) + " · feels " + fmt.deg(cur.apparent_temperature))
 
         + section("Air", statGrid([

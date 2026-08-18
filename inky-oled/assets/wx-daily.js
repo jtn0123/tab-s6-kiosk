@@ -53,7 +53,7 @@
               + fmt.deg(day.temperature_2m_max[i]) + ", low "
               + fmt.deg(day.temperature_2m_min[i])) + '">'
           + '<div class="fc-name">' + esc(name) + "</div>"
-          + '<div class="fc-icon" aria-hidden="true">' + info.icon + "</div>"
+          + '<div class="fc-icon" aria-hidden="true">' + WP.wxIcon(day.weather_code[i], false) + "</div>"
           + '<div class="fc-hi">' + fmt.deg(day.temperature_2m_max[i]) + "</div>"
           + '<div class="fc-lo">' + fmt.deg(day.temperature_2m_min[i]) + "</div>"
           + "</button>";
@@ -143,7 +143,7 @@
       }
 
       WP.repaint(body, tabs
-        + hero(info.icon,
+        + hero(WP.wxIcon(day.weather_code[i], false),
                fmt.deg(day.temperature_2m_max[i])
                  + ' <span class="dim">/ ' + fmt.deg(day.temperature_2m_min[i]) + "</span>",
                esc(info.text))

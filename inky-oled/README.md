@@ -109,7 +109,7 @@ a test named `REGRESSION:` that fails when the bug is put back —
 Also covered: countdown ceiling, lap-split reconciliation, duty cycle (time-weighted),
 settings merge, WMO codes, the demo simulator's mean reversion, `esc()` including the live
 Home Assistant feed, the growth cap and the `overflow=0` layout assertion, the bridge contract
-and its degradation, the monochrome-glyph rule, the CSP meta, and the poll cadences
+and its degradation, the icon palette discipline, the CSP meta, and the poll cadences
 (`polling.test.js` — see below).
 
 ### Coverage
@@ -133,7 +133,10 @@ now, and each was written by first reintroducing the mutation and watching it fa
 
 ## What it shows
 
-Eight widgets, all interactive — tap a card for its full-screen detail panel.
+Eleven widgets, all interactive — tap a card for its full-screen detail panel. The icons are
+the app's own coloured SVG (no emoji fonts), and an animated **sky layer** behind the dashboard
+draws what the weather is doing: stars on a clear night, rain, snow, fog, drifting cloud banks,
+a dim flash in a storm. Portrait and landscape both render a full, dead-space-free layout.
 
 - **Clock** — time, seconds, full date; panel adds time zone, day of year, ISO week, world clocks
 - **Now** — temperature, conditions, feels-like, wind, humidity; panel adds pressure, dew point,
@@ -144,7 +147,12 @@ Eight widgets, all interactive — tap a card for its full-screen detail panel.
   when a token is configured
 - **Device** — real battery, storage, memory, network and uptime through a JS bridge
 - **Timer** — stopwatch with laps, countdown with presets and a full-screen alarm
-- **Settings** — units, clock format, seconds, burn-in, per-widget show/hide; persisted
+- **Moon** — live phase drawn as a disc, illumination, age, next full/new; computed locally
+- **Air** — US AQI in the EPA's own colour bands, pollutant breakdown, 24 h forecast
+  (Open-Meteo air-quality endpoint, keyless like the weather)
+- **Date** — month calendar with today ringed, prev/next month, day-of-year
+- **Settings** — units, clock format, seconds, sky animation, burn-in, per-widget show/hide;
+  persisted
 
 Weather comes from **Open-Meteo — no API key, no account.**
 

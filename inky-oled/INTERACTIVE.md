@@ -22,11 +22,33 @@ nine files rather than a directory. `index.html` pins their load order and
 
 ---
 
-## The eight widgets
+## The eleven widgets
 
 Every widget is a plugin object registered with `WP.register()`: `init()` at boot with its own
 refresh cadence, `onOpen(panel, arg)` to fill its detail panel, `onClose()` to tear down
 whatever the panel started.
+
+Three of them are new since the colour redesign and cost no API key: **Moon** (phase computed
+locally from the mean synodic month; the disc in the tile and the panel share one crescent
+path with the icon set), **Air** (Open-Meteo's air-quality endpoint, same CORS posture as the
+weather fetch; the AQI number wears the EPA band colours), and **Date** (a month grid computed
+locally, today ringed).
+
+## The colour layer and the sky
+
+The panel used to be monochrome because Android's emoji font rendered any colour-capable
+codepoint as an uncontrollable sprite. The weather icons are now the app's own SVG
+(`wx-icons.js`), so colour is deliberate: every colour is a `--ic-*` / `--temp-*` / `--aqi-*`
+token in `style.css` (a hex literal inside the icon file is a test failure), warm things are
+warm, rain is blue, and temperature charts run a hot-to-cold gradient in user space so peaks
+literally read warm.
+
+Behind the dashboard, `wx-sky.js` draws the current conditions on a full-screen canvas: stars
+that twinkle on a clear night, a wandering sun/moon glow, drifting cloud banks, angled rain,
+swaying snow, sliding fog bands, and a dim (≤0.25 alpha) flash every few seconds in a storm.
+It subscribes to the same Open-Meteo payload the cards render from, runs at ~30 fps, stops
+entirely when the app is hidden or the "Weather in the background" switch in Settings is off,
+and every element moves so it cannot burn in.
 
 ### 1. Clock — real device time
 
@@ -323,7 +345,9 @@ hideable with no transition.
 
 ### Layout budget
 
-The home column is a fixed height budget: 100 vh has to hold eight widgets with nothing clipped.
+The home column is a fixed height budget: 100 vh has to hold eleven widgets with nothing clipped — the six small tiles share
+two half-width rows on one line in portrait, and landscape is a real two-column grid
+(clock and tiles left, the weather trio right, Home Assistant across the base).
 Every card carries `flex-grow`, so spare height is handed back to the cards as internal
 breathing room rather than collecting in the gaps.
 
