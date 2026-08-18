@@ -589,7 +589,9 @@ test("generated toggles announce as switches and say which way they are set", fu
   var tiles = app.qsa("#sensors .sensor").filter(function (t) {
     return t.getAttribute("data-act") === "toggle";
   });
-  assert.ok(tiles.length >= 2, "no toggle tiles to check");
+  /* the card caps at five entities since the news ticker took the second tile row;
+     the demo keeps exactly one switch (the lamp) on the wall, the rest in the panel */
+  assert.ok(tiles.length >= 1, "no toggle tiles to check");
   tiles.forEach(function (t) {
     assert.equal(t.getAttribute("role"), "switch");
     var e = app.registry.sensors.find(t.getAttribute("data-arg"));

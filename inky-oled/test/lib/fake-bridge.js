@@ -58,6 +58,24 @@ function make(over) {
     },
     prefs: prefs
   };
+
+  /* Opt-in network half of the bridge (MainActivity's fetchOrigins/httpFetch). Off by
+     default so every existing test keeps exercising the no-bridge fallback paths. */
+  if (over.net) {
+    bridge.lockedOrigins = null;
+    bridge.fetchCalls = [];
+    bridge.fetchOrigins = function (json) {
+      calls.push("fetchOrigins");
+      if (bridge.lockedOrigins !== null) return false;   // first write wins, like Java
+      bridge.lockedOrigins = JSON.parse(json);
+      return true;
+    };
+    bridge.httpFetch = function (id, url, headersJson, method, body) {
+      calls.push("httpFetch:" + method + ":" + url);
+      bridge.fetchCalls.push({ id: id, url: url,
+        headers: JSON.parse(headersJson || "{}"), method: method, body: body });
+    };
+  }
   return bridge;
 }
 

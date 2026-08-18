@@ -179,6 +179,10 @@ function createApp(opts) {
     removeEventListener: function () {},
     CONFIG: opts.config === undefined ? defaultConfig() : opts.config
   };
+  /* base64 <-> binary string, which WebView has natively; bridgeFetch decodes its
+     payloads with atob so the sandbox needs one. */
+  sandbox.atob = function (b64) { return Buffer.from(String(b64 || ""), "base64").toString("binary"); };
+  sandbox.btoa = function (bin) { return Buffer.from(String(bin || ""), "binary").toString("base64"); };
   if (opts.bridge) sandbox.Android = opts.bridge;
   sandbox.window = sandbox;
   sandbox.self = sandbox;

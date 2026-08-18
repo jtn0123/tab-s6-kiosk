@@ -75,15 +75,15 @@
       { id: "sensor.living_room_humidity", label: "Humidity", short: "Humid", icon: "☂",
         unit: "%", base: 46, amp: 7, phase: 4,
         tau: 600000, noise: 0.11, min: 22, max: 78, dp: 0 },
+      { id: "light.living_room_lamp", label: "Lamp", short: "Lamp", icon: "●", iconOff: "○",
+        kind: "toggle", domain: "light",
+        dwell: { on: [25 * 60000, 95 * 60000], off: [18 * 60000, 70 * 60000] } },
       { id: "sensor.living_room_co2", label: "CO₂", short: "CO₂", icon: "≈",
         unit: "ppm", base: 640, amp: 190, phase: 21,
         tau: 300000, noise: 3.8, min: 400, max: 1800, dp: 0 },
       { id: "sensor.house_power", label: "Power", short: "Power", icon: "↯",
         unit: "W", base: 430, amp: 210, phase: 19,
         tau: 60000, noise: 18, min: 80, max: 4200, dp: 0 },
-      { id: "light.living_room_lamp", label: "Lamp", short: "Lamp", icon: "●", iconOff: "○",
-        kind: "toggle", domain: "light",
-        dwell: { on: [25 * 60000, 95 * 60000], off: [18 * 60000, 70 * 60000] } },
       { id: "switch.office_fan", label: "Office fan", short: "Fan", icon: "◆", iconOff: "◇",
         kind: "toggle", domain: "switch",
         dwell: { on: [12 * 60000, 40 * 60000], off: [22 * 60000, 90 * 60000] } },
@@ -313,6 +313,36 @@
       });
     },
 
+    /* All live traffic goes through here. On the tablet it rides the Java shell's
+       fetch (WP.bridgeFetch): the page's origin is file:// -> null, so a direct fetch
+       with an Authorization header dies in a CORS preflight stock Home Assistant never
+       answers — this was broken for every real user on day one, and no HA setting short
+       of a reverse proxy fixes it from the page side. In a browser (tests, dev) the
+       bridge is absent and it falls back to a plain fetch, where CORS is the caller's
+       problem. Both paths resolve to the same {ok, status, json()} shape. */
+    haFetch: function (url, opts) {
+      opts = opts || {};
+      var headers = this.haHeaders();
+      if (WP.bridgeFetch.available()) {
+        var p = opts.method === "POST"
+          ? WP.bridgeFetch.post(url, headers, opts.body)
+          : WP.bridgeFetch.get(url, headers);
+        return p.then(function (r) {
+          return {
+            ok: r.ok, status: r.status,
+            json: function () {
+              var j = r.json();
+              return j == null ? Promise.reject(new Error("bad JSON")) : Promise.resolve(j);
+            }
+          };
+        });
+      }
+      var init = { headers: headers, cache: "no-store" };
+      if (opts.method) init.method = opts.method;
+      if (opts.body != null) init.body = opts.body;
+      return fetch(url, init);
+    },
+
     haHeaders: function () {
       return { "Authorization": "Bearer " + this.token, "Content-Type": "application/json" };
     },
@@ -357,8 +387,7 @@
     stepLive: function () {
       var self = this, now = Date.now();
       Promise.all(this.ents.map(function (e) {
-        return fetch(self.base + "/api/states/" + encodeURIComponent(e.id),
-          { headers: self.haHeaders(), cache: "no-store" })
+        return self.haFetch(self.base + "/api/states/" + encodeURIComponent(e.id))
           .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
           .then(function (j) {
             e.err = null;
@@ -430,9 +459,9 @@
            from a config-supplied entity id, so it is not attacker-controlled in any real
            sense — but it IS the only place in the file that interpolated a config string
            into a URL raw, and a lone exception is how a rule stops being a rule. */
-        fetch(this.base + "/api/services/" + encodeURIComponent(e.domain)
+        this.haFetch(this.base + "/api/services/" + encodeURIComponent(e.domain)
               + "/turn_" + (e.on ? "on" : "off"), {
-          method: "POST", headers: this.haHeaders(),
+          method: "POST",
           body: JSON.stringify({ entity_id: id })
         })
           .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); })
@@ -520,7 +549,10 @@
       /* Skip this frame if a finger is down: replacing a tile mid-press would move the
          click target out from under the user and swallow the tap. */
       if (WP.touching()) return;
-      box.innerHTML = this.ents.map(function (e) {
+      /* The card shows the FIRST FIVE entities (config order decides which); the panel
+         has everything. The second row of tiles became the news ticker's height — and a
+         wall of ten look-alike tiles was the least glanceable card on the panel anyway. */
+      box.innerHTML = this.ents.slice(0, 5).map(function (e) {
         var isSwitch = (e.kind === "toggle");
         var stale = !!e.err;
         /* toggles act on tap; readings open the detail panel */
@@ -657,6 +689,17 @@
                     ["Average", r(avg) + " " + esc(unit)]], 3))));
     }
   };
+
+  /* Registered while the file parses so boot() locks it into the shell's allowlist:
+     the bridge fetch refuses any origin not on the list, including this one if the
+     config had no baseUrl at boot. */
+  (function () {
+    var ha = WP.C.homeAssistant || {};
+    if (ha.enabled && ha.baseUrl) {
+      var o = WP.originOf(ha.baseUrl);
+      if (o) WP.fetchOrigins.push(o);
+    }
+  })();
 
   WP.register(sensors);
 })();

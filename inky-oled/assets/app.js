@@ -93,16 +93,109 @@ window.WP = (function () {
     }
   };
 
+  /* ---------------- bridge fetch ----------------
+     Network through the Java shell (MainActivity.doFetch), because the page's file://
+     origin is null and CORS therefore kills any request that matters: Home Assistant
+     rejects the auth preflight and RSS feeds send no CORS headers at all.
+
+     The shell only talks to origins registered HERE, once, at boot — first call wins in
+     Java, so nothing that attaches to the page later (the devtools socket this userdebug
+     ROM force-opens, an injected script) can widen the list. Widgets that need an origin
+     push it onto WP.fetchOrigins while their file parses; boot() locks the list. */
+  var fetchOrigins = [
+    "https://api.open-meteo.com",
+    "https://air-quality-api.open-meteo.com"
+  ];
+
+  /* "https://host[:port]/anything" -> "https://host[:port]" (lowercased), or null. */
+  function originOf(url) {
+    var m = /^(https?):\/\/([^\/?#]+)/i.exec(String(url || ""));
+    if (!m) return null;
+    var proto = m[1].toLowerCase(), hostport = m[2].toLowerCase();
+    var dp = proto === "https" ? ":443" : ":80";
+    if (hostport.slice(-dp.length) === dp) hostport = hostport.slice(0, -dp.length);
+    return proto + "://" + hostport;
+  }
+
+  var bridgeFetch = {
+    seq: 0,
+    pending: {},
+    TIMEOUT_MS: 20000,          // the shell gives up long before this; belt and braces
+
+    available: function () { return bridge.has("httpFetch"); },
+
+    lockOrigins: function () {
+      if (!bridge.has("fetchOrigins")) return false;
+      var uniq = [];
+      fetchOrigins.forEach(function (o) {
+        if (o && uniq.indexOf(o) === -1) uniq.push(o);
+      });
+      try { return window.Android.fetchOrigins(JSON.stringify(uniq)) === true; }
+      catch (e) { return false; }
+    },
+
+    get: function (url, headers) { return bridgeFetch.send("GET", url, headers, null); },
+    post: function (url, headers, body) { return bridgeFetch.send("POST", url, headers, body); },
+
+    send: function (method, url, headers, body) {
+      if (!bridgeFetch.available()) {
+        return Promise.reject(new Error("bridge fetch unavailable"));
+      }
+      var id = "f" + (++bridgeFetch.seq);
+      return new Promise(function (resolve, reject) {
+        bridgeFetch.pending[id] = {
+          res: resolve, rej: reject,
+          t: setTimeout(function () { bridgeFetch._reject(id, "bridge fetch timed out"); },
+                        bridgeFetch.TIMEOUT_MS)
+        };
+        try {
+          window.Android.httpFetch(id, String(url),
+            JSON.stringify(headers || {}), method, body == null ? null : String(body));
+        } catch (e) {
+          bridgeFetch._reject(id, "bridge call failed: " + (e && e.message));
+        }
+      });
+    },
+
+    /* Java calls these via evaluateJavascript. The payload is base64 so nothing in a
+       response body can escape the string literal it rides in on. */
+    _resolve: function (id, status, b64) {
+      var p = bridgeFetch.pending[id];
+      if (!p) return;
+      delete bridgeFetch.pending[id];
+      clearTimeout(p.t);
+      var text = "";
+      try { text = decodeURIComponent(escape(atob(b64 || ""))); }
+      catch (e) { try { text = atob(b64 || ""); } catch (e2) { text = ""; } }
+      p.res({
+        ok: status >= 200 && status < 300,
+        status: status,
+        text: text,
+        json: function () {
+          try { return JSON.parse(text); } catch (e) { return null; }
+        }
+      });
+    },
+
+    _reject: function (id, msg) {
+      var p = bridgeFetch.pending[id];
+      if (!p) return;
+      delete bridgeFetch.pending[id];
+      clearTimeout(p.t);
+      p.rej(new Error(String(msg || "bridge fetch failed")));
+    }
+  };
+
   /* ---------------- persisted settings ----------------
      localStorage is the source of truth (spec), but a wall panel gets force-stopped and
      wiped more than a phone browser does, so every write is also mirrored into Android
      SharedPreferences and used as a fallback if localStorage comes back empty. */
   var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air", "calendar",
-                 "sensors", "system", "timer", "settings"];
+                 "news", "sensors", "system", "timer", "settings"];
   var WIDGET_LABELS = {
     clock: "Clock", weather: "Weather now", hourly: "Hourly forecast",
     daily: "Daily forecast", moon: "Moon phase", air: "Air quality",
-    calendar: "Calendar", sensors: "Home Assistant", system: "Device",
+    calendar: "Calendar", news: "News headlines", sensors: "Home Assistant", system: "Device",
     timer: "Stopwatch & timer", settings: "Settings tile"
   };
 
@@ -868,6 +961,7 @@ window.WP = (function () {
   /* ---------------- boot ---------------- */
   function boot() {
     settings.load();
+    bridgeFetch.lockOrigins();
     applyVisibility();
     bindTouch();
 
@@ -966,6 +1060,7 @@ window.WP = (function () {
        condition the growth cap needs before it may bind. */
     relayoutHome: function () { layoutReady = true; relayoutHome(); },
     drift: drift, wmo: wmo, fmt: fmt, sparkline: sparkline,
+    bridgeFetch: bridgeFetch, fetchOrigins: fetchOrigins, originOf: originOf,
     register: register, registry: registry
   };
 })();

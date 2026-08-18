@@ -22,7 +22,7 @@ nine files rather than a directory. `index.html` pins their load order and
 
 ---
 
-## The eleven widgets
+## The twelve widgets
 
 Every widget is a plugin object registered with `WP.register()`: `init()` at boot with its own
 refresh cadence, `onOpen(panel, arg)` to fill its detail panel, `onClose()` to tear down
@@ -33,6 +33,26 @@ locally from the mean synodic month; the disc in the tile and the panel share on
 path with the icon set), **Air** (Open-Meteo's air-quality endpoint, same CORS posture as the
 weather fetch; the AQI number wears the EPA band colours), and **Date** (a month grid computed
 locally, today ringed).
+
+## The bridge fetch and the News widget
+
+`Android.httpFetch` (MainActivity) is the shell doing the page's networking: base64 payloads
+come back through `WP.bridgeFetch` as promises. It exists because the page's `file://` origin
+made CORS fatal for anything with an auth header (Home Assistant) and anything that never
+sends CORS headers (every RSS feed). It is deliberately narrow:
+
+- the **origin allowlist** is registered once at boot from config-derived origins
+  (`WP.fetchOrigins`) and is first-write-wins on the Java side, so nothing that attaches to
+  the page later — the userdebug devtools socket included — can widen it;
+- GET/POST only, http(s) only, every redirect hop re-validated against the allowlist;
+- responses capped at 1.5 MB, request bodies at 8 KB, 8 s per hop, three redirects;
+- only `Authorization`, `Accept` and `Content-Type` headers cross the boundary.
+
+**News** is the first widget that only exists because of it: RSS/Atom headlines (defaults:
+BBC World + NPR, override with `news: { feeds: […] }` in config.js), parsed by a small pure
+parser, deduped and merged newest-first. The home card is a one-line ticker rotating every
+12 s — moving text is also burn-in-friendly — and the panel lists the merged headlines with
+source and age. In a browser (no shell) the ticker explains itself instead of failing.
 
 ## The colour layer and the sky
 
@@ -626,9 +646,14 @@ The page is a `file://` document, so its origin is `null`; the `Authorization` h
 each call a non-simple cross-origin request; Chromium sends a preflight `OPTIONS` first. That
 is not a property of the mock — a stock Home Assistant answers CORS preflights only for origins
 listed in `http.cors_allowed_origins`, and `"null"` is not one of them by default. **Anybody
-enabling this feature on day one gets six dashes and "check baseUrl/token", with a baseUrl and
-a token that are both correct.** The workaround is documented in
-[README](README.md#you-will-also-need-cors-on-the-home-assistant-side).
+enabling this feature on day one got six dashes and "check baseUrl/token", with a baseUrl and
+a token that are both correct.**
+
+**Resolved since: live traffic rides the shell.** `wx-sensors.haFetch()` prefers
+`WP.bridgeFetch` — MainActivity's native fetch — whenever the app shell is present, and the
+page's CORS rules simply do not apply to it. The finding above is kept because it explains
+WHY the bridge fetch exists, and because the plain-`fetch` fallback (browser development)
+still behaves exactly as described.
 
 With the mock answering the preflight (`Access-Control-Allow-Headers: authorization,
 content-type`), everything below worked on the first poll.

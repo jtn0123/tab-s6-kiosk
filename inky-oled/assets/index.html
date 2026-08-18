@@ -192,6 +192,13 @@
       </section>
     </div>
 
+    <!-- ---- 12. news ticker: one line, rotates through the freshest headlines ---- -->
+    <section class="card tappable news-card" data-widget="news" data-open="news"
+             aria-label="News headlines">
+      <span class="card-label">News</span>
+      <div id="news-line" class="news-line"><span class="news-t muted">waiting for headlines&hellip;</span></div>
+    </section>
+
     <!-- Shown only when every widget is switched off, so an all-hidden dashboard reads as
          a deliberate state instead of a crashed app. Toggled by WP applyVisibility(). -->
     <div id="empty" class="empty" hidden>
@@ -304,6 +311,15 @@
     <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
   </section>
 
+  <section class="panel" data-panel="news">
+    <header class="panel-head">
+      <div><h1 class="panel-title">News</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+    <footer class="panel-foot"><button class="wide-btn tappable" data-close>&larr; Dashboard</button></footer>
+  </section>
+
   <section class="panel" data-panel="settings">
     <header class="panel-head">
       <div><h1 class="panel-title">Settings</h1><p class="panel-sub" data-sub></p></div>
@@ -365,6 +381,7 @@
 <script src="wx-moon.js"></script>
 <script src="wx-air.js"></script>
 <script src="wx-calendar.js"></script>
+<script src="wx-news.js"></script>
 <script src="wx-settings.js"></script>
 <script src="wx-sky.js"></script>
 </body>

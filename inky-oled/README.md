@@ -133,7 +133,7 @@ now, and each was written by first reintroducing the mutation and watching it fa
 
 ## What it shows
 
-Eleven widgets, all interactive — tap a card for its full-screen detail panel. The icons are
+Twelve widgets, all interactive — tap a card for its full-screen detail panel. The icons are
 the app's own coloured SVG (no emoji fonts), and an animated **sky layer** behind the dashboard
 draws what the weather is doing: stars on a clear night, rain, snow, fog, drifting cloud banks,
 a dim flash in a storm. Portrait and landscape both render a full, dead-space-free layout.
@@ -151,6 +151,8 @@ a dim flash in a storm. Portrait and landscape both render a full, dead-space-fr
 - **Air** — US AQI in the EPA's own colour bands, pollutant breakdown, 24 h forecast
   (Open-Meteo air-quality endpoint, keyless like the weather)
 - **Date** — month calendar with today ringed, prev/next month, day-of-year
+- **News** — a one-line rotating headline ticker (RSS/Atom through the app shell — feeds
+  never need CORS), full list in its panel; defaults to BBC World + NPR, configurable
 - **Settings** — units, clock format, seconds, sky animation, burn-in, per-widget show/hide;
   persisted
 
@@ -188,36 +190,18 @@ falls back to the simulator.
 > readable through the WebView devtools socket; see
 > [Residual risk](INTERACTIVE.md#residual-risk-the-devtools-socket).
 
-### You will also need CORS on the Home Assistant side
+### CORS no longer applies on the tablet
 
-This is the part nobody tells you, and it is the first thing that will happen when you flip
-`enabled` to `true`.
+Earlier builds hit a wall here: the dashboard is a `file://` document, so its origin is
+`null`, the `Authorization` header forces a CORS preflight, and a stock Home Assistant
+never answers it — every request died before leaving the device, with a valid token.
 
-The dashboard is a `file://` document, so its origin is the string `null`. The `Authorization`
-header makes every `/api/states` call a *non-simple* cross-origin request, so Chromium sends a
-CORS preflight `OPTIONS` first. A Home Assistant that does not answer that preflight for the
-`null` origin blocks **every** request before it leaves the device. What you see is:
-
-```
-Home Assistant: 6 entity error(s) — check baseUrl/token
-```
-
-…with correct `baseUrl` and a perfectly valid token, and one `blocked by CORS policy` line per
-entity per poll in logcat. Verified on device against a mock HA (details in
-[INTERACTIVE.md](INTERACTIVE.md#home-assistant-live-path-verification)): with the preflight
-unanswered, nothing populates; with it answered, everything does, on the first poll.
-
-In `configuration.yaml`:
-
-```yaml
-http:
-  cors_allowed_origins:
-    - "null"      # the quotes matter — bare null is a YAML null, not the string
-```
-
-then restart Home Assistant. If you would rather not open that up, the alternative is to stop
-being a `file://` page — serve the assets from HA itself, or from any origin you then allow —
-which is a bigger change than this project wants.
+Live traffic now goes through the **app shell's own fetch** (`Android.httpFetch` in
+MainActivity), which is not subject to page CORS at all. No `cors_allowed_origins` entry
+is needed. The shell only talks to origins derived from `config.js` — locked once at page
+load, first caller wins — accepts only GET/POST over http(s), re-validates every redirect
+hop, and caps responses at 1.5 MB. Running the page in a desktop browser (no shell) still
+uses a plain `fetch`, where CORS is back on you; that path exists for development only.
 
 ## Poll cadences
 
