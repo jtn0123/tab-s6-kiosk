@@ -243,12 +243,16 @@ window.WP = (function () {
       clockHours: (C.clockHours === 24) ? 24 : 12,
       seconds:    false,
       burnIn:     b.enabled !== false,
-      /* OFF by default. The animated sky drew specks INSIDE the cards, not just behind
-         them, and at 2-4 m a scatter of dim dots on a black panel does not read as weather,
-         it reads as dust on the glass or as dead pixels — on a display where a dead pixel is
-         a real thing that happens. It also animates 24/7 on a panel whose rule is that lit
-         pixels are data. It is still one tap away in Settings for anybody who wants it. */
-      sky:        false,
+      /* ON by default, again. It went off because the starfield read as dust on the glass
+         or as dead pixels — a fair verdict on what was there: 110 one-pixel rectangles, all
+         the same size, all the same brightness, which is what sensor noise looks like. What
+         it draws now is a sky with magnitudes in it (a few bright with a bloom, most faint)
+         under light interpolated from the day's REAL sunrise and sunset, so the panel is a
+         different colour at 6am and at 8pm. That is the whole "window, not a readout" of
+         this product, and a feature nobody ever turns on is a feature nobody has. The
+         alpha budget it lives inside is stated in wx-sky-light.js; the switch in Settings
+         still stops the loop dead for anybody who wants a black rectangle. */
+      sky:        true,
       cycle:      false,
       show:       {}
     };
@@ -270,7 +274,7 @@ window.WP = (function () {
         if (saved.clockHours === 12 || saved.clockHours === 24) d.clockHours = saved.clockHours;
         d.seconds = !!saved.seconds;
         d.burnIn = saved.burnIn !== false;
-        d.sky = saved.sky === true;   /* opt-in, like the default above */
+        d.sky = saved.sky !== false;  /* opt-OUT, like the default above */
         d.cycle = saved.cycle === true;
         if (saved.show) {
           WIDGETS.forEach(function (w) {

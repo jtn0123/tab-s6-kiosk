@@ -1,62 +1,64 @@
-/* Wall panel dashboard — SKY (animated background).
+/* Wall panel dashboard — SKY (animated background, the painters).
 
-   A full-screen canvas behind the dashboard that draws what the weather is doing: stars
-   on a clear night, a warm glow on a clear day, drifting cloud banks, falling rain or
-   snow, fog banks, and a dim occasional flash in a storm. This is the "the panel is a
-   window" layer — it is why the theme is allowed to stay dark: the background is not
-   empty, it is the weather.
+   A full-screen canvas behind the dashboard that draws what the weather is doing: the
+   light of the actual hour, stars with real magnitudes, drifting cloud banks, rain leaning
+   on the real wind, snow that drifts rather than falls, fog sitting on the floor of the
+   frame, and a dim flash in a storm. This is the "the panel is a window" layer — it is why
+   the theme is allowed to stay dark: the background is not empty, it is the weather.
+
+   The LIGHT — which mood, which colour, where the bloom sits — is not decided here. It
+   comes out of wx-sky-light.js, a pure function of (now, sunrise, sunset) tested at every
+   phase boundary. This file only paints what that model says. The seam is deliberate: the
+   painters can only be judged by looking at them, so the half that CAN be pinned by a test
+   was moved somewhere a test can reach it.
 
    AMOLED rules the layer lives by:
      * everything moves — a canvas whose pixels never sit still cannot burn in, which is
-       why the glows wander and even the stars twinkle;
-     * dim by construction — nothing here exceeds ~0.25 alpha, and most of the frame
-       stays true black (pixels off);
+       why the bloom tracks the sun across the frame and even the stars twinkle;
+     * dim by construction — the alpha budget is stated and defended in wx-sky-light.js;
+       nothing composited here exceeds ~0.25, and most of the frame stays true black;
      * 30 fps, not 60 — half the GPU work, invisible for weather;
      * it stops completely when the app is hidden or the switch in Settings is off.
 
-   The scene is chosen from the same Open-Meteo payload the cards read (subscribed via
-   weather.onData), so the background never disagrees with the Now card.
+   WHY IT SHIPS ON AGAIN: it shipped off after a round of grading called the starfield
+   "dust on the glass or dead pixels", and that was a fair verdict on what was there — 110
+   one-pixel rectangles, all the same size and brightness, which is what sensor noise looks
+   like. A sky is not uniform: a few bright stars with a bloom and a great many faint ones
+   is what makes a field of dots read as a sky. That, plus light that follows the real sun,
+   is the difference between an effect and a window.
 
    One widget, one flat file (assets/ cannot hold subdirectories — aapt2 on Windows
-   writes the separator as a backslash and file:///android_asset/ cannot resolve it).
-*/
+   writes the separator as a backslash and file:///android_asset/ cannot resolve it). */
 
 (function () {
   "use strict";
 
   var S = WP.settings;
+  var L = WP.skyLight;
+  var sceneFor = L.sceneFor, coverFor = L.coverFor, rgba = L.rgba;
 
-  /* WMO code -> scene. Pure and exported: the tests pin every code to a scene so a new
-     code cannot silently fall through to "clear" while the icon shows a thunderstorm. */
-  function sceneFor(code) {
-    if (code === 0 || code === 1) return "clear";
-    if (code === 2) return "partly";
-    if (code === 3) return "cloudy";
-    if (code === 45 || code === 48) return "fog";
-    if (code >= 51 && code <= 57) return "drizzle";
-    if (code >= 71 && code <= 77) return "snow";
-    if (code === 85 || code === 86) return "snow";
-    if (code === 82 || code === 95 || code === 96 || code === 99) return "storm";
-    if (code >= 61 && code <= 67) return "rain";
-    if (code === 80 || code === 81) return "rain";
-    return "clear";
-  }
+  var MAXCLOUD = 9, MAXDROP = 150, MAXFLAKE = 90;
 
   var sky = {
     name: "sky",
     canvas: null, ctx: null,
     w: 0, h: 0,
     scene: "clear", night: false,
+    /* what the payload said; null until the first fetch lands, which is the offline and
+       first-boot case the light model has a documented fallback for */
+    sun: null, cover: null, windKmh: 0, windDir: 270,
     stars: [], drops: [], flakes: [], clouds: [], bands: [],
-    glowSeed: Math.random() * 1000,
-    flashAt: 0, flashNext: 0,
+    puff: null, puffAt: -1e9, moonAt: -1e9, moonK: 1,
+    seedPhase: Math.random() * 1000,
+    flashAt: -99, flashNext: 0, flashN: 0,
     raf: 0, last: 0, acc: 0,
     col: {},
 
     init: function () {
       var c = document.getElementById("sky");
       /* The test DOM has no canvas contexts and no rAF; the layer simply stays off
-         there — everything testable about it (sceneFor, the settings switch) is pure. */
+         there — everything testable about it (sceneFor, the light model, the settings
+         switch) is pure and lives outside the draw loop. */
       if (!c || typeof c.getContext !== "function"
              || typeof requestAnimationFrame !== "function") return;
       this.canvas = c;
@@ -69,28 +71,46 @@
       var self = this;
       /* follow the same payload the cards render from */
       if (WP.registry.weather && WP.registry.weather.onData) {
-        WP.registry.weather.onData(function (d) {
-          var cur = d && d.current;
-          if (!cur) return;
-          self.set(sceneFor(cur.weather_code), cur.is_day === 0);
-        });
+        WP.registry.weather.onData(function (d) { self.ingest(d); });
       }
       S.onChange(function (k) {
         if (k === "sky" || k === "*") self.apply();
+        /* the wind arrives in whatever unit the panel is set to, so a unit flip changes
+           the number the slant is computed from */
+        if (k === "units" && WP.registry.weather) self.ingest(WP.registry.weather.data);
       });
       document.addEventListener("visibilitychange", function () { self.apply(); });
       this.apply();
     },
 
+    /* Everything the layer takes from the payload. Sun times and cloud and wind are read
+       straight off the same object the Now card renders, so the two cannot disagree. */
+    ingest: function (d) {
+      var cur = d && d.current;
+      if (!cur) return;
+      var day = d.daily;
+      if (day && day.sunrise && day.sunset && day.sunrise[0] && day.sunset[0]) {
+        /* Local ISO with no offset, which Date parses as local time — the same reading
+           the Now panel's Sunrise/Sunset rows take from these very fields. */
+        var r = Date.parse(day.sunrise[0]), s = Date.parse(day.sunset[0]);
+        if (isFinite(r) && isFinite(s)) this.sun = { rise: r, set: s };
+      }
+      var scene = sceneFor(cur.weather_code);
+      this.cover = coverFor(scene, cur.cloud_cover);
+      this.windKmh = (S.isMetric() ? 1 : 1.609344) * (Number(cur.wind_speed_10m) || 0);
+      this.windDir = Number(cur.wind_direction_10m);
+      this.set(scene, cur.is_day === 0);
+    },
+
     readPalette: function () {
       var cs = (typeof getComputedStyle === "function")
         ? getComputedStyle(document.documentElement) : null;
-      if (!cs) { this.col = { rain: "#5aa9ff", snow: "#d6efff", star: "#cfd4ff" }; return; }
-      function v(name, fb) { return (cs.getPropertyValue(name) || fb).trim() || fb; }
+      var fb = { rain: "#5aa9ff", snow: "#d6efff", star: "#cfd4ff", fog: "#9aa8b8" };
+      if (!cs) { this.col = fb; return; }
+      function v(name, d) { return (cs.getPropertyValue(name) || d).trim() || d; }
       this.col = {
-        rain: v("--ic-rain", "#5aa9ff"),
-        snow: v("--ic-snow", "#d6efff"),
-        star: v("--ic-star", "#cfd4ff")
+        rain: v("--ic-rain", fb.rain), snow: v("--ic-snow", fb.snow),
+        star: v("--ic-star", fb.star), fog: v("--ic-fog", fb.fog)
       };
     },
 
@@ -122,37 +142,23 @@
       }
     },
 
+    /* The full pool is always seeded; how much of it draws is decided per frame from the
+       real cover and the real rain rate. Re-seeding because a cloud percentage moved two
+       points would restart every raindrop on screen. */
+    /* The particle populations live with the light model in wx-sky-light.js: they are
+       the sky's DATA — how many stars at which magnitudes, how deep the rain field is —
+       and this file is only the painter. (Also the honest reason: the painter crossed the
+       500-line budget by eight lines, and the populations were the one block that was not
+       painting.) */
     seed: function () {
-      var w = this.w, h = this.h, i;
-      this.stars = [];
-      for (i = 0; i < 110; i++) this.stars.push({
-        x: Math.random() * w, y: Math.random() * h * 0.85,
-        r: 0.6 + Math.random() * 1.2,
-        ph: Math.random() * 6.28, sp: 0.3 + Math.random() * 1.2
-      });
-      this.drops = [];
-      for (i = 0; i < 110; i++) this.drops.push({
-        x: Math.random() * w, y: Math.random() * h,
-        l: 12 + Math.random() * 14, v: 380 + Math.random() * 240
-      });
-      this.flakes = [];
-      for (i = 0; i < 70; i++) this.flakes.push({
-        x: Math.random() * w, y: Math.random() * h,
-        r: 1 + Math.random() * 1.6, v: 40 + Math.random() * 50,
-        ph: Math.random() * 6.28
-      });
-      this.clouds = [];
-      for (i = 0; i < 6; i++) this.clouds.push({
-        x: Math.random() * w, y: Math.random() * h * 0.7,
-        rx: 120 + Math.random() * 160, ry: 34 + Math.random() * 26,
-        v: 4 + Math.random() * 7, a: 0.035 + Math.random() * 0.03
-      });
-      this.bands = [];
-      for (i = 0; i < 4; i++) this.bands.push({
-        y: h * (0.15 + 0.22 * i), hh: 40 + Math.random() * 30,
-        x: Math.random() * w, v: 6 + Math.random() * 8, a: 0.05 + Math.random() * 0.03
-      });
-      this.flashNext = 4000 + Math.random() * 9000;
+      var f = WP.skyLight.populate(this.w, this.h, MAXCLOUD, MAXDROP, MAXFLAKE);
+      this.stars = f.stars;
+      this.drops = f.drops;
+      this.flakes = f.flakes;
+      this.clouds = f.clouds;
+      this.bands = f.bands;
+      this.flashNext = f.flashNext;
+      this.puffAt = -1e9;
     },
 
     loop: function () {
@@ -171,129 +177,280 @@
       });
     },
 
+    /* A new moon is a darker night than a full one and the panel may as well know it. The
+       Moon widget computes illumination locally from arithmetic, so this costs nothing and
+       needs no network. Recomputed once a minute; it moves slower than that. */
+    moonFactor: function (t) {
+      if (t - this.moonAt < 60) return this.moonK;
+      this.moonAt = t;
+      this.moonK = 1;
+      var m = WP.registry.moon;
+      if (m && typeof m.calc === "function") {
+        try { this.moonK = 0.45 + 0.55 * (m.calc(Date.now()).frac || 0); } catch (e) {}
+      }
+      return this.moonK;
+    },
+
+    /* One soft blob, rendered once and stamped for every cloud bank. Cheaper than a
+       radial gradient per bank per frame, and — the reason it exists — a bank built from
+       five overlapping lobes has a ragged edge, where a single gradient is visibly an
+       ellipse. Rebuilt on a slow throttle because the tint follows the light. */
+    makePuff: function (rgb, t) {
+      if (this.puff && t - this.puffAt < 45) return this.puff;
+      this.puffAt = t;
+      var s = 128, c = document.createElement("canvas");
+      if (!c || typeof c.getContext !== "function") return null;
+      c.width = s; c.height = s;
+      var g = c.getContext("2d");
+      if (!g) return null;
+      var lobes = [[0.50, 0.52, 0.30], [0.33, 0.57, 0.21], [0.67, 0.55, 0.23],
+                   [0.43, 0.43, 0.19], [0.61, 0.45, 0.17]];
+      for (var i = 0; i < lobes.length; i++) {
+        var cx = lobes[i][0] * s, cy = lobes[i][1] * s, r = lobes[i][2] * s;
+        var rg = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+        rg.addColorStop(0, "rgba(" + rgb + ",0.5)");
+        rg.addColorStop(0.55, "rgba(" + rgb + ",0.17)");
+        rg.addColorStop(1, "rgba(" + rgb + ",0)");
+        g.fillStyle = rg;
+        g.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+      this.puff = c;
+      return c;
+    },
+
     draw: function (dt, t) {
-      var x = this.ctx, w = this.w, h = this.h, sc = this.scene, i;
+      var x = this.ctx, w = this.w, h = this.h, sc = this.scene;
       x.clearRect(0, 0, w, h);
 
-      /* -- glow: the sun or the moon, wandering slowly so it cannot burn in -- */
-      if (sc === "clear" || sc === "partly") {
-        var gx = w * 0.80 + Math.sin(t * 0.013 + this.glowSeed) * w * 0.05;
-        var gy = h * 0.12 + Math.cos(t * 0.017 + this.glowSeed) * h * 0.03;
-        var gr = h * (this.night ? 0.34 : 0.46) * (1 + Math.sin(t * 0.05) * 0.04);
-        var g = x.createRadialGradient(gx, gy, 0, gx, gy, gr);
-        if (this.night) {
-          g.addColorStop(0, "rgba(190,196,255,0.13)");
-          g.addColorStop(1, "rgba(190,196,255,0)");
-        } else {
-          g.addColorStop(0, "rgba(255,178,84,0.17)");
-          g.addColorStop(1, "rgba(255,178,84,0)");
-        }
-        x.fillStyle = g;
-        x.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
-      }
+      var sun = this.sun || {};
+      var light = L.at(Date.now(), sun.rise, sun.set);
+      var cover = this.cover == null ? coverFor(sc, null) : this.cover;
+      var d = L.dim(light, cover);
+      var wind = L.wind(this.windKmh, this.windDir);
 
-      /* -- stars: clear/partly nights only -- */
-      if (this.night && (sc === "clear" || sc === "partly")) {
-        x.fillStyle = this.col.star;
-        for (i = 0; i < this.stars.length; i++) {
-          var s = this.stars[i];
-          var tw = 0.25 + 0.75 * Math.abs(Math.sin(t * s.sp + s.ph));
-          x.globalAlpha = tw * 0.5;
-          x.fillRect(s.x, s.y, s.r, s.r);
-        }
-        x.globalAlpha = 1;
-      }
-
-      /* -- cloud banks: partly/cloudy/rain-family carry them -- */
-      if (sc !== "clear" && sc !== "fog") {
-        for (i = 0; i < this.clouds.length; i++) {
-          var c = this.clouds[i];
-          if (sc === "partly" && i > 2) continue;   // partly = fewer banks
-          c.x += c.v * dt;
-          if (c.x - c.rx > w) c.x = -c.rx;
-          var cg = x.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.rx);
-          cg.addColorStop(0, "rgba(150,170,200," + c.a + ")");
-          cg.addColorStop(1, "rgba(150,170,200,0)");
-          x.fillStyle = cg;
-          x.save();
-          x.translate(c.x, c.y); x.scale(1, c.ry / c.rx); x.translate(-c.x, -c.y);
-          x.fillRect(c.x - c.rx, c.y - c.rx, c.rx * 2, c.rx * 2);
-          x.restore();
-        }
-      }
-
-      /* -- rain / drizzle: angled streaks -- */
+      this.paintWash(light, d, w, h);
+      this.paintGlow(light, d, t, w, h);
+      if (light.stars * d.stars > 0.02) this.paintStars(light, d, t, w, h);
+      if (sc !== "clear" && sc !== "fog") this.paintClouds(light, wind, dt, t, w, h, cover);
       if (sc === "rain" || sc === "drizzle" || sc === "storm") {
-        var n = sc === "drizzle" ? 55 : this.drops.length;
-        x.strokeStyle = this.col.rain;
-        x.lineWidth = 1.3;
-        x.globalAlpha = sc === "drizzle" ? 0.16 : 0.24;
+        this.paintRain(sc, wind, dt, w, h);
+      }
+      if (sc === "snow") this.paintSnow(wind, dt, t, w, h);
+      if (sc === "fog") this.paintFog(dt, w, h);
+      if (sc === "storm") this.paintFlash(dt, t, w, h);
+    },
+
+    /* The light pools at the bottom of the frame, because that is where the horizon is at
+       every hour except noon — and noon's wash is 0.036, which is as close to nothing as a
+       thing can be and still be there. */
+    paintWash: function (light, d, w, h) {
+      var a = light.wash * d.wash;
+      if (a < 0.004) return;
+      var c = light.sky.join(",");
+      var g = this.ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, "rgba(" + c + ",0)");
+      g.addColorStop(0.45, "rgba(" + c + "," + (a * 0.05).toFixed(4) + ")");
+      g.addColorStop(0.74, "rgba(" + c + "," + (a * 0.30).toFixed(4) + ")");
+      g.addColorStop(0.91, "rgba(" + c + "," + (a * 0.72).toFixed(4) + ")");
+      g.addColorStop(1, "rgba(" + c + "," + a.toFixed(4) + ")");
+      this.ctx.fillStyle = g;
+      this.ctx.fillRect(0, 0, w, h);
+    },
+
+    /* The sun or the moon: a bloom, never a disc. Its place in the frame comes from the
+       light model and therefore from the real sun, so over a day it genuinely rises in the
+       east and sets in the west. The small sine on top is not decoration — it is the
+       minute-scale motion that keeps a soft bright spot from ever being static pixels. */
+    paintGlow: function (light, d, t, w, h) {
+      var a = light.glowA * d.glow * (light.stars > 0.5 ? this.moonFactor(t) : 1);
+      if (a < 0.004) return;
+      var gx = w * light.glowX + Math.sin(t * 0.021 + this.seedPhase) * w * 0.018;
+      var gy = h * light.glowY + Math.cos(t * 0.017 + this.seedPhase) * h * 0.012;
+      var gr = Math.max(w, h) * light.glowR;
+      var c = light.glow.join(",");
+      var x = this.ctx;
+      var g = x.createRadialGradient(gx, gy, 0, gx, gy, gr);
+      g.addColorStop(0, "rgba(" + c + "," + a.toFixed(4) + ")");
+      g.addColorStop(0.32, "rgba(" + c + "," + (a * 0.64).toFixed(4) + ")");
+      g.addColorStop(0.68, "rgba(" + c + "," + (a * 0.22).toFixed(4) + ")");
+      g.addColorStop(1, "rgba(" + c + ",0)");
+      /* Low light spreads ALONG the horizon rather than sitting in a circle on it — a
+         sunrise is a band, not a spotlight. The stretch is a function of how low the bloom
+         is, so it grows in through dawn and flattens back out by noon. */
+      var sx = 1 + Math.max(0, light.glowY - 0.45) * 1.7;
+      x.save();
+      x.translate(gx, gy); x.scale(sx, 1); x.translate(-gx, -gy);
+      x.fillStyle = g;
+      x.fillRect(gx - gr, gy - gr, gr * 2, gr * 2);
+      x.restore();
+    },
+
+    /* Round, sized by magnitude, and the bright few carry a bloom. Twinkle is the product
+       of two slow incommensurate sines per star: slow enough that nobody catches one
+       doing it, unsynchronised enough that the field never pulses as a sheet. */
+    paintStars: function (light, d, t, w, h) {
+      var x = this.ctx, k = light.stars * d.stars, i, s, tw, a;
+      x.fillStyle = this.col.star;
+      for (i = 0; i < this.stars.length; i++) {
+        s = this.stars[i];
+        tw = 0.74 + 0.26 * Math.sin(t * s.sp + s.ph) * Math.sin(t * s.sp2 + s.ph2);
+        a = s.a * tw * k;
+        if (a < 0.008) continue;
+        if (s.m > 0.7) {
+          var br = s.r * 4.5;
+          var g = x.createRadialGradient(s.x, s.y, 0, s.x, s.y, br);
+          g.addColorStop(0, rgba(this.col.star, (a * 0.30).toFixed(4)));
+          g.addColorStop(1, rgba(this.col.star, 0));
+          x.fillStyle = g;
+          x.fillRect(s.x - br, s.y - br, br * 2, br * 2);
+          x.fillStyle = this.col.star;
+        }
+        x.globalAlpha = a;
         x.beginPath();
-        for (i = 0; i < n; i++) {
-          var d = this.drops[i];
-          var v = sc === "drizzle" ? d.v * 0.55 : d.v;
-          d.y += v * dt; d.x -= v * 0.18 * dt;
-          if (d.y > h) { d.y = -d.l; d.x = Math.random() * (w * 1.2); }
-          var ll = sc === "drizzle" ? d.l * 0.6 : d.l;
-          x.moveTo(d.x, d.y);
-          x.lineTo(d.x + ll * 0.18, d.y - ll);
+        x.arc(s.x, s.y, s.r, 0, 6.283);
+        x.fill();
+      }
+      x.globalAlpha = 1;
+    },
+
+    /* How many banks is the real cover percentage; how fast and how bright is depth. A
+       cloud is lit by the sky it hangs in, so the tint is the light model's own colour
+       pulled halfway to grey — dawn banks are warm, midnight banks are cold. */
+    paintClouds: function (light, wind, dt, t, w, h, cover) {
+      var n = L.banks(cover, MAXCLOUD);
+      if (!n) return;
+      var tint = [Math.round(light.sky[0] * 0.35 + 160 * 0.65),
+                  Math.round(light.sky[1] * 0.35 + 172 * 0.65),
+                  Math.round(light.sky[2] * 0.35 + 194 * 0.65)].join(",");
+      var puff = this.makePuff(tint, t);
+      if (!puff) return;
+      var x = this.ctx;
+      var drift = (wind.east >= 0 ? 1 : -1) * (0.45 + wind.force * 1.6);
+      for (var i = 0; i < n; i++) {
+        var c = this.clouds[i];
+        c.x += c.v * drift * dt;
+        if (c.x - c.rx > w) c.x = -c.rx;
+        if (c.x + c.rx < 0) c.x = w + c.rx;
+        var ry = c.rx * (0.30 + c.z * 0.10);
+        /* The puff sprite already carries a soft alpha falloff of its own (0.5 at a lobe
+           core), so this multiplies down: 0.11 here is about 0.09 on the glass. */
+        x.globalAlpha = 0.035 + c.z * 0.075;
+        x.drawImage(puff, c.x - c.rx, c.y - ry, c.rx * 2, ry * 2);
+      }
+      x.globalAlpha = 1;
+    },
+
+    /* Three depth bands, drawn as three batched paths so each can keep its own width and
+       brightness: near drops long, fast and bright, far ones short, slow and dim. The
+       slant is the real wind — direction and speed both — which is the single change that
+       stops rain looking like a screensaver, because a screensaver's rain is vertical. */
+    paintRain: function (sc, wind, dt, w, h) {
+      var x = this.ctx, thin = sc === "drizzle";
+      var n = thin ? 70 : (sc === "storm" ? MAXDROP : 120);
+      var vk = thin ? 0.5 : 1, lk = thin ? 0.5 : 1, ak = thin ? 0.62 : 1;
+      var band = [[], [], []], i, dr;
+      for (i = 0; i < n; i++) {
+        dr = this.drops[i];
+        var v = dr.v * vk;
+        dr.y += v * dt;
+        dr.x += v * wind.slant * dt;
+        if (dr.y > h) { dr.y = -dr.l; dr.x = Math.random() * w * 1.4 - w * 0.2; }
+        if (dr.x < -w * 0.25) dr.x += w * 1.5;
+        else if (dr.x > w * 1.25) dr.x -= w * 1.5;
+        band[dr.z < 0.34 ? 0 : (dr.z < 0.67 ? 1 : 2)].push(dr);
+      }
+      x.strokeStyle = this.col.rain;
+      for (var b = 0; b < 3; b++) {
+        if (!band[b].length) continue;
+        x.lineWidth = 0.7 + b * 0.5;
+        x.globalAlpha = (0.07 + b * 0.075) * ak;     /* ceiling 0.22 */
+        x.beginPath();
+        for (i = 0; i < band[b].length; i++) {
+          dr = band[b][i];
+          var l = dr.l * lk;
+          x.moveTo(dr.x, dr.y);
+          x.lineTo(dr.x - wind.slant * l, dr.y - l);
         }
         x.stroke();
-        x.globalAlpha = 1;
       }
+      x.globalAlpha = 1;
+    },
 
-      /* -- snow: drifting flakes with sway -- */
-      if (sc === "snow") {
-        x.fillStyle = this.col.snow;
-        x.globalAlpha = 0.5;
-        for (i = 0; i < this.flakes.length; i++) {
-          var f = this.flakes[i];
-          f.y += f.v * dt;
-          f.x += Math.sin(t * 0.8 + f.ph) * 14 * dt;
-          if (f.y > h) { f.y = -3; f.x = Math.random() * w; }
-          x.beginPath();
-          x.arc(f.x, f.y, f.r, 0, 6.283);
-          x.fill();
-        }
-        x.globalAlpha = 1;
+    /* Snow does not fall, it drifts: a slow sink, a sway of its own, and a sideways push
+       from the real wind. Depth again — the near flakes are twice the size and twice the
+       speed of the far ones, which is most of why a flat flake field looks like static. */
+    paintSnow: function (wind, dt, t, w, h) {
+      var x = this.ctx;
+      x.fillStyle = this.col.snow;
+      for (var i = 0; i < this.flakes.length; i++) {
+        var f = this.flakes[i];
+        f.y += f.v * dt;
+        f.x += (Math.sin(t * f.sw + f.ph) * (7 + f.z * 11)
+                + wind.east * wind.force * (14 + f.z * 30)) * dt;
+        if (f.y > h) { f.y = -4; f.x = Math.random() * w; }
+        if (f.x < -6) f.x = w + 5; else if (f.x > w + 6) f.x = -5;
+        x.globalAlpha = 0.07 + f.z * 0.14;           /* ceiling 0.21 */
+        x.beginPath();
+        x.arc(f.x, f.y, f.r, 0, 6.283);
+        x.fill();
       }
+      x.globalAlpha = 1;
+    },
 
-      /* -- fog: soft horizontal bands sliding sideways -- */
-      if (sc === "fog") {
-        for (i = 0; i < this.bands.length; i++) {
-          var b = this.bands[i];
-          b.x += b.v * dt;
-          if (b.x > w) b.x = 0;
-          var bg = x.createLinearGradient(0, b.y - b.hh, 0, b.y + b.hh);
-          bg.addColorStop(0, "rgba(154,168,184,0)");
-          bg.addColorStop(0.5, "rgba(154,168,184," + b.a + ")");
-          bg.addColorStop(1, "rgba(154,168,184,0)");
-          x.fillStyle = bg;
-          /* two copies so the band wraps seamlessly */
-          x.fillRect(b.x - w, b.y - b.hh, w, b.hh * 2);
-          x.fillRect(b.x, b.y - b.hh, w, b.hh * 2);
-        }
+    /* Fog lies on the ground. The old version put four bands across the middle of the
+       frame, evenly spaced, which is not fog — it is venetian blinds. A base gradient
+       rising from the bottom edge plus bands that all live in the lower third is. */
+    paintFog: function (dt, w, h) {
+      var x = this.ctx, c = this.col.fog, i;
+      var base = x.createLinearGradient(0, h * 0.5, 0, h);
+      base.addColorStop(0, rgba(c, 0));
+      base.addColorStop(0.55, rgba(c, 0.035));
+      base.addColorStop(1, rgba(c, 0.10));
+      x.fillStyle = base;
+      x.fillRect(0, h * 0.5, w, h * 0.5);
+      for (i = 0; i < this.bands.length; i++) {
+        var b = this.bands[i];
+        b.x += b.v * dt;
+        if (b.x > w) b.x = 0;
+        var g = x.createLinearGradient(0, b.y - b.hh, 0, b.y + b.hh);
+        g.addColorStop(0, rgba(c, 0));
+        g.addColorStop(0.5, rgba(c, b.a));
+        g.addColorStop(1, rgba(c, 0));
+        x.fillStyle = g;
+        /* two copies so the band wraps seamlessly */
+        x.fillRect(b.x - w, b.y - b.hh, w, b.hh * 2);
+        x.fillRect(b.x, b.y - b.hh, w, b.hh * 2);
       }
+    },
 
-      /* -- storm: everything rain does, plus a dim flash every few seconds -- */
-      if (sc === "storm") {
-        this.flashNext -= dt * 1000;
-        if (this.flashNext <= 0) {
-          this.flashAt = t;
-          this.flashNext = 6000 + Math.random() * 12000;
-        }
-        var since = (t - this.flashAt) * 1000;
-        if (since < 260) {
-          x.fillStyle = "rgba(210,220,255," + (0.13 * (1 - since / 260)) + ")";
-          x.fillRect(0, 0, w, h);
-        }
+    /* Lightning lights the CLOUD, so the flash is brightest at the top of the frame and
+       has all but gone by the bottom — a flat white rectangle over the whole panel is a
+       camera effect, not weather. Strikes come in ones and twos, as they do. */
+    paintFlash: function (dt, t, w, h) {
+      this.flashNext -= dt * 1000;
+      if (this.flashNext <= 0) {
+        this.flashAt = t;
+        this.flashN = Math.random() < 0.45 ? 2 : 1;
+        this.flashNext = 6000 + Math.random() * 12000;
       }
+      var since = (t - this.flashAt) * 1000;
+      var k = 0;
+      if (since < 240) k = 1 - since / 240;
+      else if (this.flashN > 1 && since > 380 && since < 560) k = (560 - since) / 180 * 0.6;
+      if (k <= 0.01) return;
+      var g = this.ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, "rgba(214,224,255," + (0.14 * k).toFixed(4) + ")");
+      g.addColorStop(0.5, "rgba(214,224,255," + (0.05 * k).toFixed(4) + ")");
+      g.addColorStop(1, "rgba(214,224,255,0)");
+      this.ctx.fillStyle = g;
+      this.ctx.fillRect(0, 0, w, h);
     },
 
     onOpen: function () {}, onClose: function () {}
   };
 
   sky.sceneFor = sceneFor;
+  sky.coverFor = coverFor;
   WP.sky = sky;
   WP.register(sky);
 })();

@@ -151,20 +151,34 @@ test("every documented WMO code lands in the scene its icon promises", function 
   assert.equal(sky.sceneFor(1234), "clear", "unknown codes degrade to the quiet scene");
 });
 
-test("the sky honours its settings switch, and ships OFF", function () {
-  /* It shipped on. The scene drew its specks inside the cards as well as behind them, and
-     at 2-4 m a scatter of dim dots on a black panel reads as dust on the glass or as dead
-     pixels rather than as weather — on a display where a dead pixel is a thing that
-     actually happens — while animating 24/7 on a panel whose rule is that lit pixels are
-     data. The default is the decision; the switch is still there for anyone who wants it. */
+test("the sky honours its settings switch, and ships ON", function () {
+  /* It shipped OFF for a while: the old scene was 110 identical one-pixel rectangles and
+     at 2-4 m that reads as dust on the glass or as dead pixels rather than as weather.
+     What it draws now is a magnitude-distributed starfield under light interpolated from
+     the day's real sunrise and sunset, which is the whole "window, not a readout" of this
+     product — so the default went back. The switch is the thing that must not rot: off has
+     to mean the loop is not running, not merely that it is drawing less. */
   var a = h.createApp({});
-  assert.equal(a.WP.settings.get("sky"), false, "sky ships on");
+  assert.equal(a.WP.settings.get("sky"), true, "sky ships off");
+  assert.equal(a.registry.sky.on(), true, "the layer is not running at its own default");
   a.WP.panels.open("settings");
   var row = a.qs('[data-panel="settings"] [data-act="sky"]');
   assert.ok(row, "settings offers no sky switch");
-  assert.equal(row.getAttribute("aria-checked"), "false");
+  assert.equal(row.getAttribute("aria-checked"), "true");
   a.tap(row);
-  assert.equal(a.WP.settings.get("sky"), true, "the switch does not persist the setting");
+  assert.equal(a.WP.settings.get("sky"), false, "the switch does not persist the setting");
+  assert.equal(a.registry.sky.on(), false, "the switch is off but the layer still runs");
+  a.tap(a.qs('[data-panel="settings"] [data-act="sky"]'));
+  assert.equal(a.registry.sky.on(), true, "the switch will not turn the layer back on");
+});
+
+test("a saved OFF survives a reboot — the switch is not overwritten by the new default", function () {
+  /* The default flipped from false to true. `saved.sky !== false` is what keeps somebody
+     who deliberately turned it off from having it turned back on by an app update. */
+  var a = h.createApp({
+    storage: { "inky.settings.v2": JSON.stringify({ sky: false }) }
+  });
+  assert.equal(a.WP.settings.get("sky"), false, "a saved OFF was overwritten by the default");
 });
 
 /* ---------------- the home tiles ---------------- */
