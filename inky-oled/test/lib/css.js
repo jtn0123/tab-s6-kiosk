@@ -24,8 +24,10 @@
 var fs = require("node:fs");
 var path = require("node:path");
 
-var CSS_PATH = path.join(__dirname, "..", "..", "assets", "style.css");
-var RAW = fs.readFileSync(CSS_PATH, "utf8");
+var SHEETS = ["style.css", "style-home.css", "style-panels.css", "style-theme.css"];
+var RAW = SHEETS.map(function (n) {
+  return fs.readFileSync(path.join(__dirname, "..", "..", "assets", n), "utf8");
+}).join("\n");
 
 /* Comments first: this stylesheet's prose quotes plenty of old values, and a test that
    reads authored text must not mistake an explanation for a declaration. */

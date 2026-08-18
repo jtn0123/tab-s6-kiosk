@@ -81,7 +81,7 @@ test("the icons carry no colour of their own — every colour is a style.css tok
   assert.equal(/#[0-9a-fA-F]{3,8}\b/.test(src), false,
     "wx-icons.js hardcodes a hex colour — the palette's one home is style.css");
 
-  var css = h.readAsset("style.css");
+  var css = h.readAsset("style.css") + h.readAsset("style-theme.css");
   var used = {};
   var m, re = /var\(--ic-([a-z-]+)\)/g;
   while ((m = re.exec(src))) used[m[1]] = true;

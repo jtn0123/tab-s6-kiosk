@@ -133,7 +133,10 @@ now, and each was written by first reintroducing the mutation and watching it fa
 
 ## What it shows
 
-Twelve widgets, all interactive — tap a card for its full-screen detail panel. The icons are
+Twelve widgets, all interactive — tap a card for its full-screen detail panel, **swipe
+left/right inside any panel** to slide between screens (wrap-around, position dots), and an
+optional **Cycle screens** switch turns the whole panel into an InkyPi-style playlist that
+slides through the content screens on a dwell timer and returns to the dashboard. The icons are
 the app's own coloured SVG (no emoji fonts), and an animated **sky layer** behind the dashboard
 draws what the weather is doing: stars on a clear night, rain, snow, fog, drifting cloud banks,
 a dim flash in a storm. Portrait and landscape both render a full, dead-space-free layout.
@@ -153,8 +156,8 @@ a dim flash in a storm. Portrait and landscape both render a full, dead-space-fr
 - **Date** — month calendar with today ringed, prev/next month, day-of-year
 - **News** — a one-line rotating headline ticker (RSS/Atom through the app shell — feeds
   never need CORS), full list in its panel; defaults to BBC World + NPR, configurable
-- **Settings** — units, clock format, seconds, sky animation, burn-in, per-widget show/hide;
-  persisted
+- **Settings** — units, clock format, seconds, sky animation, screen cycling, burn-in,
+  per-widget show/hide; persisted
 
 Weather comes from **Open-Meteo — no API key, no account.**
 

@@ -32,23 +32,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Base64;
 
 /**
  * Fullscreen kiosk shell for the wall panel dashboard.
@@ -257,7 +243,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        fetchPool.shutdownNow();
+        bridgeFetch.shutdown();
         if (web != null) web.destroy();
         super.onDestroy();
     }
@@ -278,99 +264,11 @@ public class MainActivity extends Activity {
         return (host < 0 ? url : url.substring(0, host)) + "/…";
     }
 
-    private final ExecutorService fetchPool = Executors.newFixedThreadPool(3);
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private volatile Set<String> allowedOrigins = null;   // null until the page locks it
-
-    private static String originOf(URL u) {
-        int port = u.getPort();
-        String o = u.getProtocol().toLowerCase() + "://" + u.getHost().toLowerCase();
-        if (port != -1 && port != u.getDefaultPort()) o += ":" + port;
-        return o;
-    }
-
-    /** Runs on the fetch pool. Validates every hop, then posts the result into the page. */
-    private void doFetch(String id, String url, String headersJson, String method, String body) {
-        int status = -1;
-        String errText = null;
-        byte[] payload = null;
-        try {
-            Set<String> allowed = allowedOrigins;
-            if (allowed == null) throw new Exception("no origins registered");
-            boolean post = "POST".equalsIgnoreCase(method);
-            String target = url;
-            for (int hop = 0; hop < 4; hop++) {
-                URL u = new URL(target);
-                String proto = u.getProtocol().toLowerCase();
-                if (!proto.equals("http") && !proto.equals("https"))
-                    throw new Exception("scheme not allowed");
-                if (!allowed.contains(originOf(u)))
-                    throw new Exception("origin not allowed: " + originOf(u));
-
-                HttpURLConnection c = (HttpURLConnection) u.openConnection();
-                c.setInstanceFollowRedirects(false);       // hops are validated by hand
-                c.setConnectTimeout(8000);
-                c.setReadTimeout(8000);
-                c.setRequestMethod(post ? "POST" : "GET");
-                JSONObject h = new JSONObject(headersJson == null ? "{}" : headersJson);
-                for (Iterator<String> it = h.keys(); it.hasNext(); ) {
-                    String k = it.next();
-                    String kl = k.toLowerCase();
-                    if (kl.equals("authorization") || kl.equals("accept")
-                            || kl.equals("content-type"))
-                        c.setRequestProperty(k, h.optString(k, ""));
-                }
-                if (post) {
-                    byte[] out = (body == null ? "" : body).getBytes("UTF-8");
-                    if (out.length > 8192) throw new Exception("body too large");
-                    c.setDoOutput(true);
-                    c.getOutputStream().write(out);
-                }
-                status = c.getResponseCode();
-                if (status >= 300 && status < 400) {
-                    String loc = c.getHeaderField("Location");
-                    c.disconnect();
-                    if (loc == null) throw new Exception("redirect without location");
-                    target = new URL(u, loc).toString();
-                    continue;                              // re-validated at loop top
-                }
-                InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
-                ByteArrayOutputStream buf = new ByteArrayOutputStream();
-                if (in != null) {
-                    byte[] chunk = new byte[16384];
-                    int n, total = 0;
-                    while ((n = in.read(chunk)) != -1) {
-                        total += n;
-                        if (total > 1536 * 1024) throw new Exception("response too large");
-                        buf.write(chunk, 0, n);
-                    }
-                    in.close();
-                }
-                c.disconnect();
-                payload = buf.toByteArray();
-                break;
-            }
-            if (payload == null) throw new Exception("too many redirects");
-        } catch (Exception e) {
-            errText = String.valueOf(e.getMessage()).replaceAll("[^\\w .:/-]", " ");
-        }
-
-        final String js;
-        if (errText != null) {
-            js = "window.WP&&WP.bridgeFetch&&WP.bridgeFetch._reject('" + id + "','"
-                    + errText + "')";
-        } else {
-            String b64 = Base64.encodeToString(payload, Base64.NO_WRAP);
-            js = "window.WP&&WP.bridgeFetch&&WP.bridgeFetch._resolve('" + id + "',"
-                    + status + ",'" + b64 + "')";
-        }
-        mainHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                if (web != null) web.evaluateJavascript(js, null);
-            }
-        });
-    }
+    /** The page's network access, fenced; see BridgeFetch. */
+    private final BridgeFetch bridgeFetch = new BridgeFetch(new BridgeFetch.WebViewSupplier() {
+        @Override
+        public WebView get() { return web; }
+    });
 
     /* ====================================================================================
        JS BRIDGE
@@ -413,59 +311,20 @@ public class MainActivity extends Activity {
                     .edit().putString(key, value).apply();
         }
 
-        /* ================================================================================
-           NETWORK FETCH THROUGH THE SHELL
-           The page is file:// so its origin is null: any request that carries an auth
-           header dies in a CORS preflight the target never answers (Home Assistant), and
-           most RSS feeds send no CORS headers at all. This bypasses CORS by doing the
-           request natively - which is exactly why it is fenced:
-
-             * the ORIGIN ALLOWLIST is fixed once per page load, first call wins. app.js
-               registers the origins derived from config.js at boot; anything attaching
-               later (the userdebug devtools socket is open on this ROM) cannot widen it.
-             * GET and POST only, http(s) only, and every redirect hop is re-checked
-               against the allowlist before it is followed.
-             * response capped at 1.5 MB, request body at 8 KB, 8 s per hop.
-             * only Authorization / Accept / Content-Type headers pass through.
-
-           Results go back asynchronously via evaluateJavascript into WP.bridgeFetch -
-           a synchronous bridge call would park the page's JS thread on the network.
-           ================================================================================ */
-
+        /* Network through the shell — the machinery, the fencing and the WHY live in
+           BridgeFetch.java; these two are the @JavascriptInterface surface only. */
         @JavascriptInterface
         public boolean fetchOrigins(String originsJson) {
-            if (allowedOrigins != null) return false;      // first write wins
-            Set<String> set = new HashSet<>();
-            try {
-                JSONArray a = new JSONArray(originsJson);
-                for (int i = 0; i < a.length(); i++) {
-                    String o = a.optString(i, "").toLowerCase();
-                    if (o.startsWith("http://") || o.startsWith("https://")) set.add(o);
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "fetchOrigins rejected: " + e);
-                return false;
-            }
-            allowedOrigins = set;
-            Log.i(TAG, "bridge fetch origins locked: " + set.size());
-            return true;
+            return bridgeFetch.lockOrigins(originsJson);
         }
 
         @JavascriptInterface
-        public void httpFetch(final String id, final String url,
-                              final String headersJson, final String method,
-                              final String body) {
-            if (id == null || !id.matches("[A-Za-z0-9_-]{1,32}")) return;
-            fetchPool.execute(new Runnable() {
-                @Override
-                public void run() {
-                    doFetch(id, url, headersJson, method, body);
-                }
-            });
+        public void httpFetch(String id, String url, String headersJson,
+                              String method, String body) {
+            bridgeFetch.enqueue(id, url, headersJson, method, body);
         }
 
-
-        /* ---- battery: sticky ACTION_BATTERY_CHANGED needs no permission ---- */
+    /* ---- battery: sticky ACTION_BATTERY_CHANGED needs no permission ---- */
         private JSONObject battery() throws Exception {
             JSONObject o = new JSONObject();
             Intent i = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));

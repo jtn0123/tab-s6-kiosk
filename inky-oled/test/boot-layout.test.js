@@ -49,8 +49,8 @@ test("every widget registers and initialises", function () {
   var names = Object.keys(app.registry).sort();
   /* sky is registered but is not a WIDGET: it has no card, no panel and no show/hide
      switch — it is the background layer, initialised through the same registry. */
-  assert.deepEqual(names, ["air", "calendar", "clock", "daily", "hourly", "moon", "news",
-                           "sensors", "settings", "sky", "system", "timer", "weather"]);
+  assert.deepEqual(names, ["air", "calendar", "carousel", "clock", "daily", "hourly", "moon",
+                           "news", "sensors", "settings", "sky", "system", "timer", "weather"]);
   /* each one has painted something into its card */
   assert.notEqual(app.text("time"), "--:--");
   assert.notEqual(app.text("date").trim(), "");

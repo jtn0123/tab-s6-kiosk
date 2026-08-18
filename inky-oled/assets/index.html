@@ -39,6 +39,9 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' http: https:; base-uri 'none'; form-action 'none'">
 <title>Wall Panel</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style-home.css">
+<link rel="stylesheet" href="style-panels.css">
+<link rel="stylesheet" href="style-theme.css">
 </head>
 <body>
 
@@ -334,6 +337,9 @@
 <!-- transient confirmation for actions that have no other visible result -->
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+<!-- position dots: which screen of the carousel you are on; decorative, fades out -->
+<div id="dots" aria-hidden="true"></div>
+
 <!-- Countdown alarm overlay — full-screen so it is impossible to miss across the room.
      data-act on the overlay itself as well as on the button, for two reasons. First, both
      have to be on the pointer delegation: the Dismiss button used to carry its own click
@@ -369,6 +375,8 @@
      the fact that every one of them exists. -->
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="app-view.js"></script>
+<script src="app-touch.js"></script>
 <script src="wx-ui.js"></script>
 <script src="wx-icons.js"></script>
 <script src="wx-clock.js"></script>
@@ -376,13 +384,16 @@
 <script src="wx-weather.js"></script>
 <script src="wx-hourly.js"></script>
 <script src="wx-daily.js"></script>
+<script src="wx-sensors-demo.js"></script>
 <script src="wx-sensors.js"></script>
+<script src="wx-sensors-panel.js"></script>
 <script src="wx-system.js"></script>
 <script src="wx-moon.js"></script>
 <script src="wx-air.js"></script>
 <script src="wx-calendar.js"></script>
 <script src="wx-news.js"></script>
 <script src="wx-settings.js"></script>
+<script src="wx-carousel.js"></script>
 <script src="wx-sky.js"></script>
 </body>
 </html>

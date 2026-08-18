@@ -1,0 +1,298 @@
+/* Wall panel dashboard — THE COLOUR LAYER AND LANDSCAPE.
+   Icon/temperature/AQI palettes, the sky canvas layer, charts, the carousel slide,
+   the new widgets' looks, and the landscape grid. Tokens it defines extend the ramp
+   in style.css, which loads first. */
+
+/* ---------- toast ----------
+   Both screens are full layouts with no spare band, so a floating toast is always over
+   something and the only real choice is *what*. Two earlier positions both picked content:
+   5.5vh printed through the panel subtitle, and 11.5vh cleared the header only to land on
+   the first content row instead — in the HA panel, on the entity chip row the user had just
+   tapped, and in Settings across the "WIDGETS" label.
+   So it takes over the one line of throwaway text in whichever context it appears, and that
+   line fades out underneath it: the home status line ("Updated 3:41 PM") when the dashboard
+   is showing, an open panel's subtitle when one is up. Both are re-rendered from state, so
+   nothing is lost by hiding them for 1.8s, and no control or datum is ever covered.
+     home   0.9-5.5vh, entirely inside the 4.2vh topbar band (clock starts at ~5.95vh)
+     panel  6.0-10.6vh, the subtitle line plus the body's top padding (content at ~11.9vh)
+   max-width keeps a long message clear of the gear button and the panel's close button. */
+.toast {
+  position: fixed;
+  left: 50%;
+  top: 0.9vh;
+  transform: translate(-50%, -1.5vh);
+  max-width: 76vw;
+  background: #141414;
+  border: 1px solid var(--card-line2);
+  border-radius: 1.2vh;
+  padding: 1.05vh 3vw;
+  font-size: var(--fs-body);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-ui) var(--ease), transform var(--dur-ui) var(--ease);
+  z-index: 90;
+}
+body.panel-open .toast { top: 6vh; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* The line the toast stands on gets out of the way rather than being painted over. It
+   vanishes instantly (transition: none) and only fades back afterwards: if it faded out over
+   the same 200ms the toast fades in, every frame in between would show one legible through
+   the other — which is the collision this position exists to avoid. */
+#status, .panel-sub { transition: opacity var(--dur-ui) var(--ease) var(--dur-press); }
+body.toasting #status,
+body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
+
+/* ---------- countdown alarm ----------
+   Fully opaque, not rgba(0,0,0,.92): at 92% the whole dashboard stayed legible behind the
+   alarm and the countdown's preset chips read straight through the Dismiss button, so the
+   one thing on screen that has to be unmistakable from across a room was competing with the
+   layout it had covered. Opaque black also costs nothing on OLED — those pixels are off. */
+.alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  opacity: 0;
+  visibility: hidden;
+  /* transform is the burn-in drift: this layer is on the same cycle as the dashboard and
+     the panels, because an alarm has 60s of unattended life before the idle unwind takes
+     it down and a bright red title should not spend that on fixed pixels */
+  transition: opacity var(--dur-ui) var(--ease), transform var(--dur-drift) ease-in-out;
+}
+.alarm.show { opacity: 1; visibility: visible; }
+.alarm-inner { text-align: center; padding: 0 8vw; width: 100%; }
+.alarm-title {
+  font-size: var(--fs-hero);
+  font-weight: 300;
+  color: var(--danger);
+  animation: pulse var(--dur-pulse) infinite;
+}
+.alarm-sub { font-size: var(--fs-body-lg); color: var(--dim); margin: 1.4vh 0 3vh; }
+.alarm-flash { animation: pulse var(--dur-pulse) infinite; }
+
+/* ============================================================================
+   LANDSCAPE FALLBACK
+   The device currently renders portrait, but if it is ever rotated the panel must not
+   look broken: two columns, shorter type, same touch targets.
+   ============================================================================ */
+
+/* ============================= THE COLOUR LAYER =============================
+   The app was monochrome because Android's emoji font made colour uncontrollable, not
+   because the panel wanted to be grey. The icons are our own SVG now, so colour is ours
+   to spend — and it is spent by meaning, not decoration: sun things are warm, rain
+   things are blue, snow is ice, AQI wears the EPA's own scale, and temperature always
+   reads hot=warm-colour / cold=blue. Text stays monochrome; colour marks DATA. */
+:root {
+  --ic-sun:      #ffcf54;
+  --ic-ray:      #ffb347;
+  --ic-moon:     #e9e5ff;
+  --ic-moon-dk:  #232a3a;   /* the unlit part of the moon disc */
+  --ic-star:     #cfd4ff;
+  --ic-cloud:    #aebfd4;
+  --ic-cloud-dk: #71829a;
+  --ic-rain:     #5aa9ff;
+  --ic-snow:     #d6efff;
+  --ic-bolt:     #ffd75a;
+  --ic-fog:      #9aa8b8;
+
+  --temp-hot:    #ff8a50;
+  --temp-warm:   #ffc954;
+  --temp-cold:   #6db3f2;
+
+  /* EPA AQI bands — this scale is a public convention, so the hues are theirs */
+  --aqi-good:    #6fdc7f;
+  --aqi-mod:     #ffd75a;
+  --aqi-usg:     #ffa04d;
+  --aqi-bad:     #ff6d6d;
+  --aqi-vbad:    #b48cff;
+  --aqi-haz:     #d97a7a;
+}
+
+/* the sky canvas sits between the body background and the dashboard */
+#sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+#drift { position: relative; z-index: 1; }
+
+/* An icon is sized by the type ramp exactly like the glyph it replaced: 1em-ish, from
+   the container's font-size. Slightly over 1em because SVG art carries its own internal
+   padding where a font glyph's ink box does not. */
+.wxi { width: 1.18em; height: 1.18em; display: block; margin: 0 auto; }
+.big-icon .wxi, .wx-icon .wxi { width: 1.1em; height: 1.1em; }
+
+/* ---- AQI colour classes: text takes the band's hue ---- */
+.aqi-good { color: var(--aqi-good); }
+.aqi-mod  { color: var(--aqi-mod); }
+.aqi-usg  { color: var(--aqi-usg); }
+.aqi-bad  { color: var(--aqi-bad); }
+.aqi-vbad { color: var(--aqi-vbad); }
+.aqi-haz  { color: var(--aqi-haz); }
+.aqi-na   { color: var(--dimmer); }
+.aqi-spark .spark-line { stroke: currentColor; }
+.aqi-spark .spark-fill { fill: currentColor; opacity: 0.10; }
+
+/* ---- hourly panel chart ----
+   Ticks and hi/lo callouts are HTML over the SVG so their sizes come off the ramp like
+   every other label; the SVG carries only geometry. */
+.hchart-wrap { position: relative; margin: 0.6vh 0 0.2vh; }
+.hchart { width: 100%; display: block; }
+.hc-bars rect { fill: var(--ic-rain); opacity: 0.55; }
+.hc-hi, .hc-lo {
+  position: absolute; transform: translate(-50%, -100%);
+  font-size: var(--fs-caption); font-variant-numeric: tabular-nums;
+}
+.hc-hi { color: var(--temp-warm); }
+.hc-lo { color: var(--temp-cold); transform: translate(-50%, 0); }
+.hc-ticks { position: relative; height: 2vh; }
+.hc-ticks span {
+  position: absolute; transform: translateX(-50%);
+  font-size: var(--fs-caption); color: var(--dimmer);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* rain-chance figures wear rain's colour once they mean something (>= 30%) */
+.hr-p.wet, .hrow-p.wet { color: var(--ic-rain); }
+/* daily lows read cool — hi stays primary text */
+.fc-lo { color: var(--temp-cold); }
+
+/* ---- moon ---- */
+.mini-big.moon-row { display: flex; align-items: center; gap: 1.6vw; }
+.moon-mini { width: 1.05em; height: 1.05em; flex: 0 0 auto; }
+.moon-hero { display: flex; align-items: center; gap: 5vw; padding: 1.2vh 0 0.6vh; }
+.moon-disc {
+  width: 15vh; height: 15vh; flex: 0 0 auto;
+  filter: drop-shadow(0 0 2.5vh rgba(233, 229, 255, 0.16));
+}
+
+/* ---- screen-to-screen slide (the carousel) ----
+   A mounted-but-not-open panel normally rests 2.4vh BELOW its place (the open is a rise);
+   with a slide-from class it rests to the SIDE instead, so the same is-open transition
+   plays as a horizontal slide. The exit classes need is-open's specificity beaten by one
+   extra class, which is exactly what they are. */
+.panel.slide-from-r { transform: translateX(9vw); }
+.panel.slide-from-l { transform: translateX(-9vw); }
+.panel.is-open.slide-exit-l { opacity: 0; transform: translateX(-9vw); pointer-events: none; }
+.panel.is-open.slide-exit-r { opacity: 0; transform: translateX(9vw); pointer-events: none; }
+
+/* position dots, shown briefly after a screen change */
+#dots {
+  position: fixed;
+  left: 50%; bottom: 1.6vh;
+  transform: translateX(-50%);
+  display: flex; gap: 1.2vw;
+  z-index: 60;
+  opacity: 0;
+  transition: opacity var(--dur-ui) var(--ease);
+  pointer-events: none;
+}
+#dots.show { opacity: 1; }
+#dots .dot {
+  width: 1vh; height: 1vh; border-radius: 50%;
+  background: var(--card-line2);
+}
+#dots .dot.on { background: var(--accent); }
+
+/* ---- news ticker ---- */
+.news-card { flex-direction: row; align-items: center; gap: 2.2vw; padding: var(--pad-row) 2.2vw; }
+.news-line { display: flex; min-width: 0; flex: 1 1 auto; align-items: baseline; gap: 1.6vw; }
+.news-t {
+  min-width: 0; flex: 1 1 auto;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: var(--fs-body);
+}
+.news-meta { flex: 0 0 auto; color: var(--dimmer); font-size: var(--fs-caption); }
+.news-row { padding: 1.05vh 0; border-bottom: 1px solid var(--card-line); }
+.news-row:last-child { border-bottom: none; }
+.news-row-t { font-size: var(--fs-body); }
+.news-row-m { font-size: var(--fs-caption); color: var(--dimmer); margin-top: 0.2vh; }
+
+/* ---- calendar ---- */
+.cal-nav { display: flex; align-items: center; justify-content: space-between; gap: 2vw; margin: 0.4vh 0 0.8vh; }
+.cal-title { font-size: var(--fs-title); font-weight: 300; text-align: center; flex: 1 1 auto; }
+.cal-nav .btn { flex: 0 0 auto; min-width: 12vw; }
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 0.35vh 0; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.cal-dow {
+  font-size: var(--fs-label); color: var(--dimmer);
+  letter-spacing: var(--label-track); font-weight: var(--label-weight);
+  padding-bottom: 0.5vh;
+}
+.cal-day { font-size: var(--fs-body-lg); padding: 1.05vh 0; border-radius: 1vh; }
+.cal-day.out { color: var(--dimmer); opacity: 0.45; }
+.cal-day.today { background: rgba(109, 179, 242, 0.16); color: var(--accent); font-weight: 600; }
+
+/* ============================= LANDSCAPE =============================
+   The tablet can hang either way. Portrait is a single column; landscape is a real
+   two-column composition, not the portrait column squeezed — the old fallback left the
+   lower-left third of the screen black and clipped the sensors card off the bottom.
+
+   Areas, not auto-flow: the clock anchors top-left, the weather trio stacks on the
+   right where the eye lands from a doorway, the six small tiles fill under the clock,
+   and Home Assistant takes the full base line. Every row is an fr of the same grid, so
+   the composition fills exactly 100% of the screen with zero dead space.
+
+   A vh is worth ~1.6x less across the short axis, so the type ramp is restated once at
+   ~1.45x — under parity on purpose: the grid rows are sized by the cards' own
+   content, and parity-sized chips made the rows total ~40px more than the screen. */
+@media (orientation: landscape) {
+  :root {
+    --fs-caption:    2.05vh;
+    --fs-label:      2.3vh;
+    --fs-note:       2.7vh;
+    --fs-body:       3.1vh;
+    --fs-body-lg:    3.55vh;
+    --fs-title-sm:   4.2vh;
+    --fs-title:      4.95vh;
+    --fs-hero:       7.5vh;
+    --fs-display:    11vh;
+    --fs-display-xl: 15.2vh;
+  }
+
+  #drift { padding: 1.3vh 1.8vw; }
+
+  #home {
+    display: grid;
+    grid-template-columns: 1fr 1.22fr;
+    grid-template-rows: 1.15fr 1fr 1fr auto 1.2fr;
+    grid-template-areas:
+      "clock   weather"
+      "row3a   hourly"
+      "row3b   daily"
+      "news    news"
+      "sensors sensors";
+    gap: 1.1vh 1.8vw;
+  }
+  #home > .card[data-widget="clock"]   { grid-area: clock; justify-content: center; }
+  #home > .card[data-widget="weather"] { grid-area: weather; }
+  #home > .card[data-widget="hourly"]  { grid-area: hourly; }
+  #home > .card[data-widget="daily"]   { grid-area: daily; }
+  #home > .card[data-widget="sensors"] { grid-area: sensors; }
+  #home > .card[data-widget="news"]    { grid-area: news; }
+  #home > .row3:nth-of-type(1) { grid-area: row3a; }
+  #home > .row3:nth-of-type(2) { grid-area: row3b; }
+  #home > .empty { grid-area: 1 / 1 / -1 / -1; }
+
+  /* tiles stretch to their grid row instead of hugging content */
+  .row3 { align-items: stretch; }
+  .card.mini { justify-content: center; }
+
+  .hr { min-width: 6vw; }
+  .sensors { grid-template-columns: repeat(5, 1fr); }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid.cols3 { grid-template-columns: repeat(6, 1fr); }
+  .wc-grid { grid-template-columns: repeat(5, 1fr); }
+  .switch { width: 6vw; }
+  .switch.on span { transform: translateX(calc(6vw - 3.6vh)); }
+  .sensor-sw { width: 2.6vw; }
+  .sensor.on .sensor-sw span { transform: translateX(calc(2.6vw - 2vh)); }
+  .moon-disc { width: 22vh; height: 22vh; }
+}

@@ -22,6 +22,15 @@ nine files rather than a directory. `index.html` pins their load order and
 
 ---
 
+## The 500-line file budget
+
+No shipped source file exceeds 500 lines (enforced by a test). The seams: `app.js`
+(bridge, settings, store) → `app-view.js` (formatting, layout, drift) → `app-touch.js`
+(panels, gestures, idle, boot); `wx-sensors-demo.js` (simulator) → `wx-sensors.js`
+(state + live feed) → `wx-sensors-panel.js` (detail panel); four stylesheets
+(`style.css` tokens+base, `-home`, `-panels`, `-theme`); `MainActivity.java` +
+`BridgeFetch.java`.
+
 ## The twelve widgets
 
 Every widget is a plugin object registered with `WP.register()`: `init()` at boot with its own
@@ -33,6 +42,20 @@ locally from the mean synodic month; the disc in the tile and the panel share on
 path with the icon set), **Air** (Open-Meteo's air-quality endpoint, same CORS posture as the
 weather fetch; the AQI number wears the EPA band colours), and **Date** (a month grid computed
 locally, today ringed).
+
+## Screens, swipes and the playlist
+
+Every panel doubles as a full screen. A horizontal swipe inside one slides to its
+neighbour (`WP.panels.swap`: the outgoing screen exits sideways while the incoming one
+enters from the opposite edge, and the stack is REPLACED, so Android back always returns
+to the dashboard). Wrap-around at both ends, position dots that fade after a moment, and
+swipes that begin inside a horizontally scrollable strip belong to that strip.
+
+The optional **Cycle screens** switch is InkyPi's playlist on glass: every dwell (config
+`cycle: { seconds: … }`, clamped 8–60 s, default 20) the panel slides to the next content
+screen — tools (Settings, Device, Timer) are never cycled into — and after the last one
+it returns to the dashboard. Any touch pauses the playlist for 45 s, a ringing alarm
+blocks it entirely, and a tool screen opened by hand is never taken away.
 
 ## The bridge fetch and the News widget
 

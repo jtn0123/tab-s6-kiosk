@@ -86,10 +86,31 @@ test("the real config boots the dashboard", function () {
   var app = h.createApp({ config: loadConfig() });
   assert.deepEqual(app.logs.error, []);
   assert.deepEqual(app.logs.warn, []);
-  assert.equal(Object.keys(app.registry).length, 13);   // 12 widgets + the sky layer
+  assert.equal(Object.keys(app.registry).length, 14);   // 12 widgets + sky + carousel
 });
 
 /* ---------------- packaging invariants ---------------- */
+
+test("no shipped source file exceeds 500 lines", function () {
+  /* The project's file budget: a file this size stays reviewable on one screen-ful of
+     scrolling, and the split points (app core/view/touch, sensors data/demo/panel, the
+     four stylesheets, MainActivity/BridgeFetch) are documented in each file's header.
+     Shipped code only — index.html is one page by nature and the tests are not shipped. */
+  var LIMIT = 500;
+  var over = [];
+  fs.readdirSync(h.ASSETS).filter(function (n) { return /\.(js|css)$/.test(n); })
+    .forEach(function (n) {
+      var lines = fs.readFileSync(path.join(h.ASSETS, n), "utf8").split("\n").length;
+      if (lines > LIMIT) over.push(n + ": " + lines);
+    });
+  var javaDir = path.join(h.ASSETS, "..", "src", "com", "justin", "inkyoled");
+  fs.readdirSync(javaDir).filter(function (n) { return /\.java$/.test(n); })
+    .forEach(function (n) {
+      var lines = fs.readFileSync(path.join(javaDir, n), "utf8").split("\n").length;
+      if (lines > LIMIT) over.push(n + ": " + lines);
+    });
+  assert.deepEqual(over, [], "files over the 500-line budget: " + over.join(", "));
+});
 
 test("assets stay FLAT — aapt2 on Windows cannot ship a subdirectory", function () {
   /* aapt2 writes subdir separators as backslashes ("assets/dashboard\index.html") and
@@ -118,11 +139,12 @@ test("index.html loads exactly the scripts that exist, in the order they need", 
   var html = h.readAsset("index.html");
   var srcs = h.scriptOrder(html);
   assert.deepEqual(srcs, [
-    "config.js", "app.js", "wx-ui.js", "wx-icons.js",
+    "config.js", "app.js", "app-view.js", "app-touch.js", "wx-ui.js", "wx-icons.js",
     "wx-clock.js", "wx-timer.js", "wx-weather.js", "wx-hourly.js",
-    "wx-daily.js", "wx-sensors.js", "wx-system.js",
+    "wx-daily.js", "wx-sensors-demo.js", "wx-sensors.js", "wx-sensors-panel.js",
+    "wx-system.js",
     "wx-moon.js", "wx-air.js", "wx-calendar.js", "wx-news.js",
-    "wx-settings.js", "wx-sky.js"
+    "wx-settings.js", "wx-carousel.js", "wx-sky.js"
   ]);
   srcs.forEach(function (s) {
     assert.ok(fs.existsSync(path.join(h.ASSETS, s)), "index.html loads a missing file: " + s);
@@ -156,8 +178,9 @@ test("one widget, one file, and each file registers exactly the widget it is nam
     assert.match(src, new RegExp('name:\\s*"' + name + '"'),
       file + " does not define the widget it is named after");
   });
-  /* +1: the sky layer registers for init() but is not a widget (no card, no panel) */
-  assert.equal(Object.keys(app.registry).length, app.WP.WIDGETS.length + 1);
+  /* +2: the sky and carousel layers register for init() but are not widgets
+     (no card, no panel, no show/hide switch) */
+  assert.equal(Object.keys(app.registry).length, app.WP.WIDGETS.length + 2);
   assert.equal(fs.existsSync(path.join(h.ASSETS, "widgets.js")), false,
     "the monolith is back");
 });

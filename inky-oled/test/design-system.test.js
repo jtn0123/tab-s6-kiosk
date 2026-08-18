@@ -17,7 +17,8 @@ var test = require("node:test");
 var assert = require("node:assert/strict");
 var h = require("./lib/harness.js");
 
-var CSS = h.readAsset("style.css");
+var CSS = ["style.css", "style-home.css", "style-panels.css", "style-theme.css"]
+  .map(h.readAsset).join("\n");
 var HTML = h.readAsset("index.html");
 /* every widget file, concatenated — the rule below is about the whole widget layer, and
    reading the directory means a new wx-*.js is covered the day it is added */
