@@ -504,6 +504,41 @@ test("when the words say Steady the PICTURE says steady too", function () {
     "a real swing is being decimated");
 });
 
+test("a feed with no readings says so, instead of calling nothing Steady", function () {
+  /* Found by pointing the simulator at a Home Assistant that refuses the token — a state
+     that is essentially unreachable on a desk, and the one where this panel matters most.
+     With zero samples it printed "Steady — less than 4 °F either way in two hours" at the
+     value tier, over an empty chart frame whose axis labels ("2.0", "-2.0") were overlaid
+     by the word "collecting…", beside a RANGE of "0.0 °F" and two "--". Four separate
+     claims about data that did not exist. */
+  var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
+  var s = app.registry.sensors;
+  var e = s.ents[0];
+  e.hist = [];
+  e.value = null;
+  e.err = "HTTP 401";
+  s.sel = e.id;
+  app.WP.panels.open("sensors");
+  var body = app.panelBody("sensors");
+  var txt = body.textContent;
+
+  assert.equal(/Steady/.test(txt), false, "an empty series was called Steady");
+  assert.match(txt, /No readings yet/);
+  assert.equal(body.querySelectorAll(".spark").length, 0,
+    "an empty series still drew a chart frame");
+  assert.equal(/collecting/.test(txt), false, "the empty-chart placeholder is still drawn");
+
+  /* one sample is not a measured range of zero */
+  e.hist = [{ t: app.clock.now, v: 71.5 }];
+  s.paintPanel();
+  var cells = app.qsa('[data-panel="sensors"] .stat').map(function (c) {
+    return (c.textContent || "").replace(/\s+/g, " ").trim();
+  });
+  var range = cells.filter(function (c) { return c.indexOf("Range") === 0; })[0] || "";
+  assert.equal(/Range\s*0/.test(range), false,
+    "a single reading reported a range of zero: " + range);
+});
+
 test("an on/off trace keeps its fixed 0..1 domain and says On / Off on the axis", function () {
   /* A switch has no range to floor: it is high or it is low, and a domain taken from the
      data would redraw a lamp that never moved as noise. */

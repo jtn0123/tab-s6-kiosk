@@ -115,7 +115,15 @@ test("the Air panel names which pollutant is nearest its guideline", function ()
     /^PM2\.5 is nearest its guideline, at 100%$/);
   assert.match(air.nearestLimit({ pm2_5: 3, ozone: 80 }),
     /^ozone is nearest its guideline, at 80%$/);
-  assert.equal(air.nearestLimit({ pm2_5: 30 }), "PM2.5 is over its guideline");
+  /* Above the guideline it says BY HOW MUCH. It used to print the same six words —
+     "is over its guideline" — at 1.1x and at 4.3x, so the sentence got vaguer exactly as
+     the air got worse; found by forcing a hazardous reading in the simulator, which is
+     the only way that state is ever reachable on a desk. */
+  assert.equal(air.nearestLimit({ pm2_5: 30 }), "PM2.5 is 2× its guideline");
+  assert.equal(air.nearestLimit({ ozone: 192 }), "ozone is 1.9× its guideline");
+  assert.equal(air.nearestLimit({ ozone: 434 }), "ozone is 4.3× its guideline");
+  /* past 10x the tenth is noise, and the number is already the whole message */
+  assert.equal(air.nearestLimit({ pm2_5: 900 }), "PM2.5 is 60× its guideline");
   assert.equal(air.nearestLimit({}), "", "no readings must not invent a sentence");
 });
 

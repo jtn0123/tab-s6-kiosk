@@ -58,6 +58,9 @@
   <h2>News feed</h2>
   <div class="row" id="news"></div>
 
+  <h2>Air quality reading</h2>
+  <div class="row" id="aqi"></div>
+
   <h2>Jump to screen</h2>
   <div class="row" id="screens"></div>
 
@@ -105,7 +108,8 @@ var GROUPS = {
   weather: ["live", "clear-day", "clear-night", "rain", "snow", "storm", "fog"],
   net: ["ok", "offline", "slow"],
   ha: ["demo", "live-ok", "live-401", "live-down"],
-  news: ["ok", "empty", "fail"]
+  news: ["ok", "empty", "fail"],
+  aqi: ["live", "35", "85", "155", "260", "350"]
 };
 
 function buildSizes() {
@@ -160,6 +164,11 @@ function buildGroups() {
           }));
         }
 
+        /* Air readings need no reload either. */
+        if (key === "aqi" && w.WP && w.WP.registry.air) {
+          w.WP.registry.air.fetch();
+          return say("air quality = " + v + " — refetching…");
+        }
         /* Weather scenes need no reload — the next fetch picks them up, so ask for one. */
         if (key === "weather" && w.WP && w.WP.registry.weather) {
           w.WP.registry.weather.fetch();

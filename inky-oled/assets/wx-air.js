@@ -94,9 +94,16 @@
     var name = { pm2_5: "PM2.5", pm10: "PM10", ozone: "ozone",
                  nitrogen_dioxide: "NO₂", sulphur_dioxide: "SO₂",
                  carbon_monoxide: "CO" }[best.k];
-    return best.r > 1
-      ? name + " is over its guideline"
-      : name + " is nearest its guideline, at " + Math.round(best.r * 100) + "%";
+    /* Precision where it matters. This line said "at 97%" when nothing was wrong and
+       "is over its guideline" — the same six words — whether the driver was 1.1x its
+       limit or 4.3x it. Forced to a hazardous reading in the simulator, the panel got
+       VAGUER exactly as the situation got worse. Above the guideline it now says by how
+       much, to one decimal below 10x because 1.9x and 4.3x are different days. */
+    if (best.r <= 1) {
+      return name + " is nearest its guideline, at " + Math.round(best.r * 100) + "%";
+    }
+    var mult = best.r < 10 ? (Math.round(best.r * 10) / 10) : Math.round(best.r);
+    return name + " is " + mult + "× its guideline";
   }
 
   var air = {

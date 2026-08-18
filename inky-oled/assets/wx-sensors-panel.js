@@ -191,14 +191,27 @@
            words, at the value tier — which is the tier somebody 3 m away can actually read
            — and the trace behind it becomes the evidence rather than the claim. */
         + section("Last 2 hours",
-            (dom.flat && !binary
+            /* NO readings is not the same fact as readings that did not move, and the
+               panel used to print "Steady — less than 4 °F either way in two hours" over
+               an empty chart while every stat beside it read "--". Found by pointing the
+               simulator at a Home Assistant that refuses the token: the one screen whose
+               job is to tell you whether these numbers are true was, in that state, making
+               a confident claim about numbers it did not have. */
+            (nums.length < 2
+              ? '<div class="stat-v dim">No readings yet</div><div class="stat-x">'
+                + (e.err ? "Nothing has arrived since the feed stopped answering."
+                         : "The first readings arrive within a few minutes.") + "</div>"
+              : dom.flat && !binary
               ? '<div class="stat-v">Steady</div><div class="stat-x">less than '
                 + dom.floor + " " + esc(unit) + " either way in two hours</div>"
               : "")
-            + plot(WP.sparkline(dom.flat && !binary ? decimate(vals, FLAT_POINTS) : vals,
+            + (nums.length < 2 ? ""       /* an empty frame labelled 2.0 / -2.0 with
+                   "collecting…" printed across both is three pieces of text arguing over
+                   the same 40 px; nothing is the honest drawing of nothing */
+                : plot(WP.sparkline(dom.flat && !binary ? decimate(vals, FLAT_POINTS) : vals,
                                 spark),
                    ed(dom.max), ed(dom.min), "2h ago", "now",
-                   dom.flat && !binary ? "is-flat" : "")
+                   dom.flat && !binary ? "is-flat" : ""))
             + (binary
                 ? statGrid([["State now", esc(this.display(e))],
                     ["On", duty == null ? "--" : Math.round(duty * 100) + "% of window"],
@@ -209,8 +222,11 @@
                    second pair of bounds for a series whose bounds are printed in the
                    corners of the chart directly above them, in the same unit, disagreeing
                    with them by the width of the domain floor. */
+                /* `max - min` of an empty series is NaN -> "--", but of a SINGLE reading
+                   it is a confident 0.0 sitting between two cells that admit they have
+                   nothing. One sample is not a measured range of zero. */
                 : statGrid([["Average", r(avg) + " " + esc(unit)],
-                    ["Range", r(max - min) + " " + esc(unit)],
+                    ["Range", (nums.length > 1 ? r(max - min) : "--") + " " + esc(unit)],
                     ["Change", (last != null && first != null && last - first >= 0 ? "+" : "")
                       + r(last == null || first == null ? null : last - first)
                       + " " + esc(unit)]], 3))));

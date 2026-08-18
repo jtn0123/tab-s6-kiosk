@@ -19,6 +19,7 @@
       net: "ok",           // ok | offline | slow
       ha: "demo",          // demo | live-ok | live-401 | live-down
       news: "ok",          // ok | empty | fail
+      aqi: "live",         // live, or a number: the reading to force (0-500)
       battery: 83,
       charging: true
     },
@@ -99,7 +100,37 @@
       SIM.log.push("offline: blocked " + u.slice(0, 60));
       return Promise.reject(new TypeError("Failed to fetch (sim offline)"));
     }
-    if (u.indexOf("api.open-meteo.com") !== -1) {
+    if (u.indexOf("//air-quality-api.open-meteo.com") !== -1) {
+      return realFetch("/__proxy?u=" + encodeURIComponent(u), init).then(function (r) {
+        var forced = parseFloat(SIM.scenario.aqi);
+        if (isNaN(forced)) return r;
+        /* Scale the whole real payload toward the requested reading rather than pasting a
+           number in: the hero, the 24 h curve and every pollutant then stay consistent
+           with each other, which is the thing a screenshot of "hazardous" has to prove. */
+        return r.json().then(function (j) {
+          var base = (j.current && j.current.us_aqi) || 50;
+          var k = forced / base;
+          if (j.current) {
+            j.current.us_aqi = forced;
+            ["pm2_5", "pm10", "ozone", "nitrogen_dioxide", "sulphur_dioxide",
+             "carbon_monoxide"].forEach(function (f) {
+              if (typeof j.current[f] === "number") j.current[f] = j.current[f] * k;
+            });
+          }
+          if (j.hourly && j.hourly.us_aqi) {
+            j.hourly.us_aqi = j.hourly.us_aqi.map(function (v) { return v * k; });
+          }
+          return new Response(JSON.stringify(j), { status: r.status,
+            headers: { "Content-Type": "application/json" } });
+        });
+      });
+    }
+    /* Host-anchored with "//", and the air-quality test moved ABOVE this one:
+       "air-quality-api.open-meteo.com" CONTAINS "api.open-meteo.com", so a bare
+       substring test here swallowed every air-quality request and handed it to the
+       WEATHER rewriter. Forced AQI readings came back as the real one, and the panel
+       could not be reviewed at the top of its scale at all. */
+    if (u.indexOf("//api.open-meteo.com") !== -1) {
       return realFetch("/__proxy?u=" + encodeURIComponent(u), init).then(function (r) {
         return r.json().then(function (j) {
           var body = JSON.stringify(applyScene(j));
@@ -107,9 +138,6 @@
             headers: { "Content-Type": "application/json" } });
         });
       });
-    }
-    if (u.indexOf("air-quality-api.open-meteo.com") !== -1) {
-      return realFetch("/__proxy?u=" + encodeURIComponent(u), init);
     }
     return realFetch(url, init);
   };
