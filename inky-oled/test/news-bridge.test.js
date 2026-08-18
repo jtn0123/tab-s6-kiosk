@@ -103,11 +103,20 @@ test("a request the shell never answers times out instead of hanging forever", f
   var bridge = fakeBridge.make({ net: true });
   var app = h.createApp({ bridge: bridge });
   var err;
+  var before = Object.keys(app.WP.bridgeFetch.pending).slice();
   app.WP.bridgeFetch.get("https://api.open-meteo.com/x").catch(function (e) { err = e; });
+  var mine = Object.keys(app.WP.bridgeFetch.pending).filter(function (k) {
+    return before.indexOf(k) === -1;
+  });
   app.advance(21000);
   return app.flush().then(function () {
     assert.match(err.message, /timed out/);
-    assert.equal(Object.keys(app.WP.bridgeFetch.pending).length, 0, "the pending map leaked");
+    /* OUR entry must be gone. The map as a whole is no longer empty here by design: the
+       picture widgets chain retries (the front page walks back a shelf per attempt), so
+       someone else's fresh in-flight request is normal, not a leak. */
+    mine.forEach(function (k) {
+      assert.equal(k in app.WP.bridgeFetch.pending, false, "the timed-out entry leaked");
+    });
   });
 });
 

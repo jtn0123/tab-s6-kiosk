@@ -345,6 +345,15 @@
        in the hourly list and "12A" on the daily axis, on three screens one swipe apart.
        Upper is the one that survives being inside the recipe, and it is the more legible of
        the two at 3 m: "9P" has no descender to lose. */
+    /* 1st / 2nd / 3rd / 4th — for naming a day of the month in a sentence ("page of
+       the 3rd"). English's teens are the whole trick: 11th, 12th, 13th. */
+    ordinal: function (n) {
+      var t = n % 10, h = n % 100;
+      var suf = (t === 1 && h !== 11) ? "st" : (t === 2 && h !== 12) ? "nd"
+        : (t === 3 && h !== 13) ? "rd" : "th";
+      return n + suf;
+    },
+
     hourLabel: function (d) {
       if (settings.get("clockHours") === 24) return pad2(d.getHours()) + ":00";
       var h = d.getHours() % 12; if (h === 0) h = 12;

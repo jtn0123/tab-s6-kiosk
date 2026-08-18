@@ -204,6 +204,24 @@
         <div id="air-big" class="mini-big">--</div>
         <div id="air-sub" class="mini-sub">waiting&hellip;</div>
       </section>
+
+      <!-- ---- 11 / 12: the InkyPi picture plugins, on glass. Paper is today's actual
+           front page; Picture rotates the day's image among XKCD, Wikimedia's picture of
+           the day, NASA's APOD and (with a key) a generated image. This row is the
+           CONTENT row — the row above is the tools. -->
+      <section class="card mini tappable" data-widget="paper" data-open="paper"
+               role="button" tabindex="0" aria-label="Front page">
+        <div class="mini-head">Paper</div>
+        <div id="paper-big" class="mini-big">--</div>
+        <div id="paper-sub" class="mini-sub">&nbsp;</div>
+      </section>
+
+      <section class="card mini tappable" data-widget="gallery" data-open="gallery"
+               role="button" tabindex="0" aria-label="Daily picture">
+        <div class="mini-head">Picture</div>
+        <div id="gallery-big" class="mini-big">--</div>
+        <div id="gallery-sub" class="mini-sub">&nbsp;</div>
+      </section>
     </div>
 
     <!-- ---- 12. news ticker: one line, rotates through the freshest headlines ---- -->
@@ -323,6 +341,22 @@
     <div class="panel-body" data-body></div>
   </section>
 
+  <section class="panel" data-panel="paper">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Front Page</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+  </section>
+
+  <section class="panel" data-panel="gallery">
+    <header class="panel-head">
+      <div><h1 class="panel-title">Picture</h1><p class="panel-sub" data-sub></p></div>
+      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
+    </header>
+    <div class="panel-body" data-body></div>
+  </section>
+
   <section class="panel" data-panel="settings">
     <header class="panel-head">
       <div><h1 class="panel-title">Settings</h1><p class="panel-sub" data-sub></p></div>
@@ -392,6 +426,8 @@
 <script src="wx-system.js"></script>
 <script src="wx-moon.js"></script>
 <script src="wx-air.js"></script>
+<script src="wx-paper.js"></script>
+<script src="wx-gallery.js"></script>
 <script src="wx-news.js"></script>
 <script src="wx-settings.js"></script>
 <script src="wx-carousel.js"></script>

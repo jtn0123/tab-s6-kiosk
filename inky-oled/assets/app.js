@@ -171,6 +171,12 @@ window.WP = (function () {
         ok: status >= 200 && status < 300,
         status: status,
         text: text,
+        /* the raw payload, untouched: an image that went through the UTF-8 text decode
+           above comes out corrupted, so the picture widgets read THIS and never .text */
+        b64: b64 || "",
+        dataUri: function (mime) {
+          return "data:" + (mime || "image/jpeg") + ";base64," + (b64 || "");
+        },
         json: function () {
           try { return JSON.parse(text); } catch (e) { return null; }
         }
@@ -197,6 +203,7 @@ window.WP = (function () {
      and shipping a fourth empty calendar is worse than shipping eleven panels that all say
      something. The tile went with it: DATE 17 / Mon · Aug restated the clock card. */
   var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air",
+                 "paper", "gallery",
                  "news", "sensors", "system", "timer", "settings"];
   /* What each widget is called in the Widgets list on the Settings panel. These are the
      words printed on the CARD each switch controls — "Now", "Next days", "Home", "Setup" —
@@ -208,6 +215,7 @@ window.WP = (function () {
   var WIDGET_LABELS = {
     clock: "Clock", weather: "Now", hourly: "Hourly",
     daily: "Next days", moon: "Moon", air: "Air",
+    paper: "Paper", gallery: "Picture",
     news: "News", sensors: "Home", system: "Device",
     timer: "Timer", settings: "Setup"
   };

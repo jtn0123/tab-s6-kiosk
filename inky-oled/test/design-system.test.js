@@ -322,6 +322,13 @@ test("no field label is wider than the column it has to fit in", function () {
   app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
   app.registry.weather.publish();
   app.registry.air.data = wx.aqi({ now: app.clock.now });
+  /* the picture widgets render an IMAGE; seed one so their panels are not the no-shell
+     fallback during the sweep */
+  app.registry.paper.uri = "data:image/jpeg;base64,AAAA";
+  app.registry.paper.shownDay = new Date(app.clock.now).getDate();
+  app.registry.gallery.slots.xkcd = { uri: "data:image/png;base64,AAAA",
+    title: "Sweep fixture", note: "alt text for the sweep", at: app.clock.now };
+  app.registry.gallery.cur = "xkcd";
   var over = [];
   app.qsa("[data-panel]").forEach(function (p) {
     var name = p.getAttribute("data-panel");
@@ -501,6 +508,13 @@ test("nothing the wall says is written for whoever built the app", function () {
   app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
   app.registry.weather.publish();
   app.registry.air.data = wx.aqi({ now: app.clock.now });
+  /* the picture widgets render an IMAGE; seed one so their panels are not the no-shell
+     fallback during the sweep */
+  app.registry.paper.uri = "data:image/jpeg;base64,AAAA";
+  app.registry.paper.shownDay = new Date(app.clock.now).getDate();
+  app.registry.gallery.slots.xkcd = { uri: "data:image/png;base64,AAAA",
+    title: "Sweep fixture", note: "alt text for the sweep", at: app.clock.now };
+  app.registry.gallery.cur = "xkcd";
 
   var offenders = [];
   function sweep(where, label) {
@@ -531,10 +545,21 @@ test("the copy sweep can actually see a panel body", function () {
   app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
   app.registry.weather.publish();
   app.registry.air.data = wx.aqi({ now: app.clock.now });
+  /* the picture widgets render an IMAGE; seed one so their panels are not the no-shell
+     fallback during the sweep */
+  app.registry.paper.uri = "data:image/jpeg;base64,AAAA";
+  app.registry.paper.shownDay = new Date(app.clock.now).getDate();
+  app.registry.gallery.slots.xkcd = { uri: "data:image/png;base64,AAAA",
+    title: "Sweep fixture", note: "alt text for the sweep", at: app.clock.now };
+  app.registry.gallery.cur = "xkcd";
   app.qsa("[data-panel]").forEach(function (p) {
     var name = p.getAttribute("data-panel");
     app.WP.panels.open(name);
-    assert.ok(strings(app.panelBody(name)).length >= 5,
+    /* Paper and Picture are IMAGES with at most a caption: five text nodes is the wrong
+       bar for a screen whose content is a photograph. The rendered picture standing in
+       the body is the proof the sweep reached it. */
+    var pictured = app.panelBody(name).querySelectorAll(".page-img").length > 0;
+    assert.ok(strings(app.panelBody(name)).length >= 5 || pictured,
       name + " panel body yielded almost no text — the sweep is reading the wrong node");
     app.WP.panels.close();
   });
@@ -552,7 +577,7 @@ test("the copy sweep can actually see a panel body", function () {
 test("the three home tiles are one object repeated", function () {
   var app = h.createApp({});
   var tiles = app.qsa("#home .row3 .card.mini");
-  assert.equal(tiles.length, 5);   // device/timer/settings + moon/air
+  assert.equal(tiles.length, 7);   // device/timer/setup + moon/air/paper/picture
   var shape = tiles.map(function (t) {
     return t.children.filter(function (c) { return c.nodeType === 1; })
       .map(function (c) { return c.getAttribute("class").split(" ")[0]; }).join(",");

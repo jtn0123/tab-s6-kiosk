@@ -49,11 +49,13 @@ test("every widget registers and initialises", function () {
   var names = Object.keys(app.registry).sort();
   /* sky is registered but is not a WIDGET: it has no card, no panel and no show/hide
      switch — it is the background layer, initialised through the same registry. */
-  /* ELEVEN widgets plus carousel and sky. "calendar" is gone: a month grid with no events,
-     3.2% inked, restating a date the clock card already prints — see the note on WIDGETS in
-     app.js for why a fourth empty round was not the answer. */
-  assert.deepEqual(names, ["air", "carousel", "clock", "daily", "hourly", "moon",
-                           "news", "sensors", "settings", "sky", "system", "timer", "weather"]);
+  /* THIRTEEN widgets plus carousel and sky. "calendar" stays gone (a month grid with no
+     events — see the WIDGETS note in app.js); "paper" and "gallery" are the InkyPi
+     picture plugins arriving: the daily front page, and the rotating XKCD / Wikimedia /
+     NASA / generated picture. */
+  assert.deepEqual(names, ["air", "carousel", "clock", "daily", "gallery", "hourly", "moon",
+                           "news", "paper", "sensors", "settings", "sky", "system",
+                           "timer", "weather"]);
   /* each one has painted something into its card */
   assert.notEqual(app.text("time"), "--:--");
   assert.notEqual(app.text("date").trim(), "");

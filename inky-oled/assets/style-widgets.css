@@ -385,3 +385,36 @@
 .spark-line { fill: none; stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke;
               stroke-linejoin: round; }
 .spark-empty { font-size: var(--fs-note); color: var(--dimmer); padding: 2vh 0; }
+
+/* ---- the picture panels (front page, daily picture) ----
+   The image IS the screen: letterboxed on true black, no frame, no chrome. It flexes to
+   whatever height the chips and caption leave, and object-fit keeps the whole page or
+   photo visible rather than cropping a headline off a masthead. */
+.page-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.panel[data-panel="paper"] [data-body],
+.panel[data-panel="gallery"] [data-body] {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+}
+/* the alt text / prompt line under a picture, one line, quiet */
+.pic-note {
+  flex: 0 0 auto;
+  font-size: var(--fs-note);
+  color: var(--dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

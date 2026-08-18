@@ -181,6 +181,11 @@ a dim flash in a storm. Portrait and landscape both render a full, dead-space-fr
   (Open-Meteo air-quality endpoint, keyless like the weather)
 - **News** — a one-line rotating headline ticker (RSS/Atom through the app shell — feeds
   never need CORS), full list in its panel; defaults to BBC World + NPR, configurable
+- **Paper** — today's actual front page (the Freedom Forum archive InkyPi itself uses);
+  pick the paper with `newspaper: { code: "USAT" }`; walks back a day when today's is late
+- **Picture** — one picture a day, rotating among XKCD, the Wikimedia Commons picture of
+  the day, and NASA's APOD; add `openai: { apiKey: … }` and a fourth source generates one
+  (`prompt`, `model`, `quality` configurable) — the only key anything here can use
 - **Settings** — units, clock format, seconds, sky animation, screen cycling, burn-in,
   per-widget show/hide; persisted
 

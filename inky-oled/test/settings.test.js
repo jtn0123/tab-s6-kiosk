@@ -11,6 +11,7 @@ var fakeBridge = require("./lib/fake-bridge.js");
 
 var KEY = "inky.settings.v2";
 var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air",
+               "paper", "gallery",
                "news", "sensors", "system", "timer", "settings"];
 
 function boot(opts) { return h.createApp(opts || {}); }
