@@ -247,11 +247,15 @@
       var a = light.wash * d.wash;
       if (a < 0.004) return;
       var c = light.sky.join(",");
+      /* The first curve kept the colour in the bottom tenth of the frame, which is why
+         golden hour read as black with a warm rumour: two thirds of the screen never got
+         a single tinted pixel. A real sky's gradient owns the whole height — faint at the
+         zenith, full at the horizon. */
       var g = this.ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, "rgba(" + c + ",0)");
-      g.addColorStop(0.45, "rgba(" + c + "," + (a * 0.05).toFixed(4) + ")");
-      g.addColorStop(0.74, "rgba(" + c + "," + (a * 0.30).toFixed(4) + ")");
-      g.addColorStop(0.91, "rgba(" + c + "," + (a * 0.72).toFixed(4) + ")");
+      g.addColorStop(0, "rgba(" + c + "," + (a * 0.10).toFixed(4) + ")");
+      g.addColorStop(0.40, "rgba(" + c + "," + (a * 0.28).toFixed(4) + ")");
+      g.addColorStop(0.70, "rgba(" + c + "," + (a * 0.55).toFixed(4) + ")");
+      g.addColorStop(0.90, "rgba(" + c + "," + (a * 0.85).toFixed(4) + ")");
       g.addColorStop(1, "rgba(" + c + "," + a.toFixed(4) + ")");
       this.ctx.fillStyle = g;
       this.ctx.fillRect(0, 0, w, h);
@@ -334,7 +338,7 @@
         var ry = c.rx * (0.30 + c.z * 0.10);
         /* The puff sprite already carries a soft alpha falloff of its own (0.5 at a lobe
            core), so this multiplies down: 0.11 here is about 0.09 on the glass. */
-        x.globalAlpha = 0.035 + c.z * 0.075;
+        x.globalAlpha = 0.06 + c.z * 0.13;
         x.drawImage(puff, c.x - c.rx, c.y - ry, c.rx * 2, ry * 2);
       }
       x.globalAlpha = 1;
@@ -362,8 +366,8 @@
       x.strokeStyle = this.col.rain;
       for (var b = 0; b < 3; b++) {
         if (!band[b].length) continue;
-        x.lineWidth = 0.7 + b * 0.5;
-        x.globalAlpha = (0.07 + b * 0.075) * ak;     /* ceiling 0.22 */
+        x.lineWidth = 0.8 + b * 0.7;
+        x.globalAlpha = (0.12 + b * 0.14) * ak;      /* ceiling 0.26 — rain you can see */
         x.beginPath();
         for (i = 0; i < band[b].length; i++) {
           dr = band[b][i];
@@ -389,7 +393,7 @@
                 + wind.east * wind.force * (14 + f.z * 30)) * dt;
         if (f.y > h) { f.y = -4; f.x = Math.random() * w; }
         if (f.x < -6) f.x = w + 5; else if (f.x > w + 6) f.x = -5;
-        x.globalAlpha = 0.07 + f.z * 0.14;           /* ceiling 0.21 */
+        x.globalAlpha = 0.14 + f.z * 0.26;           /* ceiling 0.40 — snow is WHITE */
         x.beginPath();
         x.arc(f.x, f.y, f.r, 0, 6.283);
         x.fill();

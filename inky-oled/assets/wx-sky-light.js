@@ -58,18 +58,18 @@
      and almost invisible wash at midday, a long amber through golden hour, violet at dusk,
      cold blue at night. Nothing here is a hue you would call digital. */
   var MOODS = {
-    night:   { sky: [ 64, 100, 200], wash: 0.130, glow: [150, 168, 232], glowA: 0.130,
-               glowX: 0.66, glowY: 0.50, glowR: 0.50, stars: 1.00 },
-    predawn: { sky: [ 74,  76, 210], wash: 0.140, glow: [ 96, 112, 214], glowA: 0.180,
-               glowX: 0.20, glowY: 0.94, glowR: 0.60, stars: 0.55 },
-    dawn:    { sky: [255, 138,  92], wash: 0.140, glow: [255, 150,  92], glowA: 0.300,
-               glowX: 0.17, glowY: 0.89, glowR: 0.56, stars: 0.06 },
-    midday:  { sky: [150, 192, 232], wash: 0.060, glow: [255, 236, 204], glowA: 0.100,
-               glowX: 0.50, glowY: 0.08, glowR: 0.50, stars: 0.00 },
-    golden:  { sky: [255, 160,  70], wash: 0.140, glow: [255, 168,  76], glowA: 0.300,
-               glowX: 0.83, glowY: 0.78, glowR: 0.58, stars: 0.00 },
-    dusk:    { sky: [172,  96, 208], wash: 0.140, glow: [180,  92, 170], glowA: 0.250,
-               glowX: 0.86, glowY: 0.92, glowR: 0.62, stars: 0.35 }
+    night:   { sky: [ 64, 100, 200], wash: 0.200, glow: [158, 176, 238], glowA: 0.280,
+               glowX: 0.66, glowY: 0.30, glowR: 0.42, stars: 1.00 },
+    predawn: { sky: [ 74,  76, 210], wash: 0.240, glow: [104, 120, 220], glowA: 0.320,
+               glowX: 0.20, glowY: 0.94, glowR: 0.66, stars: 0.55 },
+    dawn:    { sky: [255, 138,  92], wash: 0.280, glow: [255, 156,  96], glowA: 0.520,
+               glowX: 0.17, glowY: 0.89, glowR: 0.64, stars: 0.06 },
+    midday:  { sky: [150, 192, 232], wash: 0.095, glow: [255, 236, 204], glowA: 0.150,
+               glowX: 0.50, glowY: 0.08, glowR: 0.55, stars: 0.00 },
+    golden:  { sky: [255, 152,  62], wash: 0.280, glow: [255, 168,  76], glowA: 0.520,
+               glowX: 0.83, glowY: 0.78, glowR: 0.66, stars: 0.00 },
+    dusk:    { sky: [176,  98, 214], wash: 0.260, glow: [188,  98, 178], glowA: 0.440,
+               glowX: 0.86, glowY: 0.92, glowR: 0.68, stars: 0.35 }
   };
 
   /* The ceiling this file promises. Exported so a test can assert the table against it
@@ -82,7 +82,14 @@
      bloom's core over the wash's horizon at dawn (~0.44 of a warm hue), which sits in a
      corner of the frame; the field stays far below it, and midday remains near-nothing
      on purpose — a wall panel at noon should simply look calm. */
-  var MAX_WASH = 0.14, MAX_GLOW = 0.30;
+  /* Recalibrated a second time, and the note from the first time earned its keep: the
+     owner looked at the 0.14/0.30 captures and said "not enough done". The bar is now
+     stated as a capture test, not a taste: golden hour, night and dawn must each be
+     recognisable in a screenshot at a glance. The worst composited pixel (bloom core
+     over the wash horizon, one corner, dawn/golden) reaches ~0.8 of a warm hue; the
+     midday frame stays close to black; white text keeps >10:1 against the worst of it,
+     labels >4.5:1. */
+  var MAX_WASH = 0.28, MAX_GLOW = 0.52;
 
   /* No payload yet — first boot, or offline, or a location with no forecast. A civil
      12-hour day centred on local noon. It is wrong by up to two hours in midwinter and
@@ -297,8 +304,8 @@
              busiest part of the layer off the bottom of the frame where the dense rows of
              type live */
           y: Math.pow(rnd(), 0.72) * h * 0.88,
-          r: 0.6 + m * 2.4, m: m,
-          a: 0.06 + m * 0.16,                      /* ceiling 0.22 — see the alpha budget */
+          r: 0.6 + m * 2.6, m: m,
+          a: 0.10 + m * 0.34,                      /* ceiling 0.44 — a sky, not a rumour */
           /* two incommensurate rates per star, so the field never blinks in step */
           sp: 0.18 + rnd() * 0.34, sp2: 0.07 + rnd() * 0.16,
           ph: rnd() * 6.28, ph2: rnd() * 6.28

@@ -128,8 +128,12 @@ test("nothing in the light jumps: a whole day, minute by minute, is continuous",
      is imperceptible even side by side, let alone sixty seconds apart. The old 0.5 pin
      was not a threshold anybody chose; it was whatever the first amplitude table
      happened to produce, and it broke the moment the ambience was raised to visible. */
-  assert.ok(worst.wash <= 1.0, "the wash steps " + worst.wash.toFixed(3) + " levels a minute");
-  assert.ok(worst.glow <= 1.0, "the bloom steps " + worst.glow.toFixed(3) + " levels a minute");
+  /* Two RGB levels per minute is still invisibility: dawn's full swing now spans ~130
+     levels and the transitions are 25 minutes long, so the worst minute moves ~1.4
+     levels — imperceptible sixty seconds apart, and the price of an ambience that is
+     visible at all. */
+  assert.ok(worst.wash <= 2.0, "the wash steps " + worst.wash.toFixed(3) + " levels a minute");
+  assert.ok(worst.glow <= 2.0, "the bloom steps " + worst.glow.toFixed(3) + " levels a minute");
   assert.ok(worst.washA <= 0.004, "the wash alpha steps " + worst.washA + " per minute");
   assert.ok(worst.glowA <= 0.004, "the bloom alpha steps " + worst.glowA + " per minute");
   assert.ok(worst.glowX <= 0.01, "the bloom slides " + worst.glowX + " of the frame a minute");
@@ -174,14 +178,18 @@ test("no mood exceeds the stated alpha budget, and no pair of them can together"
       assert.ok(ch >= 0 && ch <= 255, k + " has a channel outside 0..255");
     });
   });
-  assert.ok(L.MAX_WASH + L.MAX_GLOW <= 0.45, "the budget itself does not add up");
+  /* 0.80: the second recalibration, made because the owner looked at the 0.44-budget
+     captures and said "not enough done". The worst pixel is still one corner of the
+     frame at dawn/golden; the midday frame stays near black; and the capture set under
+     shots/day is the evidence this number was set by eye, not by drift. */
+  assert.ok(L.MAX_WASH + L.MAX_GLOW <= 0.80, "the budget itself does not add up");
 
   var worst = 0;
   everyMinute(D.midnight, D.midnight + DAY, function (t) {
     var l = L.at(t, D.rise, D.set);
     worst = Math.max(worst, l.wash + l.glowA);
   });
-  assert.ok(worst <= 0.45, "the composited ambience peaks at " + worst.toFixed(3));
+  assert.ok(worst <= 0.80, "the composited ambience peaks at " + worst.toFixed(3));
 });
 
 /* ---------------- the seasons, which is the point of reading the payload ---------------- */
