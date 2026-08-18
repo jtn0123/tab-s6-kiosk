@@ -178,6 +178,45 @@ test("slack of exactly zero counts as no headroom, not as a hair of headroom", f
   });
 });
 
+test("measuring the column leaves no inline style behind on it", function () {
+  /* homeMetrics has to neutralise three things to read an honest number — the growth
+     caps, flex-grow on the items, and (since portrait became a WRAPPED row, where the
+     leftover space goes to the LINES) align-content on the container. Every one of those
+     is an inline style written onto the live layout mid-frame, so every one has to be put
+     back. A leaked align-content would pin the dashboard to the top of the screen for
+     good; a leaked flex-grow would stop the cards filling the column. */
+  var app = h.createApp({});
+  layout(app);
+  var home = app.$("home");
+  home.style.alignContent = "stretch";        // the value the stylesheet is running with
+  app.WP.relayoutHome();
+  assert.equal(home.style.alignContent, "stretch", "the measurement kept its own value");
+  app.qsa("#home > *").forEach(function (n) {
+    /* minidom leaves a property that was never written as undefined, so "unset" is either */
+    assert.ok(!n.style.flexGrow, "flex-grow was left neutralised on " + (n.id || n.className));
+  });
+});
+
+test("burn-in drift may never nudge further down than the column has spare", function () {
+  /* The wall panel's own instrumentation said slack=2px with every widget on, and a nudge
+     is up to 12px — so for the stretch of every hour the random walk spent below the
+     origin, the bottom of the news ticker was simply off the bottom of the screen
+     (measured 40px clipped at full deflection in the simulator). Burn-in protection that
+     clips content is worse than the ghosting it prevents, so the vertical range is
+     whatever the column actually has, and a column with nothing spare holds still. */
+  var app = h.createApp({});
+  var kids = layout(app);                          // VIEW_H - 8 * CARD_H = 100px of slack
+  app.advance(12500);
+  assert.equal(app.WP._layout.metrics().slack, 100, "this test is not sitting on real slack");
+  assert.equal(app.WP.drift.downRoom(12), 12, "plenty of slack should allow the full nudge");
+  assert.equal(app.WP.drift.downRoom(400), 100, "the nudge may not exceed the slack");
+
+  /* a column that already overflows holds still rather than making it worse */
+  layout(app, { cardHeight: 200 });
+  assert.ok(app.WP._layout.metrics().slack < 0, "premise: the column is overflowing");
+  assert.equal(app.WP.drift.downRoom(12), 0, "an overflowing column was nudged down anyway");
+});
+
 test("the column is never reflowed under a finger", function () {
   var app = h.createApp({});
   var kids = layout(app);

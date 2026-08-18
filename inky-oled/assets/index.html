@@ -73,7 +73,11 @@
   <main id="home">
 
     <!-- ---- 1. clock ---- -->
-    <section class="card tappable" data-widget="clock" data-open="clock">
+    <!-- role=button + aria-label on every whole-card target: these are <section>s, so
+         without them a screen reader is told nothing is here at all — eight of the twelve
+         screens were unreachable. The a11y test only swept <button>s and never saw it. -->
+    <section class="card tappable" data-widget="clock" data-open="clock"
+               role="button" tabindex="0" aria-label="Clock details">
       <!-- Seconds come BEFORE the meridiem and sit tight against the digits, so the row
            reads "2:33:01 AM" the way a clock is read. Trailing the meridiem, they read as a
            detached fragment ("2:33 AM :01"). Both stay on the digits' baseline — stacking
@@ -89,7 +93,8 @@
     </section>
 
     <!-- ---- 3. weather now ---- -->
-    <section class="card tappable" data-widget="weather" data-open="weather">
+    <section class="card tappable" data-widget="weather" data-open="weather"
+               role="button" tabindex="0" aria-label="Current conditions">
       <!-- Three cards on this screen open a detail panel from their heading, and this one
            used to do it with a bare grey chevron while Hourly, Daily and Home used a
            labelled blue "Details >" / "All >". Two idioms for "open me", ten centimetres
@@ -150,13 +155,15 @@
 
     <!-- ---- 7 / 2 / 8. device, timer, settings ---- -->
     <div class="row3">
-      <section class="card mini tappable" data-widget="system" data-open="system">
+      <section class="card mini tappable" data-widget="system" data-open="system"
+               role="button" tabindex="0" aria-label="Device status">
         <div class="mini-head">Device</div>
         <div id="sys-big" class="mini-big">--%</div>
         <div id="sys-sub" class="mini-sub">reading&hellip;</div>
       </section>
 
-      <section class="card mini tappable" data-widget="timer" data-open="timer">
+      <section class="card mini tappable" data-widget="timer" data-open="timer"
+               role="button" tabindex="0" aria-label="Stopwatch and timer">
         <div class="mini-head">Timer</div>
         <div id="tmr-big" class="mini-big">00:00</div>
         <div id="tmr-sub" class="mini-sub">tap to open</div>
@@ -167,7 +174,8 @@
            line box stays identical across all three tiles — which is what keeps the third
            line on one baseline — and the gear gets the ~12% it needs to match a digit's cap
            height optically. It is decorative: "Settings" is already the tile's heading. -->
-      <section class="card mini tappable" data-widget="settings" data-open="settings">
+      <section class="card mini tappable" data-widget="settings" data-open="settings"
+               role="button" tabindex="0" aria-label="Settings">
         <div class="mini-head">Setup</div>
         <div class="mini-big glyph" aria-hidden="true">&#9881;</div>
         <div id="set-sub" class="mini-sub">&nbsp;</div>
@@ -176,19 +184,22 @@
 
     <!-- ---- 9 / 10 / 11. moon, air quality, calendar ---- -->
     <div class="row3">
-      <section class="card mini tappable" data-widget="moon" data-open="moon">
+      <section class="card mini tappable" data-widget="moon" data-open="moon"
+               role="button" tabindex="0" aria-label="Moon phase">
         <div class="mini-head">Moon</div>
         <div id="moon-big" class="mini-big moon-row">&nbsp;</div>
         <div id="moon-sub" class="mini-sub">&nbsp;</div>
       </section>
 
-      <section class="card mini tappable" data-widget="air" data-open="air">
+      <section class="card mini tappable" data-widget="air" data-open="air"
+               role="button" tabindex="0" aria-label="Air quality">
         <div class="mini-head">Air</div>
         <div id="air-big" class="mini-big">--</div>
         <div id="air-sub" class="mini-sub">waiting&hellip;</div>
       </section>
 
-      <section class="card mini tappable" data-widget="calendar" data-open="calendar">
+      <section class="card mini tappable" data-widget="calendar" data-open="calendar"
+               role="button" tabindex="0" aria-label="Calendar">
         <div class="mini-head">Date</div>
         <div id="cal-big" class="mini-big">&nbsp;</div>
         <div id="cal-sub" class="mini-sub">&nbsp;</div>
@@ -197,7 +208,7 @@
 
     <!-- ---- 12. news ticker: one line, rotates through the freshest headlines ---- -->
     <section class="card tappable news-card" data-widget="news" data-open="news"
-             aria-label="News headlines">
+             role="button" tabindex="0" aria-label="News headlines">
       <span class="card-label">News</span>
       <div id="news-line" class="news-line"><span class="news-t muted">waiting for headlines&hellip;</span></div>
     </section>

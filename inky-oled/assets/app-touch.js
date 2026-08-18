@@ -111,6 +111,26 @@
       }
     },
 
+    /* Close ONE named panel wherever it sits in the stack, rather than the top one.
+       applyVisibility() needs this: switching a widget off has to take its screen with
+       it even if something else was opened on top of it since. */
+    closePanel: function (name) {
+      var i = panels.stack.indexOf(name);
+      if (i === -1) return;
+      if (i === panels.stack.length - 1) return panels.close();
+      panels.stack.splice(i, 1);
+      var el = panels.el(name);
+      if (el) {
+        el.classList.remove("is-open");
+        clearTimeout(unmountTimers[name]);
+        unmountTimers[name] = setTimeout(function () { el.classList.remove("is-mounted"); }, 240);
+      }
+      var p = registry[name];
+      if (p && p.onClose) {
+        try { p.onClose(el); } catch (e) { console.error(name + " onClose: " + e.message); }
+      }
+    },
+
     closeAll: function () { while (panels.stack.length) panels.close(); },
 
     isOpen: function (name) { return panels.stack.indexOf(name) !== -1; },

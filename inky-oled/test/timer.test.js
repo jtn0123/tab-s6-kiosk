@@ -248,15 +248,22 @@ test("+1 / -1 min adjust the pending duration, and the running deadline", functi
   assert.equal(app.text("tmr-disp"), "04:50", "+1 min on a running timer moves the deadline");
 });
 
-test("the duration can never be bumped below one second", function () {
+test("the duration can never be bumped below one MINUTE", function () {
+  /* The floor used to be one second, so "−1 min" from 1:00 left a 00:01 countdown: a
+     timer nobody chose, which then fires a full-screen alarm a second later. The controls
+     step in minutes, so the floor is a minute. */
   var app = h.createApp({});
   app.tap(app.qs('[data-open="timer"]'));
   pickMode(app, "countdown");
   for (var i = 0; i < 10; i++) {
     app.tap(app.qs('[data-panel="timer"] [data-act="cd-bump"][data-arg="-60"]'));
   }
-  assert.ok(app.registry.timer.cd.duration >= 1000, "duration went to zero or negative");
-  assert.equal(app.text("tmr-disp"), "00:01");
+  assert.equal(app.registry.timer.cd.duration, 60000, "the floor is not one minute");
+  assert.equal(app.text("tmr-disp"), "01:00");
+
+  /* and it is a floor, not a clamp on the whole control: +1 min still climbs from it */
+  app.tap(app.qs('[data-panel="timer"] [data-act="cd-bump"][data-arg="60"]'));
+  assert.equal(app.text("tmr-disp"), "02:00");
 });
 
 test("the loaded preset is the highlighted chip", function () {

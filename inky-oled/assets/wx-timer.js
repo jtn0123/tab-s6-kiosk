@@ -65,7 +65,11 @@
           case "cd-bump":
             var delta = parseInt(arg, 10) * 1000;
             if (cd.running) { cd.endsAt = Math.max(Date.now(), cd.endsAt + delta); }
-            else { cd.duration = Math.max(1000, cd.duration + delta); cd.remain = cd.duration; }
+            /* Floor of one minute, not one second. At 1:00, "−1 min" used to leave a
+               00:01 countdown — a timer nobody set on purpose, and one that fires its
+               full-screen alarm a second after you look away. The buttons step in
+               minutes, so the floor is a minute. */
+            else { cd.duration = Math.max(60000, cd.duration + delta); cd.remain = cd.duration; }
             break;
           case "cd-toggle":
             if (cd.running) { cd.remain = Math.max(0, cd.endsAt - Date.now()); cd.running = false; }

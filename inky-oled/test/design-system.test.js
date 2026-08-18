@@ -607,6 +607,38 @@ test("generated toggles announce as switches and say which way they are set", fu
   assert.notEqual(after, before, "aria-checked did not follow the toggle");
 });
 
+test("every tappable is reachable and named, whatever element it is built from", function () {
+  /* The a11y sweep next to this one only ever looked at <button>. Nine of the app's
+     targets are whole <section> cards — Clock, Conditions, Device, Timer, Settings, Moon,
+     Air, Calendar and the news ticker — so a screen reader was told nothing was there at
+     all, and eight of the twelve screens had no accessible route in. Found by reading the
+     accessibility tree of the running app rather than the markup. */
+  var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
+  var offenders = [];
+  function sweep(root, where) {
+    app.qsa(".tappable", root).forEach(function (n) {
+      if (n.tagName === "BUTTON") return;              // implicit role and name
+      var role = n.getAttribute("role");
+      var name = n.getAttribute("aria-label");
+      if (role !== "button" && role !== "switch") {
+        offenders.push(where + " ." + (n.getAttribute("class") || "").split(" ")[0]
+          + " has no role");
+      } else if (!name && !(n.textContent || "").trim()) {
+        offenders.push(where + " ." + (n.getAttribute("class") || "").split(" ")[0]
+          + " has no accessible name");
+      }
+    });
+  }
+  sweep(app.doc, "home");
+  app.qsa("[data-panel]").forEach(function (p) {
+    var name = p.getAttribute("data-panel");
+    app.WP.panels.open(name);
+    sweep(p, name);
+    app.WP.panels.close();
+  });
+  assert.deepEqual(offenders, []);
+});
+
 test("single-choice button groups are radiogroups, not loose buttons", function () {
   /* Without this a reader is told "12-hour, button" and "24-hour, button" with nothing to
      say that they are alternatives or which one is in force. */

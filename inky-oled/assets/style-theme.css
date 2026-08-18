@@ -199,7 +199,19 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 #dots .dot.on { background: var(--accent); }
 
 /* ---- news ticker ---- */
-.news-card { flex-direction: row; align-items: center; gap: 2.2vw; padding: var(--pad-row) 2.2vw; }
+/* The ticker is one line of text, so it is the one card in the column that can give
+   height back. It was the eighth card added to a budget that had converged on ~2 px of
+   slack — measured on the device — and 2 px is not a margin, it is luck: a font fallback,
+   a longer headline, or a system font-size bump clips it. It takes the tighter chip
+   padding rather than the row padding, and it is the only card allowed to shrink. */
+.news-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 2.2vw;
+  padding: var(--pad-chip) 2.2vw;
+  min-height: 0;
+}
+#home > .card[data-widget="news"] { flex-shrink: 1; }
 .news-line { display: flex; min-width: 0; flex: 1 1 auto; align-items: baseline; gap: 1.6vw; }
 .news-t {
   min-width: 0; flex: 1 1 auto;
@@ -296,3 +308,21 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   .sensor.on .sensor-sw span { transform: translateX(calc(2.6vw - 2vh)); }
   .moon-disc { width: 22vh; height: 22vh; }
 }
+
+/* ---- panels whose content is short ----
+   Moon, Air and Calendar each rendered a hero, one or two stat blocks, and then 200-335 px
+   of empty black — measured at 41% of the Moon panel. A wall panel read from across a room
+   cannot tell "short screen" from "screen that failed to load", so the content owns the
+   height it has: the sections space themselves down the panel instead of stacking at the
+   top, and the hero art grows into the room it is given. */
+.panel[data-panel="moon"] [data-body],
+.panel[data-panel="air"] [data-body],
+.panel[data-panel="calendar"] [data-body] {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 1.2vh;
+}
+.panel[data-panel="moon"] .moon-hero { padding: 0; }
+.panel[data-panel="moon"] .moon-disc { width: 22vh; height: 22vh; }
+.panel[data-panel="calendar"] .cal-grid { row-gap: 1.1vh; }

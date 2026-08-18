@@ -40,6 +40,16 @@
     });
     var empty = $("empty");
     if (empty) empty.hidden = (visible > 0);
+
+    /* A widget switched off while its own panel is open used to leave that panel on the
+       screen: the card vanished from the dashboard behind it, the carousel could no
+       longer find it (so swipes did nothing), and the only way out was the close button.
+       Turning a widget off means its screen goes away too. */
+    if (WP.panels) {
+      WP.panels.stack.slice().forEach(function (name) {
+        if (name in settings.data.show && !settings.data.show[name]) WP.panels.closePanel(name);
+      });
+    }
     relayoutHome();
   }
 
@@ -73,12 +83,24 @@
       return n.id !== "empty" && n.offsetHeight > 0;
     });
     if (!kids.length) return null;
+    /* Neutralising flex-grow is not enough any more, and for five rounds it quietly was
+       not: portrait became a WRAPPED row (the two tile rows share one line), and in a
+       wrapped container the leftover space is handed to the LINES by align-content, not
+       to the items. So the lines stretched to the bottom whatever the items did, the last
+       card's bottom sat on the container's edge, and slack measured ~2 px no matter how
+       much room the content actually needed. The boot log has been printing "slack=2px"
+       as a constant, and anything reading it — the growth cap, and now the drift clamp —
+       was reading a number that could not move. Pin align-content for the measurement
+       too, and the figure means something again. */
+    var priorAlign = hv.style.alignContent;
+    hv.style.alignContent = "flex-start";
     kids.forEach(function (n) { n.style.maxHeight = "none"; n.style.flexGrow = "0"; });
     var nat = kids.map(function (n) { return n.offsetHeight; });
     var slack = Math.round(hv.clientHeight
       - (kids[kids.length - 1].getBoundingClientRect().bottom
          - hv.getBoundingClientRect().top));
     kids.forEach(function (n) { n.style.flexGrow = ""; });
+    hv.style.alignContent = priorAlign;
     /* Both axes. The vertical one was measured from the first round because the column is
        a height budget; the horizontal one went unchecked for five, and in 24-hour mode the
        hourly strip was clipping an eighth chip through the middle of a glyph at the card's
@@ -160,8 +182,27 @@
       var b = C.burnInProtection || {};
       var max = b.maxShiftPx || 12;
       var x = (Math.random() * 2 - 1) * max;
-      var y = (Math.random() * 2 - 1) * max;
+      var y = (Math.random() * 2 - 1) * drift.downRoom(max);
       drift.apply("translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px)");
+    },
+
+    /* How far the layout may travel DOWNWARD before the bottom card leaves the screen.
+
+       This is a real defect the simulator caught, not a theoretical one: the home column
+       converges on ~2 px of slack with every widget switched on (the boot log prints it),
+       and a nudge is up to 12 px. So for the eight minutes an hour that the random walk
+       happened to land downward, the bottom of the news ticker was simply off the bottom
+       of the wall panel — measured at 40 px clipped at full deflection. Burn-in protection
+       that clips content is a worse defect than the ghosting it prevents.
+
+       The vertical range is therefore whatever the column actually has spare, and the
+       horizontal range is untouched (the column has side padding to give). A negative
+       slack (already overflowing) yields 0: hold still and let the layout log complain,
+       rather than making it worse. */
+    downRoom: function (max) {
+      var m = WP._layout && WP._layout.metrics && WP._layout.metrics();
+      if (!m || typeof m.slack !== "number") return max;
+      return Math.max(0, Math.min(max, m.slack));
     },
 
     reset: function () { drift.apply("translate(0,0)"); },

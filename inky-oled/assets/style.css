@@ -117,7 +117,9 @@
      2560 px frame at its lowest.
      Because every card carries flex-grow, the slack is handed back to the cards as extra
      internal breathing room, so trimming intrinsic padding above costs nothing visually. */
-  --gap: 0.8vh;
+  /* Between cards in the home column. 0.8vh x 7 gaps was 64 device px of the budget at a
+     moment when the column had 2 px spare; the column is the constraint, not the rhythm. */
+  --gap: 0.62vh;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
