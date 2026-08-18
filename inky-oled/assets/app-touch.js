@@ -53,6 +53,7 @@
       void el.offsetWidth;
       el.classList.add("is-open");
       document.body.classList.add("panel-open");
+      WP._layout.reportPanel(name);
       armIdle();
     },
 

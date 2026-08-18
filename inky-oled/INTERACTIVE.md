@@ -31,17 +31,21 @@ No shipped source file exceeds 500 lines (enforced by a test). The seams: `app.j
 (`style.css` tokens+base, `-home`, `-panels`, `-theme`); `MainActivity.java` +
 `BridgeFetch.java`.
 
-## The twelve widgets
+## The eleven widgets
 
 Every widget is a plugin object registered with `WP.register()`: `init()` at boot with its own
 refresh cadence, `onOpen(panel, arg)` to fill its detail panel, `onClose()` to tear down
 whatever the panel started.
 
-Three of them are new since the colour redesign and cost no API key: **Moon** (phase computed
+Two of them are new since the colour redesign and cost no API key: **Moon** (phase computed
 locally from the mean synodic month; the disc in the tile and the panel share one crescent
-path with the icon set), **Air** (Open-Meteo's air-quality endpoint, same CORS posture as the
-weather fetch; the AQI number wears the EPA band colours), and **Date** (a month grid computed
-locally, today ringed).
+path with the icon set) and **Air** (Open-Meteo's air-quality endpoint, same CORS posture as
+the weather fetch; the AQI number wears the EPA band colours and the strip under it says which
+of the six bands today is in).
+
+A third, **Date**, was cut: a month grid computed locally, with no events, because this product
+has no account and no sync by design. See the note in README — a screen that restates the Clock
+card's date is not a screen.
 
 ## Screens, swipes and the playlist
 

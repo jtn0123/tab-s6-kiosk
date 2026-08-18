@@ -13,12 +13,14 @@ var assert = require("node:assert/strict");
 var h = require("./lib/harness.js");
 var fake = require("./lib/fake-bridge.js");
 
-/* Storage and Memory both have a "Free" and a "Total", so stats are read per section. */
+/* Storage and Memory both have a "Free" and a "Used", so stats are read per section. The
+   section titles carry the total now ("Storage free · 128 GB"), so the lookup matches on a
+   prefix rather than on the whole heading. */
 function stats(body, sectionTitle) {
   var root = body;
   if (sectionTitle) {
     root = body.querySelectorAll(".psec").filter(function (s) {
-      return s.querySelector(".psec-t").textContent === sectionTitle;
+      return s.querySelector(".psec-t").textContent.indexOf(sectionTitle) === 0;
     })[0];
     assert.ok(root, "no section titled " + sectionTitle);
   }
@@ -78,15 +80,29 @@ test("the panel renders every section from one snapshot", function () {
         || k === "Voltage" || k === "Cells";
   }), [], "the battery grid is restating the hero, or back to reporting trivia");
 
+  /* CHANGED: the TOTAL moved from a grid cell into the section heading, and the heading
+     also names the bar's direction. Free + used + total is three figures of which any two
+     determine the third — the grid was doing arithmetic out loud — and the constant of the
+     three is the one that belongs in the name of the thing rather than in a cell. The
+     direction matters because a nearly-full bar beside "FREE 104 GB" reads as "nearly full"
+     to every human alive; these bars fill with what is LEFT, and now they say so. */
+  function heading(title) {
+    return body.querySelectorAll(".psec-t").filter(function (n) {
+      return n.textContent.indexOf(title) === 0;
+    })[0].textContent;
+  }
+  assert.equal(heading("Storage"), "Storage free · 128 GB");
+  assert.equal(heading("Memory"), "Memory free · 6 GB");
+
   var st = stats(body, "Storage");
   assert.equal(st["Free"], "41 GB");
-  assert.equal(st["Total"], "128 GB");
   assert.equal(st["Used"], "87 GB");
+  assert.equal(st["Total"], undefined, "the total is in the heading, not a third cell");
 
   var mem = stats(body, "Memory");
   assert.equal(mem["Free"], "2 GB");
-  assert.equal(mem["Total"], "6 GB");
   assert.equal(mem["Used"], "4 GB");
+  assert.equal(mem["Total"], undefined, "the total is in the heading, not a third cell");
 
   /* CHANGED in the fit round: DOWN and UP are one cell, because they are one measurement
      of one link and as two cells they spilled a three-across grid onto a second row the

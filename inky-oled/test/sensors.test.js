@@ -473,6 +473,37 @@ test("a flat two hours says so in words, at a size you can read across a room", 
     "a 20 °F swing is being called steady");
 });
 
+test("when the words say Steady the PICTURE says steady too", function () {
+  /* The words landed and the drawing did not, so for a whole round the panel argued with
+     itself: `Steady` at the value tier over a line that climbed a visible step and carried
+     high-frequency jitter across a 250 px plot. Between a sentence and a picture, the
+     picture is the half a person 3 m away believes.
+
+     Two mechanisms, both asserted here because either one alone leaves the contradiction:
+     the trace is decimated to ~24 points (a room sensor's sample-to-sample noise is orders
+     of magnitude below the 4 °F a person can feel, and drawing every sample draws that
+     noise as shape), and the plot is marked .is-flat so the stylesheet can stop it being
+     the largest object on the screen. */
+  var app = boot();
+  drive(app, "sensor.living_room_temperature", 75, 1);
+  var body = app.panelBody("sensors");
+  var plot = body.querySelector(".plot");
+  assert.match(plot.getAttribute("class"), /is-flat/,
+    "a flat series still draws a full-height plot");
+  var pts = body.querySelector(".spark-line").getAttribute("points").trim().split(/\s+/);
+  assert.ok(pts.length <= 24,
+    "a flat trace is drawn from " + pts.length + " points; sensor noise is being drawn as shape");
+
+  /* a real swing keeps every sample and the full-height plot — the cap is for the case
+     where the panel has already said in words that nothing happened */
+  drive(app, "sensor.living_room_temperature", 75, 20);
+  body = app.panelBody("sensors");
+  assert.equal(/is-flat/.test(body.querySelector(".plot").getAttribute("class") || ""), false,
+    "a 20 °F swing is being drawn as if nothing happened");
+  assert.ok(body.querySelector(".spark-line").getAttribute("points").trim().split(/\s+/).length > 24,
+    "a real swing is being decimated");
+});
+
 test("an on/off trace keeps its fixed 0..1 domain and says On / Off on the axis", function () {
   /* A switch has no range to floor: it is high or it is low, and a domain taken from the
      data would redraw a lamp that never moved as noise. */

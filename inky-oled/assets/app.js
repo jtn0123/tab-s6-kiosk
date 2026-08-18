@@ -190,7 +190,13 @@ window.WP = (function () {
      localStorage is the source of truth (spec), but a wall panel gets force-stopped and
      wiped more than a phone browser does, so every write is also mirrored into Android
      SharedPreferences and used as a fallback if localStorage comes back empty. */
-  var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air", "calendar",
+  /* ELEVEN. "calendar" was the twelfth and it is gone — a month grid with no events, on a
+     wall panel, for three design rounds: 3.2% of the screen inked, telling a reader a date
+     its own header stated and the home clock states in 63 CSS px of type. There is no
+     account and no sync in this product by design, so the screen had nothing to grow into,
+     and shipping a fourth empty calendar is worse than shipping eleven panels that all say
+     something. The tile went with it: DATE 17 / Mon · Aug restated the clock card. */
+  var WIDGETS = ["clock", "weather", "hourly", "daily", "moon", "air",
                  "news", "sensors", "system", "timer", "settings"];
   /* What each widget is called in the Widgets list on the Settings panel. These are the
      words printed on the CARD each switch controls — "Now", "Next days", "Home", "Setup" —
@@ -202,7 +208,7 @@ window.WP = (function () {
   var WIDGET_LABELS = {
     clock: "Clock", weather: "Now", hourly: "Hourly",
     daily: "Next days", moon: "Moon", air: "Air",
-    calendar: "Date", news: "News", sensors: "Home", system: "Device",
+    news: "News", sensors: "Home", system: "Device",
     timer: "Timer", settings: "Setup"
   };
 

@@ -80,6 +80,10 @@
          fact (the continent is not the interesting part; whether we are on daylight time
          is). Intl already knows the long name — "Pacific Daylight Time" — so ask for that
          and keep the id only as a fallback for an ICU build that cannot answer. */
+      var localZone = "";
+      try { localZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
+      catch (e0) { localZone = ""; }
+
       var tzText = "";
       try {
         var parts = new Intl.DateTimeFormat(undefined, {
@@ -101,14 +105,20 @@
          columns give it 320 px. The three that went are the three nearest neighbours of the
          local clock two centimetres above: Denver, Chicago and Berlin are each within an
          hour of a zone still listed, which is what a world clock is for. */
+      /* The local zone is NOT in this list, and the list is filtered rather than trimmed
+         so it stays right if the tablet is ever hung somewhere else. Los Angeles was the
+         first cell of WORLD CLOCKS on a panel whose hero, 700 px above, is the time in Los
+         Angeles — a world clock for the room you are standing in. Six cells are authored so
+         that dropping the local one still leaves a full two-by-two-and-a-bit grid. */
       var zones = [
         ["Los Angeles", "America/Los_Angeles"],
         ["New York", "America/New_York"],
         ["UTC", "UTC"],
         ["London", "Europe/London"],
         ["Tokyo", "Asia/Tokyo"],
-        ["Sydney", "Australia/Sydney"]
-      ];
+        ["Sydney", "Australia/Sydney"],
+        ["Berlin", "Europe/Berlin"]
+      ].filter(function (z) { return z[1] !== localZone; }).slice(0, 6);
 
       /* Two cadences, not one.
 
@@ -165,10 +175,17 @@
                "Clock 12-hour" — a SETTING, not a reading. It is in Settings, and it is on
                  the home screen's SETUP tile. This panel is about what time it is.
              And two of the three that stayed printed their own label inside their value:
-             WEEK said "Week 34" and UTC OFFSET said "UTC-07:00". The label is the label. */
+             WEEK said "Week 34" and UTC OFFSET said "UTC-07:00". The label is the label.
+
+             The labels are SHORT because a third of this panel is about nine characters
+             wide at the label tier. "Day of year" was eleven, wrapped to two lines, and
+             dropped its own value ~90 device px below the two beside it — three values on
+             three baselines in a row that is read across. Neither word was carrying
+             anything: the value "229 of 365" is what "of year" was going to say, and
+             "-07:00" under UTC is an offset by construction. */
           + section("Today", statGrid([
-              ["UTC offset", offTxt],
-              ["Day of year", String(doy) + " of " + fmt.daysInYear(now)],
+              ["UTC", offTxt],
+              ["Day", String(doy) + " of " + fmt.daysInYear(now)],
               ["Week", String(isoWeek)]
             ], 3))
           + section("World clocks", '<div class="wc-grid">' + zones.map(function (z) {

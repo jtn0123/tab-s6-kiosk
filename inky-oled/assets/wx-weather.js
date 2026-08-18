@@ -135,14 +135,22 @@
     },
 
     /* Single source of truth for the status line, so it can be redrawn at any time from
-       state instead of only at the moment a fetch lands. */
+       state instead of only at the moment a fetch lands.
+
+       SILENT WHEN FRESH. It used to print "Updated 10:38 PM" — directly above a clock card
+       reading 10:38 PM, in the biggest type on the wall. The one thing a fresh timestamp
+       cannot tell you is that the data is fresh, because on this screen it is the same
+       glyphs as the time. A status line on a wall panel earns its row by speaking when
+       something is wrong; the fresh case has nothing to say and says it.
+
+       Stale is unchanged and stays loud, because that is the case the line exists for. */
     showStatus: function () {
       if (this.stale) {
         if (!this.data) return;
         WP.status("Offline — showing last reading"
           + (this.fetchedAt ? " (" + fmt.ago(this.fetchedAt) + ")" : ""), true);
       } else if (this.fetchedAt) {
-        WP.status("Updated " + fmt.clock(new Date(this.fetchedAt), false));
+        WP.status("");
       }
     },
 

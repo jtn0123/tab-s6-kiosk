@@ -13,31 +13,13 @@
 
   var $ = WP.$, esc = WP.esc, fmt = WP.fmt, S = WP.settings;
   var ui = WP.ui;
-  var statGrid = ui.statGrid, section = ui.section, hero = ui.hero;
+  var statGrid = ui.statGrid, section = ui.section, tempTone = ui.tempTone;
 
   /* The forecast is fetched once and shared: this widget, the "now" card and the daily card
      all read the same payload rather than each hitting Open-Meteo. wx-weather.js is loaded
      before this file (index.html pins that order, and a test asserts it), so the plugin is
      already in the registry by the time this IIFE runs. */
   var weather = WP.registry.weather;
-
-  /* Which of the three temperature stops a reading falls on, against the DAY's range.
-
-     This replaced `.hrow-bar`: each hour used to be drawn as a fill of a full-width grey
-     track, `12 + ((t - lo) / span) * 78` percent wide. A track implies a maximum, so at 3 m
-     "78 deg" read as "about half full of something" — and thirty pixels above it the same
-     eight hours were already drawn as a warm-to-cool curve. Two grammars for one variable
-     on one screen, and the bar was the one that could not be right: temperature has no
-     zero to fill from. The figure carries the curve's own colour instead, which makes the
-     list a legend for the chart rather than a competitor to it.
-
-     Three buckets, not an interpolation: the app has exactly three temperature tokens and a
-     widget picks a CLASS, never a colour — the same rule the type ramp works by. The stops
-     match the gradient in chart() (hot at the top, warm at 0.55, cold at the bottom). */
-  function tempTone(t, lo, span) {
-    var f = (t - lo) / span;
-    return f > 0.66 ? "t-hot" : f > 0.33 ? "t-warm" : "t-cold";
-  }
 
   var hourly = {
     name: "hourly",
@@ -160,7 +142,16 @@
        The hour ticks and the hi/lo callouts are HTML positioned over the chart, not SVG
        <text>: text in a scaling viewBox would need its own font-size, and the design
        system's one hard rule is that no size is authored outside the ramp. */
+    /* Every FOURTH hour, so six labels across the axis rather than eight. The annotation
+       tier moved to the acuity floor (28.5 CSS px), and that bill has to be paid in ticks:
+       eight labels leave 83 px of pitch for a 52 px word, six leave 111. A chart is the one
+       place where "it did not fit" is not an argument for shrinking the type — if the
+       annotation will not fit, the chart has too many ticks, and that is the chart's
+       problem. Six across a day still lands on 12A / 4A / 8A / 12P / 4P / 8P. */
+    TICK_EVERY: 4,
+
     chart: function (h, list, sel) {
+      var TICK_EVERY = this.TICK_EVERY;
       var W = 320, H = 104;
       var L = 8, R = 312, T = 14, B = 68;         // temp plot area
       var barBase = 100, barMax = 24;             // precip bars
@@ -193,7 +184,7 @@
           bars += '<rect x="' + (L + n * step - bw / 2).toFixed(1) + '" y="' + (barBase - bh).toFixed(1)
             + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1"/>';
         }
-        if (n % 3 === 0) {
+        if (n % TICK_EVERY === 0) {
           var tt = new Date(h.time[k]);
           ticks += '<span style="left:' + pctX(L + n * step) + '">'
             + esc(k === now ? "Now" : fmt.hourLabel(tt)) + "</span>";
@@ -232,8 +223,18 @@
         + W + " " + H + '" preserveAspectRatio="none">'
         + '<defs><linearGradient id="hc-t" x1="0" y1="' + T + '" x2="0" y2="' + B
         + '" gradientUnits="userSpaceOnUse">'
+        /* THREE BANDS with short joins, not one smooth blend. The list under this chart
+           tints each figure with one of three classes (WP.ui.tempTone), and against a
+           continuous gradient there was no height at which the two agreed except by luck:
+           72 degrees came out blue in the list and pale warm-cream on the curve 400 px
+           above it. Banding the gradient at the same cut points the classes use makes the
+           curve the legend's own key — most of any band is unambiguously its colour, and
+           the 0.1-wide joins are where a bucket boundary honestly is. */
         + '<stop offset="0" stop-color="var(--temp-hot)"/>'
-        + '<stop offset="0.55" stop-color="var(--temp-warm)"/>'
+        + '<stop offset="0.22" stop-color="var(--temp-hot)"/>'
+        + '<stop offset="0.28" stop-color="var(--temp-warm)"/>'
+        + '<stop offset="0.72" stop-color="var(--temp-warm)"/>'
+        + '<stop offset="0.78" stop-color="var(--temp-cold)"/>'
         + '<stop offset="1" stop-color="var(--temp-cold)"/></linearGradient>'
         + '<linearGradient id="hc-a" x1="0" y1="' + T + '" x2="0" y2="' + B
         + '" gradientUnits="userSpaceOnUse">'
@@ -266,23 +267,36 @@
       WP.qs("[data-sub]", panel).textContent =
         t.toLocaleDateString(undefined, { weekday: "long" }) + " · " + fmt.clock(t, false);
 
-      /* Readout for the selected hour, then the pickable list underneath.
+      /* NO HERO. This panel's subject is the next 24 hours, so it opens on the chart.
+
+         It used to open on `72° / Clear · feels 77°` over a glyph — which is the identical
+         block Conditions opens with, which is itself the third printing of the home Now
+         card. Two adjacent screens in the carousel were roughly half the same screen, and
+         the half they shared was the half neither of them is about. The selected hour's own
+         reading is not lost: it is the row highlighted in the list below, the dot on the
+         curve, and the panel subtitle. What the hero was really buying was 150 CSS px in
+         portrait and 127 in landscape, and both are spent here — on an axis whose numbers
+         can be read from the sofa, and on rows tall enough to hold their own figures.
 
          THREE fields, down from eight. Eight was two and a half grid rows of a screen that
          has to hold a chart and a list as well, and it was the reason this panel opened
          scrolled — which in turn is why the top row used to render as three naked numbers
-         (63° / 5 mph / 0.8) with their labels above the fold, and why in landscape the
-         temperature curve was clipped off the top of its own plot. The four that went are
-         all one tap away on Conditions, which is the screen for exactly this; rain per hour
-         is the list's own right-hand column; and "feels like" is already in the hero.
-         What is left is the three that change hour to hour and are not stated anywhere
-         else on this screen. */
+         (63° / 5 mph / 0.8) with their labels above the fold. The four that went are all
+         one tap away on Conditions, which is the screen for exactly this; rain per hour is
+         the list's own right-hand column. `Feels` takes the slot the hero used to say it
+         in, so nothing that was on this screen has left it.
+
+         The stat trio is also no longer Conditions' stat trio: that panel answers
+         HUMIDITY / PRESSURE / UV, and this one now answers FEELS / WIND / UV — the three
+         that change hour to hour. */
       var uv = fmt.uv(h.uv_index[i]);
-      var readout = hero(WP.wxIcon(h.weather_code[i], h.is_day && h.is_day[i] === 0),
-            fmt.deg(h.temperature_2m[i]),
-            esc(info.text) + " · feels " + fmt.deg(h.apparent_temperature[i]))
-        + statGrid([
-            ["Humidity", Math.round(h.relative_humidity_2m[i]) + "%"],
+      var readout = statGrid([
+            /* The qualifier is the humidity alone. "Overcast · 83% humidity" is 21
+               characters in a 212 px cell and wrapped, orphaning "humidity" on its own
+               line — and the condition word is printed against every hour in the list
+               forty pixels below, so it was the half that was already on the screen. */
+            ["Feels", fmt.deg(h.apparent_temperature[i]),
+              Math.round(h.relative_humidity_2m[i]) + "% humidity"],
             ["Wind", Math.round(h.wind_speed_10m[i]) + " " + fmt.speedUnit(),
               fmt.compass(h.wind_direction_10m[i])],
             ["UV index", String(uv.n), uv.label]
@@ -304,16 +318,29 @@
          starts at whatever hour was tapped, so opening the panel on 9p still shows 9p and
          what follows it, and it slides back from the end so the last hours of the forecast
          are reachable rather than being a one-row list. */
-      /* Five in landscape. The number of rows a fixed canvas can show is a property of the
-         canvas: a 711 px-tall screen has 300 px left under the chart where a 1138 px one has
-         500, and eight rows in the short one either overflow it or shrink each row below the
-         88-device-px target floor. This is the one layout decision the stylesheet cannot
-         make, because the count is what is emitted, not how it is drawn. */
-      /* Six in portrait, not eight: the type ramp moved a row's temperature to the value
-         tier, and eight of the new rows went 21 px off the bottom of the frame (measured on
-         the device). A row that is half drawn is worse than a row that is not there, and
-         six rows a person on the sofa can read beat eight they cannot. */
-      var ROWS_SHOWN = (window.innerWidth > window.innerHeight) ? 5 : 6;
+      /* FOUR in landscape, and the count came down because the last one was being sliced.
+         The number of rows a fixed canvas can show is a property of the canvas: a 711 px
+         screen has ~350 px under the chart where a 1138 px one has ~600, and a row has to
+         be tall enough to hold a value at the value tier — 74 CSS px in landscape (see the
+         min-height in style-widgets.css, which is derived from the type rather than typed).
+         Five rows of 74 do not fit in 350 with a heading above them, so the fifth painted
+         out of its own box and its temperature was cut by the bezel. Emitting four is the
+         honest form of that arithmetic; squeezing five was the dishonest one. */
+      /* Five in portrait, down from eight and then six, and every step of that is the same
+         arithmetic: a row cannot be shorter than the value it holds (91 CSS px in portrait
+         once the temperature is at the value tier), and the panel has ~490 px under the
+         chart once the axis is annotated at a size that can be read from 3 m. 490 / 91 is
+         five. A row that is half drawn is worse than a row that is not there.
+         The 24-hour shape is not lost — it is the chart directly above, which is a better
+         way to read a day than a list is.
+
+         THREE in landscape, and the row that went bought the chart back. A 711 px-tall
+         screen has ~330 px under the chart; a row is 74 px there; four of them plus a
+         heading did not fit, which is how the last one came to be sliced by the bezel. The
+         74 px is not lost either: it went into the curve, which had been squashed to ~105 px
+         and rendered a 29-degree day as almost flat. On a screen this shape the chart is the
+         better half of the panel, so it is the half that gets the pixels. */
+      var ROWS_SHOWN = (window.innerWidth > window.innerHeight) ? 3 : 5;
       var from = Math.max(0, Math.min(list.indexOf(i), list.length - ROWS_SHOWN));
       var visible = list.slice(from, from + ROWS_SHOWN);
       var wet = this.anyRain(visible);

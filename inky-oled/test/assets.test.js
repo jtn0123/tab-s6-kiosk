@@ -86,7 +86,7 @@ test("the real config boots the dashboard", function () {
   var app = h.createApp({ config: loadConfig() });
   assert.deepEqual(app.logs.error, []);
   assert.deepEqual(app.logs.warn, []);
-  assert.equal(Object.keys(app.registry).length, 14);   // 12 widgets + sky + carousel
+  assert.equal(Object.keys(app.registry).length, 13);   // 11 widgets + sky + carousel
 });
 
 /* ---------------- packaging invariants ---------------- */
@@ -143,7 +143,7 @@ test("index.html loads exactly the scripts that exist, in the order they need", 
     "wx-clock.js", "wx-timer.js", "wx-weather.js", "wx-hourly.js",
     "wx-daily.js", "wx-sensors-demo.js", "wx-sensors.js", "wx-sensors-panel.js",
     "wx-system.js",
-    "wx-moon.js", "wx-air.js", "wx-calendar.js", "wx-news.js",
+    "wx-moon.js", "wx-air.js", "wx-news.js",
     "wx-settings.js", "wx-carousel.js", "wx-sky.js"
   ]);
   srcs.forEach(function (s) {

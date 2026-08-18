@@ -177,6 +177,11 @@ function createApp(opts) {
     },
     addEventListener: function () {},
     removeEventListener: function () {},
+    /* The panel fit check reads the scrollport's bottom padding, because that padding is
+       the whole margin between the last row and the bezel. minidom has no cascade, so a
+       test states the padding the same way it states every other measurement — by writing
+       it onto the element. */
+    getComputedStyle: function (el) { return (el && el.style) || {}; },
     CONFIG: opts.config === undefined ? defaultConfig() : opts.config
   };
   /* base64 <-> binary string, which WebView has natively; bridgeFetch decodes its

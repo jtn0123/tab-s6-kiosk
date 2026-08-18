@@ -55,6 +55,28 @@
     }).join("") + "</div>";
   }
 
+  /* Which of the three temperature stops a reading falls on, against a stated [lo, hi].
+     Three widgets ask this now — the hourly list tints its figures with it, the daily
+     chart caps its 24 bars with it, and the hourly curve is drawn from the same three
+     stops — so it lives here with the rest of the shared vocabulary rather than inside
+     one of them.
+
+     The BOUNDARIES are the arithmetic that makes the list a legend for the curve instead
+     of a second opinion about it. The curve is a vertical gradient with hot at the top,
+     warm at the middle and cold at the bottom, so a reading at fraction f of the range
+     sits at gradient position 1 - f, and the stop it is NEAREST is hot above 0.75, cold
+     below 0.25 and warm between. The previous cuts were 0.66 / 0.33 against a gradient
+     whose middle stop was at 0.55, and the disagreement was visible on one screen: 72°
+     rendered blue in the NEXT HOURS list and pale warm-cream on the curve 400 px above it.
+     Same datum, same screen, two answers.
+
+     Three buckets, not an interpolation: the app has exactly three temperature tokens and
+     a widget picks a CLASS, never a colour — the same rule the type ramp works by. */
+  function tempTone(t, lo, span) {
+    var f = (t - lo) / (span || 1);
+    return f > 0.75 ? "t-hot" : f > 0.25 ? "t-warm" : "t-cold";
+  }
+
   function section(title, inner, cls) {
     return '<section class="psec' + (cls ? " " + cls + '"' : '"')
       + '><h2 class="psec-t">' + esc(title) + "</h2>" + inner + "</section>";
@@ -64,10 +86,14 @@
      and a line of context. Laid out as a row (see .big-readout.hero) — stacking the glyph
      spent ~8vh on a line that says nothing the words underneath do not, and it is the home
      Now card's layout, so the panel reads as a magnification of the card that opened it. */
+  /* An empty icon emits no icon box. It used to emit an empty one, which on a flex row with
+     a gap is a visible indent with nothing in it — and the Air panel now opens without a
+     glyph, because the two things it kept trying to draw there (a hollow ring, then a 43 px
+     arc) were decoration standing in for a scale that is drawn properly underneath. */
   function hero(icon, valueHtml, subHtml, iconCls) {
-    return '<div class="big-readout hero">'
-      + '<div class="big-icon' + (iconCls ? " " + iconCls : "") + '" aria-hidden="true">'
-      + icon + "</div>"
+    return '<div class="big-readout hero' + (icon ? "" : " no-icon") + '">'
+      + (icon ? '<div class="big-icon' + (iconCls ? " " + iconCls : "") + '" aria-hidden="true">'
+                  + icon + "</div>" : "")
       + '<div class="hero-text">'
       + '<div class="big-time">' + valueHtml + "</div>"
       + '<div class="big-sub">' + subHtml + "</div></div></div>";
@@ -84,12 +110,21 @@
      charts annotated two ways is two design systems.
 
      The labels are HTML over the SVG, not SVG <text>: a size inside a scaling viewBox is a
-     size authored outside the ramp, and these sit at the axis tier (--fs-note at --dim).
-     They cost the chart no height. */
-  function plot(svg, hi, lo, from, to) {
-    return '<div class="plot">' + svg
+     size authored outside the ramp, and these sit at the annotation tier (--fs-body-lg).
+     They cost the chart no height.
+
+     The y labels are inside their own .plot-y box, which is exactly the picture. They used
+     to be positioned against the whole .plot — including the time row — with .plot-lo held
+     off the bottom by a hand-tuned 2.2vh, and the moment the annotation tier grew that gap
+     stopped being enough: reading down the left edge of the Sensors panel gave `75.5 °F`,
+     the chart, `2h ago`, and THEN `71.5 °F`, so the bottom of the y-scale read as a pair
+     with the start of the x-scale. A box that ends where the picture ends cannot be
+     mis-tuned; nothing here is a magic number any more. */
+  function plot(svg, hi, lo, from, to, cls) {
+    return '<div class="plot' + (cls ? " " + cls : "") + '">'
+      + '<div class="plot-y">' + svg
       + '<span class="plot-hi">' + esc(hi) + "</span>"
-      + '<span class="plot-lo">' + esc(lo) + "</span>"
+      + '<span class="plot-lo">' + esc(lo) + "</span></div>"
       + '<div class="plot-x"><span>' + esc(from) + "</span><span>"
       + esc(to) + "</span></div></div>";
   }
@@ -150,6 +185,7 @@
   WP.ui = {
     statGrid: statGrid,
     section: section,
+    tempTone: tempTone,
     hero: hero,
     plot: plot,
     bar: bar,

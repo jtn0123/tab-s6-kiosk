@@ -131,9 +131,17 @@ test("REGRESSION: every 'now' number on the wall is drawn from hourly[nowIndex]"
       "the panel's feels-like is reading `current`");
     app.WP.panels.close();
 
-    /* and the hourly panel's own hero, for the same hour */
+    /* and the hourly panel says the same number for the same hour. It says it in the
+       SELECTED ROW now, not in a hero: the hero was `72° / Clear · feels 77°`, which is
+       character-for-character the block Conditions opens with, which is itself the third
+       printing of the home Now card — two adjacent carousel screens that were half the
+       same screen. The invariant this test exists for is unchanged: whatever the hourly
+       panel prints for the current hour is the HOURLY bucket, not `current`. */
     app.WP.panels.open("hourly");
-    assert.equal(app.panelBody("hourly").querySelector(".big-time").textContent, hourly);
+    var hb = app.panelBody("hourly");
+    assert.equal(hb.querySelector(".hrow.sel .hrow-d").textContent, hourly);
+    assert.equal(app.qsa(".big-time", hb).length, 0,
+      "the hourly panel opens on a hero again — that is Conditions' screen");
     app.WP.panels.close();
   });
 });
@@ -240,7 +248,11 @@ test("a live payload fills the Now card, the strip and the daily row", function 
     assert.equal(app.qsa("#hourly .hr").length, 24);
     assert.equal(app.qsa("#forecast .fc-day").length, 7, "all seven days the API returns");
     assert.equal(app.qs("#forecast .fc-name").textContent, "Today");
-    assert.match(app.text("status"), /^Updated /);
+    /* SILENT. The line used to read "Updated 9:30 AM" directly under a clock card reading
+       9:30 AM — the same glyphs, twice, on the screen's top two rows. A status line speaks
+       when something is wrong; a fresh reading has nothing to add that the clock has not
+       already said. The stale path below is what this row is for and it is unchanged. */
+    assert.equal(app.text("status"), "", "the status line restates the clock again");
   });
 });
 
@@ -325,7 +337,9 @@ test("the hourly panel opens on the hour that was tapped", function () {
     assert.deepEqual(app.stack(), ["hourly"]);
     assert.equal(app.registry.hourly.sel, 12);
     var body = app.panelBody("hourly");
-    assert.equal(body.querySelector(".big-time").textContent, wx.tempAt(12) + "°");
+    /* the tapped hour is the SELECTED ROW; this panel has no hero (see the note in
+       paintPanel — it was Conditions' hero, printed a third time) */
+    assert.equal(body.querySelector(".hrow.sel .hrow-d").textContent, wx.tempAt(12) + "°");
     /* SEVEN rows, not 24. The list is windowed to what the panel can actually show: all
        24 went into a scrollport that fits about four of them, so the panel always ended on
        a row sliced in half and nineteen of the rows were below a fold nobody on a wall
@@ -336,8 +350,11 @@ test("the hourly panel opens on the hour that was tapped", function () {
        one 21 px off the bottom of the frame (measured on the device). Fewer rows at a size
        that reads beats more rows nobody can. What this test is really about is unchanged
        and is the line below it: the hour you tapped is in the list and it is selected. */
-    /* SIX */
-    assert.equal(app.qsa(".hrow", body).length, 6);
+    /* FIVE. Eight, then six, then five, and every step is the same arithmetic rather than a
+       preference: a row cannot be shorter than the value it holds (91 CSS px once the
+       temperature is at the value tier), and the panel has ~490 px under a chart whose axis
+       is annotated at a size somebody 3 m away can read. */
+    assert.equal(app.qsa(".hrow", body).length, 5);
     assert.equal(app.qsa(".hrow.sel", body).length, 1);
   });
 });

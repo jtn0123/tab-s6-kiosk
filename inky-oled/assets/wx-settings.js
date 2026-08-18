@@ -141,9 +141,12 @@
           + switchRow("settings", "sky", "Weather behind the cards", S.get("sky") === true)
           + switchRow("settings", "cycle", "Cycle screens every "
               + Math.round((C.cycle && C.cycle.seconds) || 20) + "s", !!S.get("cycle"))
+          /* "so nothing burns in" wrapped in landscape and left "in." alone on a line of
+             its own. The clause is the reason the setting exists, so it stays; what goes is
+             the two words that made it a sentence longer than the row is wide. */
           + switchRow("settings", "burn", "Drift the layout", !!S.get("burnIn"), null,
               "A few pixels every "
-              + Math.round((b.intervalSeconds || 120) / 60) + " minutes, so nothing burns in.")
+              + Math.round((b.intervalSeconds || 120) / 60) + " minutes, against burn-in.")
           + "</div>")
 
         /* WP.repaint, not body.innerHTML: replacing the content outright drops the scroll

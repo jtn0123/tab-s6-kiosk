@@ -153,7 +153,7 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
    so the plot was as tall as the panel was wide — 250 CSS px in portrait and 357 px of a
    711 px-tall landscape screen. That is the landscape bug: the chart pushed the hero and
    the stat row off the top and its own peak out of view. */
-.hchart { width: 100%; height: 21vh; display: block; }
+.hchart { width: 100%; height: 20vh; display: block; }
 /* the selected hour's dot, in HTML so a stretched viewBox cannot turn it into an ellipse */
 .hc-dot {
   position: absolute;
@@ -164,19 +164,22 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 }
 .hc-bars rect { fill: var(--ic-rain); opacity: 0.55; }
 /* The two callouts and the tick row are the only things that say what the curve's HEIGHT
-   means — they are the chart, not decoration on it — so they sit at the axis tier
-   (--fs-note, 3.8' at 3 m) rather than at the ramp's floor. They were --fs-caption: 2.8',
-   which is under the acuity threshold, i.e. a curve with no numbers on it. */
+   means — they are the chart, not decoration on it — so they take the acuity floor the rest
+   of the build takes, --fs-body-lg at 5.05'. They were --fs-caption (2.8'), then --fs-note
+   (3.8'), i.e. a curve whose numbers could not be resolved from the sofa in either round,
+   with the peak callout — the one figure the chart exists to deliver — the least legible
+   mark on its own screen. The tick row grew with the type: a 28.5 px word needs a 3.4vh
+   line, and the axis carries six labels rather than eight so the pitch still pays for it. */
 .hc-hi, .hc-lo {
   position: absolute; transform: translate(-50%, -100%);
-  font-size: var(--fs-note); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-body-lg); font-variant-numeric: tabular-nums;
 }
 .hc-hi { color: var(--temp-warm); }
 .hc-lo { color: var(--temp-cold); transform: translate(-50%, 0); }
-.hc-ticks { position: relative; height: 2.6vh; }
+.hc-ticks { position: relative; height: 3.4vh; }
 .hc-ticks span {
   position: absolute; transform: translateX(-50%);
-  font-size: var(--fs-note); color: var(--dim);
+  font-size: var(--fs-body-lg); color: var(--dim);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
@@ -273,35 +276,6 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 }
 .news-row-m { font-size: var(--fs-note); color: var(--dimmer); margin-top: 0.4vh; }
 
-/* ---- calendar ----
-   The month grid IS the panel. It used to be a block floating inset at the top over 313
-   device px of black, with a day-of-year line under it that the Clock panel already says.
-   The body is a column, the grid takes what is left of it, and its rows share that between
-   them — so a date is a target the size of a thumb and a number you can read at 3 m. */
-.cal-nav { display: flex; align-items: center; gap: 1.6vw; margin: 0.4vh 0 0.8vh; }
-.cal-title { font-size: var(--fs-title); font-weight: 300; flex: 1 1 auto; }
-.cal-nav .btn { flex: 0 0 auto; min-width: 12vw; }
-.panel[data-panel="calendar"] [data-body] { display: flex; flex-direction: column; }
-.cal-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: auto;   /* the weekday heads */
-  grid-auto-rows: 1fr;        /* every week row shares what is left, evenly */
-  flex: 1 1 auto; min-height: 0;
-  gap: 0.35vh 0; text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.cal-dow {
-  font-size: var(--fs-note); color: var(--dim);
-  letter-spacing: var(--label-track); font-weight: var(--label-weight);
-  padding-bottom: 0.5vh;
-}
-.cal-day {
-  font-size: var(--fs-title-sm); border-radius: 1vh;
-  display: flex; align-items: center; justify-content: center;
-}
-.cal-day.out { color: var(--dimmer); opacity: 0.45; }
-.cal-day.today { background: rgba(255, 255, 255, 0.16); color: var(--fg); font-weight: 600; }
-
 /* ============================= LANDSCAPE =============================
    The tablet can hang either way. Portrait is a single column; landscape is a real
    two-column composition, not the portrait column squeezed — the old fallback left the
@@ -397,6 +371,8 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   }
   /* Full width: the thing the screen is about, and any control that selects WHICH thing. */
   .panel-body > .big-readout,
+  .panel-body > .aqi-scale,
+  .panel-body > .aqi-range,
   .panel-body > .hchart-wrap,
   .panel-body > .chip-row,
   .panel-body > .bar,
@@ -416,10 +392,14 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
   .stat { padding-bottom: 0.5vh; }
   .stat-grid, .stat-grid.cols3 { row-gap: 0.7vh; }
   .big-readout.hero { padding: 0.6vh 0 0.8vh; }
-  /* Both plots give back the last few pixels the short axis does not have. A chart's job
-     on this wall is the SHAPE of a day or of two hours; neither shape needs the last 10 vh
-     of a 711 px screen, and the alternative was a panel that scrolls. */
-  .hchart { height: 15vh; }
+  /* The sparkline gives back the last few pixels the short axis does not have; the hourly
+     curve TAKES some back. At 15vh it was ~105 CSS px, and a day with a 29-degree swing
+     rendered almost flat — in portrait the same curve has roughly double the amplitude and
+     reads correctly, so the landscape screen was showing a different, wronger chart of the
+     same data. The list under it dropped from four rows to three (see wx-hourly.js: four
+     did not fit, and the fourth was being sliced by the bezel), and this is where that row
+     went. */
+  .hchart { height: 19vh; }
   .spark { height: 8.5vh; }
 
   .hr { min-width: 5vw; }
@@ -448,22 +428,36 @@ body.toasting .panel.is-open .panel-sub { opacity: 0; transition: none; }
 }
 
 /* ---- panels whose content is short ----
-   Moon, Air and Calendar each rendered a hero, one or two stat blocks, and then 200-335 px
-   of empty black — measured at 41% of the Moon panel. A wall panel read from across a room
-   cannot tell "short screen" from "screen that failed to load", so the content owns the
-   height it has: the sections space themselves down the panel instead of stacking at the
-   top, and the hero art grows into the room it is given. */
-.panel[data-panel="moon"] [data-body],
-.panel[data-panel="air"] [data-body],
-.panel[data-panel="calendar"] [data-body] {
+   Moon and Air each rendered a hero, one or two stat blocks, and then 200-335 px of empty
+   black — measured at 41% of the Moon panel. A wall panel read from across a room cannot
+   tell "short screen" from "screen that failed to load", so the content owns the height it
+   has: the sections space themselves down the panel instead of stacking at the top, and the
+   hero art grows into the room it is given. (Calendar was the third panel in this list and
+   is gone; a screen that has to be spaced out because it has nothing on it was the symptom,
+   and for that one the honest fix was to stop shipping it.) */
+.panel[data-panel="moon"] [data-body] {
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   gap: 1.2vh;
 }
+/* Air is PORTRAIT ONLY, and the distinction is what the screen is. Moon is one picture and
+   two small blocks about it — a single-subject screen, which spaces itself down the column
+   in either orientation. Air stopped being one: it is a number, a band scale, a 24-hour
+   chart and six pollutants, i.e. a list of sections, and a list of sections in landscape
+   belongs in the two-column grid every other list uses. Left unscoped, this rule out-ranked
+   that grid on specificity and stacked all four blocks down a 711 px screen — measured 71 px
+   past the bottom of the frame. */
+@media (orientation: portrait) {
+  .panel[data-panel="air"] [data-body] {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 1.2vh;
+  }
+}
 .panel[data-panel="moon"] .moon-hero { padding: 0; }
 .panel[data-panel="moon"] .moon-disc { width: 22vh; height: 22vh; }
-.panel[data-panel="calendar"] .cal-grid { row-gap: 1.1vh; }
 
 /* Clock and Conditions are the same story one size down: both fit comfortably and both
    left what was over — 272 px and 232 px, measured on the device — as one slab under the

@@ -331,7 +331,11 @@
          needed to take lap 15. The mode tabs are inside the pinned block rather than above
          it because .stick cancels the panel body's top padding with a negative margin —
          anything left above it gets painted over. */
-      var html = '<div class="stick">'
+      /* `roomy` while there is no lap list to make room for: the pinned cluster grows and
+         the readout centres in it, so the space the lap table is not using goes to the one
+         number this screen exists for rather than staying black. See the CSS. */
+      var roomy = (this.mode === "stopwatch" && !this.sw.laps.length);
+      var html = '<div class="stick' + (roomy ? " roomy" : "") + '">'
         + segmented("timer", "mode", [["stopwatch", "Stopwatch"], ["countdown", "Timer"]],
                     this.mode, "Mode");
 
@@ -346,8 +350,15 @@
           + '<span id="tmr-core">' + fmt.stopwatch(e, false) + "</span>"
           + '<span class="tenths" id="tmr-tenths">.' + (Math.floor(e / 100) % 10)
           + "</span></div></div>"
+          /* Start/Stop is the PRIMARY, and it is marked by weight rather than by hue.
+             It was a green pill, which spent a fifth colour on an affordance and broke the
+             rule that a hue on this wall means a datum; removing the green was right, and
+             replacing it with nothing was not — the screen was then three identical
+             hairline pills with only Lap dimmed, i.e. a stopwatch with no obvious way to
+             start it. A neutral fill is the same treatment Settings' selected unit and a
+             selected chip already use, so it is one idiom rather than a new one. */
           + '<div class="btn-row">'
-          + btn("sw-toggle", this.sw.running ? "Stop" : "Start", "", null, "timer")
+          + btn("sw-toggle", this.sw.running ? "Stop" : "Start", "fill", null, "timer")
           + btn("sw-lap", "Lap", this.sw.running ? "" : "off", null, "timer")
           + btn("sw-reset", "Reset", "", null, "timer")
           + "</div></div>";
@@ -366,18 +377,21 @@
                 + '<span class="lap-d mono">+' + fmt.stopwatch(cur - prev, true) + "</span></div>";
             }).join("") + "</div>", "laps-sec");
         } else {
-          /* The laps block is RESERVED, not conditional. Dropping it when the count is zero
-             was meant to avoid labelling a thing that is not there; what it actually did was
-             leave the lower half of the screen as undifferentiated black — measured at a
-             747 device px unbroken band, 29% of the frame, the emptiest screen in the build
-             — and then make the whole layout jump the instant lap 1 landed.
+          /* NO FRAME until there is something to frame. The region is still reserved — it
+             keeps its heading and its share of the column, so the layout does not jump when
+             lap 1 lands — but it is no longer RULED while it is empty.
 
-             So the region keeps its heading and its shape, and the shape is the point: the
-             ruled rows are drawn at the pitch a real lap row occupies (see .laps-hint), so
-             what is on screen is a prepared table rather than a hole, and the first lap
-             lands ON the rule that was already waiting for it. */
+             The ruled version was an answer to a real defect (a 747 device px band of
+             undifferentiated black, 29% of the frame) and it was the wrong answer: seven
+             full-width hairlines at a 142 px pitch with nothing on any of them measured
+             8.5% of all the ink on the screen and ~40% of its height. Rules are not
+             content. An empty ruled notepad on a wall panel does not read as "waiting for
+             a lap", it reads as a table that failed to load — the same thing the black band
+             read as, drawn in more pixels. On the one screen in the build whose entire
+             subject is a single number, the honest use of that space is the number, which
+             is why the readout above is the largest type in the app. */
           html += section("Laps", '<div class="laps-hint"><div class="muted">'
-            + "Tap Lap while running to split.</div></div>", "laps-sec");
+            + "Tap Lap while running to split.</div></div>", "laps-sec laps-empty");
         }
 
       } else {

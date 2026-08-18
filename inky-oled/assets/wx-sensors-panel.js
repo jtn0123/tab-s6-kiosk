@@ -54,6 +54,40 @@
     return { min: mid - floor / 2, max: mid + floor / 2, flat: true, floor: floor };
   }
 
+  /* ---------------- drawing a flat series flat ----------------
+     The panel says "Steady" at the value tier and then drew a line climbing a visible step
+     with visible high-frequency jitter, so the screen argued with its own headline — and
+     between a sentence and a picture, the picture is the half people believe. Two things
+     were doing it, and both are handled here rather than in the stylesheet, because both
+     are about the DATA rather than about the box it is drawn in.
+
+     Jitter: a room sensor reporting to 0.1 °F produces sample-to-sample noise far below the
+     4 °F a person can feel, and drawing every sample turns that noise into shape. When the
+     series is inside the domain floor the trace is decimated to ~24 points — one per five
+     minutes of a two-hour window — which is the resolution at which the drawing says what
+     the sentence says: nothing happened.
+
+     (The plot's HEIGHT comes down at the same time; that half is `.plot.is-flat` in
+     style-widgets.css, since it is a property of the box.) */
+  var FLAT_POINTS = 24;
+
+  function decimate(vals, n) {
+    if (vals.length <= n) return vals;
+    /* Average within each bucket rather than sampling one point from it: picking one sample
+       keeps whichever noise spike it lands on and simply redraws the jitter with fewer
+       vertices. The mean is the value the sentence above the chart is describing. */
+    var out = [], per = vals.length / n;
+    for (var i = 0; i < n; i++) {
+      var a = Math.floor(i * per), b = Math.max(a + 1, Math.floor((i + 1) * per));
+      var sum = 0, cnt = 0;
+      for (var j = a; j < b && j < vals.length; j++) {
+        if (typeof vals[j] === "number") { sum += vals[j]; cnt++; }
+      }
+      out.push(cnt ? sum / cnt : vals[Math.min(a, vals.length - 1)]);
+    }
+    return out;
+  }
+
   /* The trace's own axis — see WP.ui.plot for why the labels are HTML over the SVG.
      These two figures are the top and bottom of the Y-DOMAIN, which after the floor above
      is not the same thing as the top and bottom of the data, and the panel used to print
@@ -129,6 +163,13 @@
       var ed = axis(dom, unit, e.dp, binary);
       var freshAt = e.hist.length ? e.hist[e.hist.length - 1].t : 0;
 
+      /* The panel, not the plot, carries the flat state — because capping the trace is only
+         half of it. Left to itself the height the trace gives up pools as one 455 device px
+         band of black between the line and the axis label under it, which is the exact
+         defect the shorter chart was supposed to fix, moved down the screen. Marked here,
+         the body distributes that height through its blocks instead. */
+      panel.classList.toggle("flat", !!(dom.flat && !binary));
+
       WP.repaint(body, chips + note
         /* The line under the number used to be "Living room · sensor.living_room_temperature"
            — the entity id, printed on a wall, and printed a second time in an ENTITY grid
@@ -154,8 +195,10 @@
               ? '<div class="stat-v">Steady</div><div class="stat-x">less than '
                 + dom.floor + " " + esc(unit) + " either way in two hours</div>"
               : "")
-            + plot(WP.sparkline(vals, spark),
-                   ed(dom.max), ed(dom.min), "2h ago", "now")
+            + plot(WP.sparkline(dom.flat && !binary ? decimate(vals, FLAT_POINTS) : vals,
+                                spark),
+                   ed(dom.max), ed(dom.min), "2h ago", "now",
+                   dom.flat && !binary ? "is-flat" : "")
             + (binary
                 ? statGrid([["State now", esc(this.display(e))],
                     ["On", duty == null ? "--" : Math.round(duty * 100) + "% of window"],

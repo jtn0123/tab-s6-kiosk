@@ -13,7 +13,8 @@
 
   var $ = WP.$, esc = WP.esc, fmt = WP.fmt;
   var ui = WP.ui;
-  var statGrid = ui.statGrid, section = ui.section, hero = ui.hero;
+  var statGrid = ui.statGrid, section = ui.section, hero = ui.hero,
+      tempTone = ui.tempTone;
 
   /* The forecast is fetched once and shared: this widget, the "now" card and the daily card
      all read the same payload rather than each hitting Open-Meteo. wx-weather.js is loaded
@@ -155,18 +156,26 @@
             + '">'
             + idx.map(function (k, n) {
             var h = 14 + ((d.hourly.temperature_2m[k] - lo) / span) * 86;
-            /* The two extremes carry their number and a full-strength cap — and the cold
-               one is COLD-coloured. Both used to take .peak alone, which paints
-               var(--temp-hot), so the day's minimum was the same red-orange as its maximum
-               and the 6a bar read as another afternoon. Colour was being used to mean
-               "extreme" while every viewer read it as "hot". */
+            /* EVERY bar's cap wears its own temperature, off the same three stops the
+               hourly curve is drawn from and the hourly list is tinted with. The two
+               previous versions each half-applied the ramp: an identical amber cap on all
+               24 (so amber, which means hot, sat on the coldest hours), then no colour at
+               all except a min and a max drawn in the two lowest-contrast colours on the
+               screen. Height carried everything and colour marked two extremes nobody could
+               resolve at 3 m. A ramp is the chart's language or it is not in the chart.
+
+               .peak still marks the two hours that carry a NUMBER — the bars are already
+               the right colour, so nothing is said twice. */
             var peak = (n === iHot || n === iCold);
-            return '<div class="daybar' + (peak ? " peak" : "")
-              + (n === iCold ? " cold" : "") + '">'
+            return '<div class="daybar ' + tempTone(d.hourly.temperature_2m[k], lo, span)
+              + (peak ? " peak" : "") + '">'
               + '<div class="daybar-v">'
                 + (peak ? fmt.deg(d.hourly.temperature_2m[k]) : "") + "</div>"
               + '<div class="daybar-c"><div style="height:' + h.toFixed(1) + '%"></div></div>'
-              + '<div class="daybar-t">' + (n % 3 === 0
+              /* Every FOURTH hour, not every third: the annotation tier moved to the acuity
+                 floor, and six labels leave 111 CSS px of pitch for a 52 px word where
+                 eight left 83. 12A / 4A / 8A / 12P / 4P / 8P still reads as a day. */
+              + '<div class="daybar-t">' + (n % 4 === 0
                   ? esc(fmt.hourLabel(new Date(d.hourly.time[k]))) : "") + "</div></div>";
           }).join("") + "</div>";
         }
@@ -215,9 +224,12 @@
             ["Feels", fmt.deg(day.apparent_temperature_max[i])
               + ' <span class="lo">/ ' + fmt.deg(day.apparent_temperature_min[i]) + "</span>",
               "high / low"],
+            /* The unit is on the value line, so the qualifier does not print it again —
+               "WNW · gusts 11 mph" wrapped and left `mph` orphaned on a line of its own,
+               to restate the unit standing 30 px above it. */
             ["Max wind", Math.round(day.wind_speed_10m_max[i]) + " " + fmt.speedUnit(),
               fmt.compass(day.wind_direction_10m_dominant[i]) + " · gusts "
-                + Math.round(day.wind_gusts_10m_max[i]) + " " + fmt.speedUnit()],
+                + Math.round(day.wind_gusts_10m_max[i])],
             ["UV max", uvBand(day.uv_index_max[i]), fmt.uv(day.uv_index_max[i]).label]
           ], 3))
         + section("Rain", '<div class="muted">' + rainLine(day, i) + "</div>")

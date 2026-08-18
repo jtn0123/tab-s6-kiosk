@@ -379,3 +379,58 @@ test("a swipe across the panel does not press a button", function () {
   app.swipe(primary(app), 0, 40);
   assert.equal(app.registry.timer.sw.running, false, "a scroll gesture started the stopwatch");
 });
+
+test("the empty lap region is reserved, not RULED", function () {
+  /* Two rounds, two opposite failures on the same rectangle. First it was dropped when the
+     lap count was zero, which left a 747 device px band of undifferentiated black — 29% of
+     the frame — and then made the layout jump the instant lap 1 landed. Then it was drawn
+     as seven full-width hairlines at a real lap row's pitch, which measured 8.5% of all the
+     ink on the screen and about 40% of its height: an empty ruled notepad, on the panel
+     whose stated rule is that lit pixels are data.
+
+     Reserving the space was the right half of the second answer and the rules were the
+     wrong half. So: the region exists and holds its share of the column with no laps taken
+     (no jump), and it draws nothing in it (no notepad). */
+  var app = h.createApp({});
+  app.tap(app.qs('[data-open="timer"]'));
+  var body = app.panelBody("timer");
+  var hint = body.querySelector(".laps-hint");
+  assert.ok(hint, "the lap region is dropped again when there are no laps — the layout will jump");
+  assert.equal(app.qsa(".lap", body).length, 0);
+
+  /* the rules were a repeating gradient on .laps-hint, so the assertion is on the rule */
+  var css = require("./lib/css.js");
+  var r = css.rules().filter(function (x) { return x.sel.trim() === ".laps-hint"; })[0];
+  assert.ok(r, ".laps-hint has no rule at all");
+  assert.equal(/repeating-linear-gradient|border-bottom/.test(r.body), false,
+    "the empty lap table is drawing its own rules again: " + r.body.trim());
+
+  /* and a real lap draws a real row */
+  app.tap(app.actBtn("timer", "sw-toggle"));
+  app.advance(1500);
+  app.tap(app.actBtn("timer", "sw-lap"));
+  assert.equal(app.qsa(".lap", app.panelBody("timer")).length, 1);
+});
+
+test("Start is the primary, and it is marked by WEIGHT rather than by hue", function () {
+  /* The green Start was correctly removed — a hue on this wall means a datum, not an
+     affordance — and nothing replaced its job, so the screen became three identical
+     hairline pills with only Lap dimmed: a stopwatch with no obvious way to start it.
+     A neutral fill is weight, not colour, and it is the same family of fill Settings'
+     selected unit and a selected chip already carry. */
+  var app = h.createApp({});
+  app.tap(app.qs('[data-open="timer"]'));
+  var start = app.actBtn("timer", "sw-toggle");
+  assert.equal(start.textContent, "Start");
+  assert.match(start.getAttribute("class"), /\bfill\b/, "the primary carries no weight at all");
+  ["sw-lap", "sw-reset"].forEach(function (a) {
+    assert.equal(/\bfill\b/.test(app.actBtn("timer", a).getAttribute("class")), false,
+      a + " is marked primary too, so nothing is");
+  });
+
+  var css = require("./lib/css.js");
+  var r = css.rules().filter(function (x) { return x.sel.trim() === ".btn.fill"; })[0];
+  assert.ok(r, ".btn.fill has no rule, so the class marks nothing");
+  assert.match(r.body, /rgba\(255,\s*255,\s*255/,
+    "the primary is filled with something that is not neutral white");
+});

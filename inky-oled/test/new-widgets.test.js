@@ -1,4 +1,4 @@
-/* Moon phase, air quality and calendar — the three local/keyless widgets, plus the sky
+/* Moon phase and air quality — the two local/keyless widgets, plus the sky
    layer's code->scene mapping. Everything here is the pure arithmetic those widgets are
    built on; the rendering paths are covered by the panel and design-system suites. */
 
@@ -11,7 +11,6 @@ var h = require("./lib/harness.js");
 var app = h.createApp({});
 var moon = app.registry.moon;
 var air = app.registry.air;
-var cal = app.registry.calendar;
 var sky = app.registry.sky;
 
 /* ---------------- moon ---------------- */
@@ -82,43 +81,49 @@ test("every band wears its own colour class and junk degrades to unknown", funct
   assert.equal(air.band(NaN).cls, "band-na");
 });
 
-/* ---------------- calendar ---------------- */
+test("a pollutant sitting exactly ON its guideline is not drawn as unremarkable", function () {
+  /* The defect this replaces, stated as the number that produced it: the pollutant grid
+     compared with a strict `n > guideline`, so `PM2.5 15` against a WHO guideline of 15 —
+     a reading at 100% of the published limit — rendered in the same plain white as one at
+     3% of it, and a reading at 5x looked identical to one at 1.01x. Six white numbers, on
+     the one screen in the build whose subject is a health scale.
 
-test("august 2026 starts on a saturday and carries 31 days", function () {
-  var weeks = cal.monthGrid(2026, 7);
-  assert.equal(weeks[0].filter(function (c) { return !c.in; }).length, 6,
-    "aug 1 2026 is a saturday: six lead-in cells");
-  var inMonth = [];
-  weeks.forEach(function (w) {
-    assert.equal(w.length, 7, "a week is seven cells");
-    w.forEach(function (c) { if (c.in) inMonth.push(c.d); });
-  });
-  assert.equal(inMonth.length, 31);
-  assert.equal(inMonth[0], 1);
-  assert.equal(inMonth[30], 31);
-});
+     Both edges of every step are pinned, for the same reason the EPA breakpoints above
+     are: a boundary that moves by one puts the wrong colour on a health figure. */
+  assert.equal(air.ratioBand(0), "band-1");
+  assert.equal(air.ratioBand(0.49), "band-1");
+  assert.equal(air.ratioBand(0.5), "band-2", "half the guideline should read as approaching");
+  assert.equal(air.ratioBand(1), "band-2", "AT the guideline is not the same as under it");
+  assert.equal(air.ratioBand(1.01), "band-3", "a hair over the guideline is over it");
+  assert.equal(air.ratioBand(2), "band-3");
+  assert.equal(air.ratioBand(2.01), "band-4");
+  assert.equal(air.ratioBand(9), "band-4");
 
-test("february keeps leap years straight", function () {
-  var leap = [];
-  cal.monthGrid(2024, 1).forEach(function (w) {
-    w.forEach(function (c) { if (c.in) leap.push(c.d); });
-  });
-  assert.equal(leap.length, 29, "2024 is a leap year");
-
-  /* feb 2026 starts on a sunday and has 28 days: exactly four full weeks, no filler */
-  var weeks = cal.monthGrid(2026, 1);
-  assert.equal(weeks.length, 4);
-  weeks.forEach(function (w) {
-    w.forEach(function (c) { assert.equal(c.in, true, "feb 2026 needs no out-of-month cells"); });
+  /* and the four steps are four different colours, or the ratio is not being encoded */
+  var seen = {};
+  [0.1, 0.8, 1.5, 4].forEach(function (r) {
+    var c = air.ratioBand(r);
+    assert.equal(seen[c], undefined, c + " is reused across two ratio steps");
+    seen[c] = true;
   });
 });
 
-test("lead-in and trailing cells carry the neighbours' real day numbers", function () {
-  var weeks = cal.monthGrid(2026, 7);          // august 2026
-  assert.equal(weeks[0][0].d, 26, "the first cell is july 26");
-  var last = weeks[weeks.length - 1];
-  assert.equal(last[6].d, 5, "the last cell is september 5");
+test("the Air panel names which pollutant is nearest its guideline", function () {
+  /* The panel's one sentence of explanation. Everything else on the screen restates the
+     61: the tile says it, the hero says it, the chart plots it. This says why. */
+  assert.match(air.nearestLimit({ pm2_5: 15, pm10: 18, ozone: 20 }),
+    /^PM2\.5 is nearest its guideline, at 100%$/);
+  assert.match(air.nearestLimit({ pm2_5: 3, ozone: 80 }),
+    /^ozone is nearest its guideline, at 80%$/);
+  assert.equal(air.nearestLimit({ pm2_5: 30 }), "PM2.5 is over its guideline");
+  assert.equal(air.nearestLimit({}), "", "no readings must not invent a sentence");
 });
+
+/* The calendar's month-grid arithmetic used to be tested here — first-weekday offset, leap
+   years, the 4/5/6-row months. The widget is gone (see the WIDGETS note in app.js: a month
+   grid with no events, on a wall panel, for three design rounds), and so are its tests.
+   Deleting a screen means deleting the assertions that kept it honest, not leaving them to
+   pass against nothing. */
 
 /* ---------------- sky scenes ---------------- */
 
@@ -156,12 +161,10 @@ test("the sky honours its settings switch, and ships OFF", function () {
 
 /* ---------------- the home tiles ---------------- */
 
-test("the moon and calendar tiles paint from local arithmetic at boot", function () {
+test("the moon tile paints from local arithmetic at boot", function () {
   var a = h.createApp({});
   assert.match(a.text("moon-big"), /\d+%/, "moon tile shows no illumination");
   assert.ok(a.text("moon-sub").length > 3, "moon tile names no phase");
-  assert.match(a.text("cal-big"), /^\d{1,2}$/, "calendar tile shows no day number");
-  assert.match(a.text("cal-sub"), /\w+ · \w+/, "calendar tile names no weekday/month");
 });
 
 test("the air tile renders a banded reading once data lands", function () {

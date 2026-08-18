@@ -187,6 +187,11 @@
 }
 .big-readout.hero .big-time { font-size: var(--fs-display); }
 .hero-text { min-width: 0; }
+/* `text-align: left` above exists to line the number and its caption up with each other
+   BESIDE a glyph. With no glyph there is nothing to line up beside, and the block came out
+   left-of-centre on a screen whose only content is that number (Air, whose two attempts at
+   a hero glyph were both decoration standing in for a scale). No icon, no offset. */
+.big-readout.hero.no-icon { text-align: center; }
 
 .big-icon { font-size: var(--fs-display); line-height: 1; }
 .big-time {
@@ -240,6 +245,11 @@
    point. It carries the BAND, which is the part a person acts on, so it is a step of prose
    and not a footnote: --fs-label was 3.3' at 3 m. */
 .stat-x { font-size: var(--fs-body); letter-spacing: 0.02em; color: var(--dim); }
+/* A unit riding INLINE on a value line, a step down and a shade dimmer so the figure still
+   reads first. It exists because the alternatives both failed on the Air panel: on its own
+   line it turned six pollutant fields into eighteen lines, and moved onto the reference
+   line below it left the measurement as a bare `15` above an identical-looking `15`. */
+.stat-v .unit { font-size: var(--fs-body-lg); color: var(--dim); }
 
 .wind-arrow { display: inline-block; }
 
@@ -271,8 +281,14 @@
    What the button does is carried by its word, its position and, for the destructive one,
    by the confirm step it already has. --danger survives where it is a STATE and not a
    control: the countdown alarm's flash, and a battery reading in the red.
-   .off is not a hue, it is the disabled shade — Lap with nothing to split. */
+   .off is not a hue, it is the disabled shade — Lap with nothing to split.
+   .fill is not a hue either: it is the PRIMARY, marked with weight. Removing the green from
+   Start was right and leaving the Timer with three identical hairline pills was not — a
+   stopwatch with no obvious way to start it. It is the same white-alpha family .chip.on and
+   .seg-b.on already use, one step up because a primary action outranks a selected chip —
+   one idiom at three weights rather than a fourth one invented for a button. */
 .btn.off     { color: var(--dimmer); }
+.btn.fill    { background: rgba(255, 255, 255, 0.16); border-color: transparent; }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 1.2vw 1.2vw; }
 /* A wrapping flex row breaks wherever the text happens to run out, which for the nine

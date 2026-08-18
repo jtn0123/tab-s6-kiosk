@@ -62,8 +62,28 @@
 
        value    --fs-title-lg  45.5 CSS px   8.1'    a number you read, not decode
        heading  --fs-title-sm  33.0 CSS px   5.9'    at --dim
-       label    --fs-body-lg   27.9 CSS px   5.0'    at --dimmer
-       axis     --fs-note      21.1 CSS px   3.8'    at --dim, and never lower
+       label    --fs-body-lg   28.5 CSS px   5.05'   at --dimmer
+       axis     --fs-body-lg   28.5 CSS px   5.05'   at --dim — the SAME step as a label
+
+     The axis tier used to be --fs-note (21.1 CSS px, 3.8'), and the suite enforced a floor
+     of 3.6' and called that "the axis tier" — i.e. the one place in the build where the
+     stated floor was set BELOW the 5' this file spends four paragraphs establishing, and
+     the round that wrote it certified the exact fault it was written to catch. The `93°`
+     peak on the Hourly chart, which is the single number that chart exists to deliver, was
+     the least legible thing on its own screen.
+
+     A chart annotation is not decoration on a chart, it is what makes the chart's height
+     mean anything, so it takes the same floor as everything else: --fs-body-lg at --dim.
+     The bill is paid where the acuity argument says it should be — in ticks and bars, not
+     in points. The Hourly axis carries six labels instead of eight and the Daily axis six
+     instead of eight; the shapes are unchanged and the numbers on them are now readable
+     from the sofa.
+
+     --fs-body-lg moved 2.45 -> 2.5vh with that change, which is 5.05' rather than 4.95' —
+     the tier is the acuity floor now, so it has to be ON the right side of it. It also
+     makes the ramp more even, not less: the step ratios through the text range were
+     1.143 / 1.156 / 1.162 / 1.140 / 1.184 and are now 1.143 / 1.156 / 1.162 / 1.163 /
+     1.160. The 1.16 ratio the ramp claims is finally the ratio it has.
 
      --fs-title-lg is the step this needed and did not have: --fs-title (38.7) is the panel
      TITLE and a value cannot equal the name of the screen it is on, and --fs-hero (59.2) is
@@ -80,7 +100,7 @@
   --fs-label:      1.6vh;    /* letter-spaced small caps: card labels on the home column */
   --fs-note:       1.85vh;   /* panel subtitles, chart axes, secondary prose */
   --fs-body:       2.15vh;   /* list rows, chips, the toast */
-  --fs-body-lg:    2.45vh;   /* a panel's FIELD LABEL; things a finger aims at */
+  --fs-body-lg:    2.5vh;    /* FIELD LABEL and CHART ANNOTATION; things a finger aims at */
   --fs-title-sm:   2.9vh;    /* a panel's SECTION HEADING; tile glyphs; list values */
   --fs-title:      3.4vh;    /* panel titles, tile headline numbers */
   --fs-title-lg:   4.0vh;    /* a panel's VALUE — the number the screen is about */
@@ -356,7 +376,17 @@ button {
   color: var(--dimmer);
 }
 .psec-t { font-size: var(--fs-title-sm); color: var(--dim); }
-.stat-k { font-size: var(--fs-body-lg); color: var(--dimmer); }
+/* NOWRAP, and it is the row that this protects rather than the label. A stat grid is read
+   ACROSS: three labels on one line, three values on the next. When the label tier was
+   re-scaled, `DAY OF YEAR` no longer fitted its third of the Clock panel, wrapped to two
+   lines, and pushed its own value ~90 device px below the two beside it — so the TODAY row
+   had three baselines and stopped being a row at all. Nothing in a grid of independent
+   cells equalises that: each cell stacks its own label over its own value.
+   A label that will not fit now overhangs its cell instead, which is visible and local,
+   where a wrap is invisible and moves a number. The real answer is that a label in a
+   three-column grid has about nine characters — which is enforced over the rendered DOM in
+   design-system.test.js, so it is a budget rather than a hope. */
+.stat-k { font-size: var(--fs-body-lg); color: var(--dimmer); white-space: nowrap; }
 /* Five Home Assistant tiles across a 711 px card is 142 px each, and an ellipsised label
    is worse than a small one — so this is the one label in the app still on --fs-caption,
    and it therefore has to give on the OTHER axis: --dim, not the recipe's --dimmer. See
@@ -367,12 +397,14 @@ button {
   letter-spacing: 0.08em;
   color: var(--dim);
 }
-/* The daily chart's TIME AXIS. It is labelled every third bar, so it has three bars' worth
-   of width — 72 CSS px for "12A" — and it was sitting at caption/--dimmer, 2.8' at 3 m,
-   which is a chart with no x-scale on it. Chart annotations carry the chart's meaning and
-   belong at the axis tier with the rest of them. */
+/* The daily chart's TIME AXIS, at the annotation tier with every other chart annotation in
+   the build. It was caption/--dimmer (2.8' at 3 m — a chart with no x-scale on it), then
+   --fs-note (3.8', still under the acuity floor this stylesheet sets for everything else).
+   At 28.5 px it is labelled every FOURTH bar rather than every third: six labels across the
+   panel is 111 CSS px of pitch for a 52 px word, which is the trade the acuity argument
+   asks for — fewer ticks, readable ones. */
 .daybar-t {
-  font-size: var(--fs-note);
+  font-size: var(--fs-body-lg);
   letter-spacing: 0.08em;
   color: var(--dim);
 }

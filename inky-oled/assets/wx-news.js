@@ -235,13 +235,24 @@
          room on nothing. Six at the section-heading tier fill the same screen, and a
          headline you can read from the sofa is the entire purpose of a news panel. */
       var SHOWN = 6;
-      var rows = this.items.slice(0, SHOWN).map(function (it) {
+      var shown = this.items.slice(0, SHOWN);
+      /* When every headline on screen came from the same feed, the source moves INTO the
+         heading and each row keeps only its age. It was printed on all six rows — "BBC News
+         ·" six times down the left margin, the same eleven characters repeated at a 142 px
+         pitch — which is a column that says the same thing in every row, i.e. texture and
+         not data. The moment two feeds are actually merged the per-row source comes back,
+         because then it is the thing that distinguishes one row from the next. */
+      var one = shown.every(function (it) { return it.source === shown[0].source; })
+        ? shown[0].source : "";
+      var rows = shown.map(function (it) {
+        var meta = (one || !it.source) ? ago(it.at) : it.source + " · " + ago(it.at);
         return '<div class="news-row">'
           + '<div class="news-row-t">' + esc(it.title) + "</div>"
-          + '<div class="news-row-m">' + esc((it.source ? it.source + " · " : "") + ago(it.at)) + "</div>"
+          + '<div class="news-row-m">' + esc(meta) + "</div>"
           + "</div>";
       }).join("");
-      WP.repaint(body, section("Latest", '<div class="news-list">' + rows + "</div>"));
+      WP.repaint(body, section(one ? "Latest · " + one : "Latest",
+        '<div class="news-list">' + rows + "</div>"));
     }
   };
 

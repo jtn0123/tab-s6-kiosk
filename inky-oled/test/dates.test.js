@@ -87,8 +87,12 @@ test("the clock panel renders the same day-of-year the formatter computes", func
   var body = app.panelBody("clock");
   var keys = body.querySelectorAll(".stat-k").map(function (n) { return n.textContent; });
   var vals = body.querySelectorAll(".stat-v").map(function (n) { return n.textContent; });
-  var i = keys.indexOf("Day of year");
-  assert.ok(i >= 0, "clock panel has no Day of year stat");
+  /* "Day", not "Day of year". A third of this panel is about nine characters wide at the
+     re-scaled label tier; the eleven-character version wrapped to two lines and dropped its
+     own value ~90 device px below the two beside it, so the TODAY row had three baselines.
+     "of year" was the half the value already says — "229 of 366". */
+  var i = keys.indexOf("Day");
+  assert.ok(i >= 0, "clock panel has no day-of-year stat");
   /* CHANGED with the copy sweep: the cell is "229 of 366" rather than a bare "229". A
      day-of-year with no denominator is a number nobody can place, and the denominator is
      itself worth pinning — 2024 is a leap year, so a daysInYear() that ignored the leap

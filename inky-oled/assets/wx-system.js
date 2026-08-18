@@ -18,13 +18,18 @@
 
   /* A battery that is as full as the battery is. Drawn rather than typed, because no text
      glyph carries a level: the shell (the same 1px hairline the cards use), a terminal nub,
-     and a fill whose WIDTH is the charge. Colour follows the one rule the app has for it —
-     danger under 20%, the accent while charging, otherwise the same grey as any other
-     supporting mark. It is decorative in the a11y sense: the number beside it says the
-     same thing in words, so the hero hides it from the reader. */
+     and a fill whose WIDTH is the charge.
+
+     Colour follows the one rule the app has for it: danger under 20%, otherwise --fg.
+     Charging used to paint the fill var(--accent) — which style.css documents, in a comment
+     on the token itself, as the same hex as --temp-cold. So the one screen in the build
+     whose panel comment states "blue means cold" was the one screen that broke it: a blue
+     battery on a wall where blue is a low temperature everywhere else. Charging does not
+     need a hue anyway; the bolt drawn through the fill already says it, in a shape nobody
+     has to learn. */
   function batteryIcon(b) {
     var pct = Math.max(0, Math.min(100, b.level == null ? 0 : b.level));
-    var fill = b.charging ? "var(--accent)" : (pct < 20 ? "var(--danger)" : "var(--dim)");
+    var fill = pct < 20 ? "var(--danger)" : (b.charging ? "var(--fg)" : "var(--dim)");
     var w = (pct / 100) * 40;
     return '<svg class="wxi" viewBox="0 0 64 64">'
       + '<rect x="8" y="20" width="44" height="24" rx="4" fill="none"'
@@ -172,7 +177,11 @@
            words (LEVEL, CHARGING, STATUS, PLUGGED). VOLTAGE and CELLS went next: 4.095 V is
            a figure nobody owning a tablet can act on, and "Li-ion" is the same word every
            day for the life of the device. Temperature and health are the two that can
-           actually change your mind about the thing on your wall. */
+           actually change your mind about the thing on your wall.
+
+           TWO cells in a TWO-column grid. They were two cells in a three-column one, which
+           filled columns 1 and 2 and left column 3 empty on a panel where STORAGE, MEMORY
+           and NETWORK all filled three — a hole in the grid rather than a shorter row. */
         + section("Battery", statGrid([
             ["Temperature", b.tempC != null
               ? (S.isMetric() ? (Math.round(b.tempC * 10) / 10) + " °C"
@@ -185,17 +194,25 @@
            filled with what remained: three grey bars at three lengths, two of them meaning
            the opposite of the one above, and no way to tell from across the room which
            direction was healthy. */
-        + section("Storage", bar(100 - stPct, "", "storage free") + statGrid([
-            ["Free", fmt.bytes(st.free)],
-            ["Used", fmt.bytes(stUsed)],
-            ["Total", fmt.bytes(st.total)]
-          ], 3))
+        /* TWO cells, and the total moved into the heading. Free + used + total is three
+           figures of which any two determine the third, printed side by side — the grid was
+           doing arithmetic homework out loud. The total is the one that never changes, so it
+           belongs where a constant belongs: naming the thing, not filling a cell.
 
-        + section("Memory", bar(100 - memPct, "", "memory free") + statGrid([
+           The heading also names the bar's DIRECTION. A nearly-full bar beside "FREE 104 GB"
+           reads as "nearly full" to every human alive, and this bar fills with what is left,
+           so it says so: STORAGE FREE · 128 GB. */
+        + section("Storage free · " + fmt.bytes(st.total),
+            bar(100 - stPct, "", "storage free") + statGrid([
+            ["Free", fmt.bytes(st.free)],
+            ["Used", fmt.bytes(stUsed)]
+          ], 2))
+
+        + section("Memory free · " + fmt.bytes(mem.total),
+            bar(100 - memPct, "", "memory free") + statGrid([
             ["Free", fmt.bytes(mem.free)],
-            ["Used", fmt.bytes(memUsed)],
-            ["Total", fmt.bytes(mem.total)]
-          ], 3))
+            ["Used", fmt.bytes(memUsed)]
+          ], 2))
 
         /* "Interface wlan0" is the kernel's name for the radio. Dropped — TRANSPORT above
            it already says Wi-Fi, which is the same fact in a word people use. Down and up

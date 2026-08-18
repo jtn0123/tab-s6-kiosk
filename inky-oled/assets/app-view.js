@@ -150,6 +150,70 @@
     });
   }
 
+  /* ---------------- panel fit ----------------
+     The home column has been measured since the first round. The twelve PANELS were not,
+     and a round that restated the landscape type ramp at 1.45x shipped an hourly screen
+     whose bottom temperature was sliced by the bezel — ink to device row 1592 of 1600.
+
+     The obvious probe does not catch it, and that is worth writing down so nobody rebuilds
+     it: `body.scrollHeight - body.clientHeight` was 0 on that exact frame, in both
+     orientations, on all twelve panels. A flex row sized to `1 1 0` gets a box shorter
+     than its own line box, the figure paints out of the row, and the ink lands in the
+     scrollport's PADDING — which scrollHeight counts as part of the box. The panel is not
+     scrolling. It is spilling.
+
+     So the property is the one a reader actually sees. The body's padding is the only
+     thing between the last row and the edge of the glass, so nothing a panel draws may
+     enter it: every painted box in the panel is measured against the body's content edge
+     downward and against its padding edge sideways (the pinned .stick block cancels the
+     side padding deliberately, and lands exactly ON that edge). Both numbers must be 0 in
+     both orientations — panels.open() reports them, so the check runs on the wall, in the
+     orientation the wall is actually in, on every screen a person opens. */
+  function panelMetrics(name) {
+    var el = qs('[data-panel="' + name + '"]');
+    var body = el && qs("[data-body]", el);
+    if (!body) return null;
+    var box = body.getBoundingClientRect();
+    var pad = 0;
+    if (typeof window.getComputedStyle === "function") {
+      pad = parseFloat(window.getComputedStyle(body).paddingBottom) || 0;
+    }
+    var floorY = box.bottom - pad;
+    var over = 0, overX = 0;
+    qsa("*", body).forEach(function (n) {
+      var r = n.getBoundingClientRect();
+      if (!r.width && !r.height) return;          // nothing painted: no opinion
+      if (r.bottom - floorY > over) over = r.bottom - floorY;
+      if (r.right - box.right > overX) overX = r.right - box.right;
+      if (box.left - r.left > overX) overX = box.left - r.left;
+    });
+    return {
+      name: name,
+      orientation: window.innerWidth > window.innerHeight ? "landscape" : "portrait",
+      overflow: Math.max(0, Math.round(over)),
+      overflowX: Math.max(0, Math.round(overX))
+    };
+  }
+
+  /* Deduped on name + orientation + result, because the carousel opens twelve screens
+     every thirty seconds for ever: a clean measurement is worth logging once — it is the
+     evidence the wall is fitting — and worth logging twelve times a minute never. */
+  var fitSeen = {};
+
+  function reportPanelFit(name) {
+    setTimeout(function () {        // after the 200ms open transition has settled
+      var m = panelMetrics(name);
+      if (!m) return;
+      var line = "[inky] layout: panel " + m.name + " " + m.orientation
+        + " overflow=" + m.overflow + " overflowX=" + m.overflowX;
+      if (fitSeen[line]) return;
+      fitSeen[line] = true;
+      if (m.overflow > 0) console.warn(line + " — OVERFLOW, the last row is into the frame");
+      else if (m.overflowX > 0) console.warn(line + " — OVERFLOW, content runs off the side");
+      else console.log(line);
+    }, 300);
+  }
+
   /* ---------------- burn-in drift ----------------
      This panel is AMOLED: a dashboard that never moves ghosts permanently, and on a wall
      panel "never moves" is the normal case — nobody is watching it at 3am.
@@ -407,6 +471,9 @@
   /* A widget calling this is telling us its content has landed, which is exactly the
      condition the growth cap needs before it may bind. */
   WP.relayoutHome = function () { layoutReady = true; relayoutHome(); markScrollers(); };
-  /* boot (app-touch.js) logs the measured budget and re-measures on settings changes */
-  WP._layout = { metrics: homeMetrics, relayout: relayoutHome };
+  /* boot (app-touch.js) logs the measured budget and re-measures on settings changes;
+     panel() is the same question asked of one of the twelve screens, and app-touch.js
+     asks it every time one is opened. */
+  WP._layout = { metrics: homeMetrics, relayout: relayoutHome,
+                 panel: panelMetrics, reportPanel: reportPanelFit };
 })();

@@ -234,7 +234,12 @@ test("a panel's field label is legible from across the room", function () {
      is the only form of this assertion that has an answer. */
   var statk = ruleFor(".stat-k", "font-size");
   var a = css.arcmin(css.vh(decl(statk.body, "font-size")));
-  assert.ok(a >= 4.8,
+  /* 5.0, not 4.8. The floor was written one notch under the number it names, so the tier
+     could sit at 4.95' — under acuity — with the suite green and the comment still saying
+     "20/20 resolves 5'". A floor that is not the number in its own sentence is a floor
+     somebody rounded down. --fs-body-lg moved 2.45 -> 2.5vh to land on the right side of
+     it, which also evened out the ramp; see the ratio note in style.css. */
+  assert.ok(a >= 5.0,
     "a field label subtends " + a.toFixed(1) + "' of cap height at 3 m; 20/20 acuity "
     + "resolves 5', so anything under that is not small print, it is a blank");
 });
@@ -261,19 +266,79 @@ test("a chart's annotations are sized like the chart, not like a footnote", func
      what makes the chart's height mean anything: without them whatever the line does reads
      as what happened. Every one of them in the build was at --fs-caption — 2.8 arcminutes
      at 3 m, under the threshold at which a glyph resolves — including three that were built
-     that way by the round which had just diagnosed exactly that fault. They sit at the axis
-     tier now, and the floor is stated where the eye is.
+     that way by the round which had just diagnosed exactly that fault.
 
-     A chart is the one place where "it did not fit" is not an argument: if the annotation
-     will not fit, the chart is too small or has too many bars, and both of those are the
-     chart's problem to solve. */
+     THE FLOOR IS 5.0, and the history of this number is the reason it is written down.
+     The round that moved these off the ramp's floor moved them to --fs-note, measured the
+     result at 3.61', and wrote the assertion as `a >= 3.6` — so the suite certified as
+     passing the exact class of mark it had been written to catch, and the `93°` peak on the
+     Hourly chart, the one number that chart exists to deliver, was the least legible thing
+     on its own screen. A floor set below the acuity threshold is not a floor; it is a
+     record of what happened to be there.
+
+     5.0' is what 20/20 resolves and what every other tier in this file is held to. There is
+     no tier in this build that is allowed to be unreadable, and a chart is the LAST place
+     to put one, because a chart with unreadable numbers is a picture.
+
+     A chart is also the one place where "it did not fit" is not an argument: if the
+     annotation will not fit, the chart is too small or has too many bars, and both of those
+     are the chart's problem to solve. It was solved that way — the Hourly and Daily axes
+     carry six labels each instead of eight, and nothing was shrunk to make room. */
   [".plot-hi, .plot-lo", ".plot-x", ".hc-ticks span", ".hc-hi, .hc-lo",
    ".daybar-v", ".daybar-t"]
     .forEach(function (sel) {
       var a = css.arcmin(css.vh(decl(ruleFor(sel, "font-size").body, "font-size")));
-      assert.ok(a >= 3.6,
-        sel + " subtends " + a.toFixed(1) + "' at 3 m; the axis tier is --fs-note (3.7')");
+      assert.ok(a >= 5.0,
+        sel + " subtends " + a.toFixed(1) + "' at 3 m; 20/20 acuity resolves 5', so a chart "
+        + "annotation under that is a chart with no numbers on it");
     });
+});
+
+test("no field label is wider than the column it has to fit in", function () {
+  /* The bug this is for, and the reason it is a SWEEP over the rendered DOM rather than an
+     assertion about the Clock panel: re-scaling the label tier made `DAY OF YEAR` too wide
+     for its third of a three-column grid, so it wrapped, so its value landed ~90 device px
+     below the two values beside it, so the TODAY row had three baselines and stopped being
+     a row. Nothing equalises that — a stat grid is independent cells, each stacking its own
+     label over its own value — and nothing in the suite could see it, because the fault was
+     a WIDTH and every legibility assertion here is about heights.
+
+     `white-space: nowrap` on .stat-k means the next one overhangs instead of moving a
+     number, which is visible and local. This is the budget that stops it happening at all,
+     and it is arithmetic rather than taste: a cell in a three-column grid is ~212 CSS px in
+     portrait; the label recipe is uppercase at --fs-body-lg with 0.16em of tracking, so an
+     upper-case advance is about 0.78em = 22 px, and 212 / 22 is nine characters. A space is
+     narrower than a letter, so counting every character is the conservative form.
+
+     The class of bug is "a bigger ramp breaks what used to fit", and it will come back the
+     next time a tier moves. When it does, this fails on the label rather than on the wall. */
+  var LIMIT = { 2: 14, 3: 9 };          // 2-col cells are ~324 px, 3-col ~212
+  /* WITH DATA, or this sweeps four empty panels and reports nothing: Conditions, Hourly,
+     Daily and Air only build their grids once a payload lands, and Device only with a
+     bridge. The Clock panel that shipped the wrap would have been caught either way; the
+     next one might be on Conditions. */
+  var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
+  var wx = require("./lib/wx-fixture.js");
+  app.registry.weather.data = wx.build({ now: app.clock.now, hours: 48 });
+  app.registry.weather.publish();
+  app.registry.air.data = wx.aqi({ now: app.clock.now });
+  var over = [];
+  app.qsa("[data-panel]").forEach(function (p) {
+    var name = p.getAttribute("data-panel");
+    app.WP.panels.open(name);
+    app.qsa(".stat-grid", p).forEach(function (g) {
+      var cols = /cols3/.test(g.getAttribute("class") || "") ? 3 : 2;
+      app.qsa(".stat-k", g).forEach(function (k) {
+        var t = (k.textContent || "").trim();
+        if (t.length > LIMIT[cols]) {
+          over.push(name + " " + cols + "-col: " + JSON.stringify(t)
+            + " is " + t.length + " chars, budget " + LIMIT[cols]);
+        }
+      });
+    });
+    app.WP.panels.close();
+  });
+  assert.deepEqual(over, []);
 });
 
 test("nothing is drawn at the ramp's floor AND the palette's floor", function () {
@@ -487,7 +552,7 @@ test("the copy sweep can actually see a panel body", function () {
 test("the three home tiles are one object repeated", function () {
   var app = h.createApp({});
   var tiles = app.qsa("#home .row3 .card.mini");
-  assert.equal(tiles.length, 6);   // device/timer/settings + moon/air/calendar
+  assert.equal(tiles.length, 5);   // device/timer/settings + moon/air
   var shape = tiles.map(function (t) {
     return t.children.filter(function (c) { return c.nodeType === 1; })
       .map(function (c) { return c.getAttribute("class").split(" ")[0]; }).join(",");
@@ -742,7 +807,7 @@ test("generated toggles announce as switches and say which way they are set", fu
 test("every tappable is reachable and named, whatever element it is built from", function () {
   /* The a11y sweep next to this one only ever looked at <button>. Nine of the app's
      targets are whole <section> cards — Clock, Conditions, Device, Timer, Settings, Moon,
-     Air, Calendar and the news ticker — so a screen reader was told nothing was there at
+     Air and the news ticker — so a screen reader was told nothing was there at
      all, and eight of the twelve screens had no accessible route in. Found by reading the
      accessibility tree of the running app rather than the markup. */
   var app = h.createApp({ bridge: require("./lib/fake-bridge.js").make({}) });
@@ -829,21 +894,70 @@ test("ARIA did not arrive by turning controls into non-buttons", function () {
   });
 });
 
-test("the cold extreme of the day chart is not painted with the hot token", function () {
-  /* The confirmed inversion: .peak marked BOTH the warmest and the coldest hour and painted
-     both var(--temp-hot), so the day's minimum was the same red-orange as its maximum on a
-     screen whose whole colour language is warm=hot / blue=cold. Colour was being used to
-     mean "extreme"; every viewer read it as "hot". */
-  var cold = rules().filter(function (r) { return /\.daybar\.peak\.cold\b/.test(r.sel); });
-  assert.ok(cold.length >= 2, "the cold extreme has no colour of its own again");
-  var fill = cold.filter(function (r) { return /daybar-c/.test(r.sel); })[0];
-  assert.ok(fill, "the cold extreme's BAR is not being repainted, only its number");
-  assert.match(fill.body, /--temp-cold/);
-  assert.equal(/--temp-hot/.test(fill.body), false, "the cold extreme is hot again");
+test("the day chart's temperature ramp is applied to EVERY bar, or to none", function () {
+  /* Rewritten, because the property it used to pin has been superseded twice by the same
+     mistake in opposite directions and the narrow assertion could not see either.
 
-  /* and the widget still marks both extremes, so the fix is a colour and not a deletion */
-  var app = h.createApp({});
-  assert.match(stripComments(h.readAsset("wx-daily.js")), /n === iCold \? " cold" : ""/);
+     It was written for a real inversion — `.peak` marked BOTH the warmest and the coldest
+     hour and painted both var(--temp-hot), so the day's minimum was the same red-orange as
+     its maximum. That was fixed by giving the cold extreme its own rule, which the old
+     assertion pinned exactly: `.daybar.peak.cold`. And that fix produced the NEXT fault,
+     which this test was blind to by construction: 22 of 24 bars identical grey, and the
+     only two coloured ones drawn in the two lowest-contrast colours on the screen. Height
+     carried the whole chart and colour marked two extremes nobody can resolve at 3 m.
+
+     A ramp is either the chart's language or it is not in the chart. So the property is now
+     the general one: every bar's cap is picked from the three temperature tokens by the
+     same function the hourly curve and the hourly list use, and no bar may wear a token
+     that disagrees with its own class. Half-application is what fails here now — which is
+     exactly what shipped while the old assertion was green. */
+  var tones = ["t-hot", "t-warm", "t-cold"];
+  tones.forEach(function (tone) {
+    var r = rules().filter(function (x) {
+      return x.sel.indexOf(".daybar." + tone + " ") !== -1 && /daybar-c/.test(x.sel);
+    })[0];
+    assert.ok(r, "the day chart has no cap colour for " + tone
+      + " — the ramp is applied to some bars and not others again");
+    var token = "--temp-" + tone.slice(2);
+    assert.match(r.body, new RegExp(token));
+    tones.filter(function (o) { return o !== tone; }).forEach(function (other) {
+      assert.equal(new RegExp("--temp-" + other.slice(2)).test(r.body), false,
+        tone + " bars are painted with the " + other + " token");
+    });
+  });
+
+  /* and the widget tones EVERY bar, not only the two extremes */
+  var src = stripComments(h.readAsset("wx-daily.js"));
+  assert.match(src, /class="daybar \s*'\s*\+\s*tempTone\(/,
+    "the daily chart is not asking WP.ui.tempTone for each bar's stop");
+  assert.match(src, /peak \? " peak" : ""/, "the two extremes no longer carry their number");
+});
+
+test("one function decides which temperature stop a reading wears", function () {
+  /* 72 degrees rendered BLUE in the hourly panel's list and pale warm-cream on the curve
+     400 px above it — same datum, same screen, two answers — because the list bucketed at
+     0.66 / 0.33 while the curve's middle gradient stop sat at 0.55. Two mappings for one
+     variable is two design systems, and the only fix that stays fixed is one function that
+     every caller shares and boundaries that are the gradient's own midpoints. */
+  var ui = stripComments(h.readAsset("wx-ui.js"));
+  assert.match(ui, /function tempTone/, "the shared stop-picker has left the vocabulary file");
+  assert.match(ui, /f > 0\.75 \? "t-hot" : f > 0\.25 \? "t-warm" : "t-cold"/,
+    "the buckets are no longer the midpoints between the curve's three stops");
+
+  /* the curve's stops are what those numbers are derived from: hot at 0, warm at the
+     MIDDLE, cold at 1, so the nearest stop to a reading at fraction f is the class above */
+  var hourly = stripComments(h.readAsset("wx-hourly.js"));
+  /* The curve is BANDED at the same cut points, not smoothly blended: against a continuous
+     gradient there is no height at which a three-class list and the curve agree except by
+     luck. Warm runs 0.3-0.7 of the plot, which brackets the 0.25/0.75 bucket edges. */
+  assert.match(hourly, /offset="0\.28" stop-color="var\(--temp-warm\)"/,
+    "the curve's warm band no longer starts where the warm bucket does");
+  assert.match(hourly, /offset="0\.72" stop-color="var\(--temp-warm\)"/,
+    "the curve's warm band no longer ends where the warm bucket does");
+  assert.equal(/function tempTone/.test(hourly), false,
+    "wx-hourly has its own copy of the stop-picker again");
+  assert.match(stripComments(h.readAsset("wx-daily.js")), /tempTone = ui\.tempTone/,
+    "the daily chart is not using the shared stop-picker");
 });
 
 test("the scroll fade only appears on a strip that is actually scrolling", function () {
@@ -877,14 +991,34 @@ test("an affordance is not painted in the colour of a temperature", function () 
 test("a control's STATE is not painted in the colour of a temperature either", function () {
   /* The other half of the same defect, and the half that survived: blue marked cold AND
      selected AND on. Every toggle in Settings, the selected day chip on Daily (a hand's
-     width from that day's blue low), the selected hour row, the calendar's today cell and
-     the Home Assistant tiles were all --accent, which is --temp-cold's hex. A state of a
-     control is drawn as more light, not as a hue; a hue on this wall means a datum. */
-  [".chip.on", ".seg-b.on", ".switch.on", ".cal-day.today", ".hrow.sel"].forEach(function (sel) {
+     width from that day's blue low), the selected hour row and the Home Assistant tiles were
+     all --accent, which is --temp-cold's hex. A state of a control is drawn as more light,
+     not as a hue; a hue on this wall means a datum. */
+  [".chip.on", ".seg-b.on", ".switch.on", ".btn.fill", ".hrow.sel"].forEach(function (sel) {
     var r = ruleFor(sel, "background");
     var bg = decl(r.body, "background");
     assert.equal(/109,\s*179,\s*242|var\(--accent\)/.test(bg), false,
       sel + " fills with " + bg + ", which is the cold-temperature blue");
+  });
+});
+
+test("nothing outside the stylesheets paints itself the cold-temperature blue", function () {
+  /* The third and last place this defect hid, and the only one the two tests above could
+     not see: a colour authored in a WIDGET rather than in a rule. wx-system.js filled the
+     charging battery with `var(--accent)`, which style.css documents — in a comment on the
+     token itself — as the same hex as --temp-cold. So the one screen in the build whose
+     panel comment states the rule was the one screen that broke it, and it broke it in a
+     file no CSS assertion reads.
+
+     --accent is allowed to mean a LINE of data (the sensor trace, the countdown bar, the
+     rain figure) and those all live in the stylesheets where the two tests above can see
+     them. A widget that wants a colour picks a CLASS, like everything else here. */
+  ["wx-system.js", "wx-air.js", "wx-moon.js", "wx-timer.js", "wx-sensors.js",
+   "wx-sensors-panel.js", "wx-weather.js", "wx-daily.js", "wx-hourly.js",
+   "wx-icons.js", "wx-news.js", "wx-clock.js"].forEach(function (f) {
+    var src = stripComments(h.readAsset(f));
+    assert.equal(/var\(--accent\)/.test(src), false,
+      f + " authors var(--accent) — the same hex as --temp-cold — outside the stylesheets");
   });
 });
 

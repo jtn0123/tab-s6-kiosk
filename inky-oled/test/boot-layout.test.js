@@ -49,7 +49,10 @@ test("every widget registers and initialises", function () {
   var names = Object.keys(app.registry).sort();
   /* sky is registered but is not a WIDGET: it has no card, no panel and no show/hide
      switch — it is the background layer, initialised through the same registry. */
-  assert.deepEqual(names, ["air", "calendar", "carousel", "clock", "daily", "hourly", "moon",
+  /* ELEVEN widgets plus carousel and sky. "calendar" is gone: a month grid with no events,
+     3.2% inked, restating a date the clock card already prints — see the note on WIDGETS in
+     app.js for why a fourth empty round was not the answer. */
+  assert.deepEqual(names, ["air", "carousel", "clock", "daily", "hourly", "moon",
                            "news", "sensors", "settings", "sky", "system", "timer", "weather"]);
   /* each one has painted something into its card */
   assert.notEqual(app.text("time"), "--:--");
@@ -110,6 +113,86 @@ test("the report measures the horizontal axis too, and warns on it", function ()
   assert.match(ok.logs.log.filter(function (l) {
     return l.indexOf("[inky] layout:") === 0;
   }).pop(), /overflow=0 overflowX=0/);
+});
+
+/* Open a panel and give its body, and one row inside it, a believable layout. The row goes
+   in AFTER the open, because onOpen repaints the body and would wipe it. `spill` is how far
+   the row's painted box reaches past where it should stop. */
+function openWithLayout(app, name, opts) {
+  opts = opts || {};
+  app.WP.panels.open(name);
+  var panel = app.qs('[data-panel="' + name + '"]');
+  var body = app.qs("[data-body]", panel);
+  var PAD = 20;                                   // the scrollport's bottom padding
+  body.style.paddingBottom = PAD + "px";
+  body.setRect({ left: 0, top: 100, right: 700, bottom: 1100 });
+  var row = app.doc.createElement("div");
+  row.className = "hrow";
+  body.appendChild(row);
+  row.setRect({
+    left: 0 - (opts.spillX || 0), top: 900, right: 700 + (opts.spillX || 0),
+    bottom: 1100 - PAD + (opts.spill || 0)
+  });
+  return { panel: panel, body: body, row: row };
+}
+
+test("a panel that spills into the frame is warned about, in EITHER orientation", function () {
+  /* The class of bug this is here for: loop 3 restated the landscape type ramp at 1.45x,
+     the hourly list's rows kept their `flex: 1 1 0` boxes, and the bottom temperature
+     painted 11 px past the end of its row and was sliced by the bezel. It shipped because
+     nothing measured a panel — and because the obvious measurement does not see it:
+     scrollHeight - clientHeight was 0 on that frame, since the spill landed in the
+     scrollport's own bottom padding, which scrollHeight counts as part of the box.
+
+     So the check is "nothing may enter the padding that keeps the last row off the glass",
+     it runs from panels.open() rather than from a probe script, and it runs in whatever
+     orientation the tablet is in. Both orientations are asserted here for the same reason:
+     the fault that shipped existed ONLY in landscape. */
+  [{ w: 800, h: 1300, name: "portrait" }, { w: 1300, h: 800, name: "landscape" }]
+    .forEach(function (v) {
+      var app = h.createApp({ width: v.w, height: v.h });
+      openWithLayout(app, "hourly", { spill: 11 });
+      app.advance(500);
+      var warn = app.logs.warn.filter(function (l) {
+        return l.indexOf("[inky] layout: panel") === 0;
+      })[0];
+      assert.ok(warn, "a panel spilling into the frame was not warned about in " + v.name);
+      assert.match(warn, new RegExp("panel hourly " + v.name
+        + " overflow=11 overflowX=0 .*OVERFLOW, the last row is into the frame"));
+    });
+});
+
+test("a panel whose content runs off the side is warned about too", function () {
+  /* The daily panel's 24 hour bars each took a min-content floor from the temperature
+     printed above them, so the row came out wider than the panel and the 24th bar rendered
+     as a 3-device-px sliver at the rail. Sideways is as clipped as downwards: there is no
+     scrollbar and nobody standing there to swipe it. */
+  var app = h.createApp({ width: 800, height: 1300 });
+  openWithLayout(app, "daily", { spillX: 30 });
+  app.advance(500);
+  var warn = app.logs.warn.filter(function (l) {
+    return l.indexOf("[inky] layout: panel") === 0;
+  })[0];
+  assert.ok(warn, "content running off the side of a panel was not warned about");
+  assert.match(warn, /panel daily portrait overflow=0 overflowX=30 .*runs off the side/);
+});
+
+test("a panel that fits is reported once, not once per visit", function () {
+  /* The carousel opens twelve screens every thirty seconds, for ever. A clean measurement
+     is worth logging — it is the evidence the wall is fitting — but only the first time,
+     or the log stops being readable and the warnings drown in it. */
+  var app = h.createApp({ width: 800, height: 1300 });
+  openWithLayout(app, "moon", { spill: 0 });
+  app.advance(500);
+  app.WP.panels.close();
+  openWithLayout(app, "moon", { spill: 0 });
+  app.advance(500);
+  var lines = app.logs.log.filter(function (l) {
+    return l.indexOf("[inky] layout: panel moon") === 0;
+  });
+  assert.deepEqual(app.logs.warn, []);
+  assert.equal(lines.length, 1, "a fitting panel was logged on every open");
+  assert.match(lines[0], /panel moon portrait overflow=0 overflowX=0$/);
 });
 
 test("a surviving card may grow to at most 1.3x its intrinsic height", function () {

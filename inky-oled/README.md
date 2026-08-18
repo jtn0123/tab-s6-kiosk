@@ -159,7 +159,7 @@ automated click times out. The harness dispatches the pointer events itself.
 
 ## What it shows
 
-Twelve widgets, all interactive — tap a card for its full-screen detail panel, **swipe
+Eleven widgets, all interactive — tap a card for its full-screen detail panel, **swipe
 left/right inside any panel** to slide between screens (wrap-around, position dots), and an
 optional **Cycle screens** switch turns the whole panel into an InkyPi-style playlist that
 slides through the content screens on a dwell timer and returns to the dashboard. The icons are
@@ -179,13 +179,19 @@ a dim flash in a storm. Portrait and landscape both render a full, dead-space-fr
 - **Moon** — live phase drawn as a disc, illumination, age, next full/new; computed locally
 - **Air** — US AQI in the EPA's own colour bands, pollutant breakdown, 24 h forecast
   (Open-Meteo air-quality endpoint, keyless like the weather)
-- **Date** — month calendar with today ringed, prev/next month, day-of-year
 - **News** — a one-line rotating headline ticker (RSS/Atom through the app shell — feeds
   never need CORS), full list in its panel; defaults to BBC World + NPR, configurable
 - **Settings** — units, clock format, seconds, sky animation, screen cycling, burn-in,
   per-widget show/hide; persisted
 
 Weather comes from **Open-Meteo — no API key, no account.**
+
+There was a twelfth, **Date**: a locally-computed month grid. It was cut. With no account and
+no sync in this product by design it had no events to show, so after three design rounds it was
+still a grid restating a date the Clock card already prints in 63 CSS px of type — 3.2% of the
+screen inked, on a wall panel read from 3 m. Its home tile was cut with it, because
+`DATE 17 / Mon · Aug` was the same fact as `Monday, August 17` on the same screen. Eleven
+screens that all say something beats twelve where one does not.
 
 ## Home Assistant sensors (optional)
 
@@ -478,7 +484,7 @@ never covers a control or a datum — [contract](INTERACTIVE.md#toast-placement)
 shadow** (a close tap suppresses only the `data-open` rect directly under it, for 600 ms — never a
 blanket cooldown, which would re-break close-then-tap — [details](INTERACTIVE.md#panels)).
 
-Sensible next cards: calendar, photo rotation, transit times, NAS status — or the Pi's InkyPi
+Sensible next cards: photo rotation, transit times, NAS status — or the Pi's InkyPi
 output if you ever want the two linked.
 
 ## Not done yet

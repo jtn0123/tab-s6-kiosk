@@ -59,7 +59,7 @@ test("every panel offers exactly one way out, and it is the header ✕", functio
      puts a second exit back has to answer for that height. */
   var app = h.createApp({});
   var panels = app.qsa("[data-panel]");
-  assert.ok(panels.length >= 12, "only " + panels.length + " panels");
+  assert.ok(panels.length >= 11, "only " + panels.length + " panels");
   panels.forEach(function (panel) {
     var name = panel.getAttribute("data-panel");
     var closers = panel.querySelectorAll("[data-close]");

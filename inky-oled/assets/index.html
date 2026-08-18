@@ -184,7 +184,12 @@
       </section>
     </div>
 
-    <!-- ---- 9 / 10 / 11. moon, air quality, calendar ---- -->
+    <!-- ---- 9 / 10. moon, air quality ----
+         Two tiles, not three. The third was DATE, which printed "17 / Mon · Aug" on a
+         screen whose clock card says "Monday, August 17" 300 px above it, and which opened
+         a month grid with nothing on it. See the note in README about why the Calendar
+         widget was cut rather than left empty for a fourth round. .card.mini is `flex: 1 1 0`,
+         so the two survivors take the row between them; there is no hole. -->
     <div class="row3">
       <section class="card mini tappable" data-widget="moon" data-open="moon"
                role="button" tabindex="0" aria-label="Moon phase">
@@ -198,13 +203,6 @@
         <div class="mini-head">Air</div>
         <div id="air-big" class="mini-big">--</div>
         <div id="air-sub" class="mini-sub">waiting&hellip;</div>
-      </section>
-
-      <section class="card mini tappable" data-widget="calendar" data-open="calendar"
-               role="button" tabindex="0" aria-label="Calendar">
-        <div class="mini-head">Date</div>
-        <div id="cal-big" class="mini-big">&nbsp;</div>
-        <div id="cal-sub" class="mini-sub">&nbsp;</div>
       </section>
     </div>
 
@@ -317,14 +315,6 @@
     <div class="panel-body" data-body></div>
   </section>
 
-  <section class="panel" data-panel="calendar">
-    <header class="panel-head">
-      <div><h1 class="panel-title">Calendar</h1><p class="panel-sub" data-sub></p></div>
-      <button class="close-btn tappable" data-close aria-label="Close">&#10005;</button>
-    </header>
-    <div class="panel-body" data-body></div>
-  </section>
-
   <section class="panel" data-panel="news">
     <header class="panel-head">
       <div><h1 class="panel-title">News</h1><p class="panel-sub" data-sub></p></div>
@@ -399,7 +389,6 @@
 <script src="wx-system.js"></script>
 <script src="wx-moon.js"></script>
 <script src="wx-air.js"></script>
-<script src="wx-calendar.js"></script>
 <script src="wx-news.js"></script>
 <script src="wx-settings.js"></script>
 <script src="wx-carousel.js"></script>
