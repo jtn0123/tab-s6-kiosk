@@ -39,3 +39,6 @@ patches/D-kiosk-settings/backup.json
 # OS noise
 Thumbs.db
 .DS_Store
+
+# the simulator's scratch: nothing here is shipped, but it is handy to keep local
+inky-oled/sim/__pycache__/

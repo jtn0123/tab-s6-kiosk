@@ -131,6 +131,32 @@ prove much on its own; four surviving mutants found that way (a `<=` boundary, d
 under a finger, the burn-in default with no config block, and `ago()`'s rounding) have tests
 now, and each was written by first reintroducing the mutation and watching it fail.
 
+## Running it without the tablet
+
+```bash
+python sim/server.py      # then open http://localhost:8788/cockpit
+```
+
+The **cockpit** runs the real app — the same `assets/` the APK ships — inside a frame at
+the tablet's true CSS viewport, with a stand-in for the Java bridge. It exists because a
+wall panel is mostly its *states*, and almost none of them happen on a desk:
+
+- **Weather scenes** — thunderstorm, snow, fog, 3am clear sky — rewritten into a real
+  Open-Meteo payload, so the icons, the charts and the animated sky can all be checked
+  against a storm without waiting for one.
+- **Failure modes** — wifi down, Home Assistant refusing the token, HA unreachable, a
+  news feed returning 503. These are the paths that decide whether the panel degrades
+  honestly or lies, and they are otherwise nearly impossible to reach on purpose.
+- **A live Home Assistant** that never existed: the sim answers `/api/states/…` with
+  believable payloads, so live mode is exercisable with no HA box on the network.
+- **`SIM.sweep()`** walks every screen and every control with real pointer events and
+  returns what looked wrong — dead space, near-miss scrolling, stuck press states,
+  stacked panels, unlabelled targets, raw JS values on screen, console errors.
+
+Note that ordinary click automation cannot drive this app: a wall panel runs 1-second
+tickers forever, so the page never reaches the idle state such tools wait for, and every
+automated click times out. The harness dispatches the pointer events itself.
+
 ## What it shows
 
 Twelve widgets, all interactive — tap a card for its full-screen detail panel, **swipe

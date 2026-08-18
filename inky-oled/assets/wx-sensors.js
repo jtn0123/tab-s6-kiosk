@@ -144,7 +144,15 @@
           /* err/okAt are the freshness pair: err is why this entity is not updating, okAt is
              when it last did. Both start unset — an entity that has never answered is not
              "stale", it is simply empty, and the tile shows "--" for that. */
-          domain: domain, hist: [], value: null, on: false, dp: 1, err: null, okAt: 0
+          /* Decimals by what the number IS, not one rule for everything: a live feed gave
+             every entity one decimal, so the wall read "512.0 W" and "44.0 %" — a tenth of
+             a watt and a tenth of a percent are noise, and the extra digit is one more
+             thing to read from across a room. A temperature earns its decimal; a count,
+             a percentage and a power reading do not. `decimals` in the entity's config
+             overrides this for anything the guess gets wrong. */
+          domain: domain, hist: [], value: null, on: false, err: null, okAt: 0,
+          dp: (typeof cfg.decimals === "number") ? cfg.decimals
+            : (/°|temp/i.test(cfg.unit || "") || /temp/i.test(cfg.id) ? 1 : 0)
         };
       });
     },

@@ -86,7 +86,11 @@ test("a hostile unit from a live Home Assistant feed is escaped, not rendered", 
     var box = app.$("sensors");
     assert.equal(box.querySelectorAll("img").length, 0, "markup from the feed was executed");
     assert.match(box.innerHTML, /&lt;img/, "the hostile unit was not escaped");
-    assert.match(box.textContent, /21\.5/, "the real reading should still be shown");
+    /* 22, not 21.5: a live entity whose unit is not a temperature is rounded to whole
+       numbers (see the dp rule in wx-sensors) — and this one's "unit" is an injection
+       attempt, so it is certainly not a temperature. What matters here is that the real
+       reading still reaches the tile at all. */
+    assert.match(box.textContent, /Hostile22/, "the real reading should still be shown");
   });
 });
 
