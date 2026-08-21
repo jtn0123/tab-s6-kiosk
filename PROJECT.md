@@ -11,6 +11,15 @@ decision/status logs as things happen.
 
 ## Status
 
+- **2026-08-21 — Repos consolidated.** This Mac-side tracker was merged into the public GitHub repo
+  `jtn0123/tab-s6-kiosk` (which the Windows session had created: 15 device patches A–O, research, KNOWN-ISSUES,
+  secret scanning). The Windows session's "Inky OLED" Android app (fullscreen WebView dashboard, ~7.6k lines,
+  339 tests, 12 screens, InkyPi newspaper/picture widgets ported) moved **with history** to
+  `jtn0123/InkyPi` → `clients/android/` (draft PR https://github.com/jtn0123/InkyPi/pull/635). The copy here was
+  removed so there is one canonical app. NAS dumps of both repos were broken partial copies; the only unique
+  content (an uncommitted InkyPi typing-cleanup WIP) is saved as `S6 Tab\Inkypi-uncommitted-*.{patch,py}`.
+  Windows log archived locally only (`docs/PROGRESS-windows-session.md`, gitignored — serials/IPs).
+
 | Date | Update |
 |---|---|
 | 2026-08-16 | Project created. Planning done, nothing flashed yet. |
@@ -96,13 +105,13 @@ GSI updates: manual re-flash from MisterZtr releases (~15 min, data survives, re
 - [ ] Smart plug charge schedule (~30 min every few hours, hold battery near 60-85%)
 - [ ] Verify InkyPi web UI reachable + usable from the tablet browser
 
-### Phase 3 — Kiosk APK (`kiosk-app/`, built here)
-- [ ] Scaffold: Kotlin, fullscreen WebView → InkyPi URL, immersive mode
-- [ ] Boot receiver: auto-launch on power-on
-- [ ] Set as HOME/launcher so the tablet boots straight into the panel
-- [ ] Keep-screen-on + screen off/on control (schedule; motion-wake if we add camera later)
-- [ ] Layout drift / burn-in guard (slow px translate) if not handled server-side
-- [ ] Settings screen: server URL, reload, kiosk escape gesture
+### Phase 3 — Kiosk APK — ✅ DONE as **Inky OLED** (2026-08-16→18, Windows session), now `jtn0123/InkyPi/clients/android`
+Built with SDK build-tools only (no Gradle), Java WebView shell + JS bridge, boot receiver, immersive mode,
+burn-in drift, on-device settings, touch panels, Home Assistant tiles, timer, news, newspaper/picture widgets.
+Standalone today (no server). Remaining kiosk items, tracked in the InkyPi PR:
+- [ ] Server mode: poll `/api/current_image` as primary screen, local widgets as offline fallback
+- [ ] Set as HOME/launcher; screen pinning
+- [ ] Presence-based wake (mmWave → HA) — idea parked in tab-s6-kiosk README
 
 ### Phase 4 — InkyPi `panel` profile (LAST — PRs to jtn0123/InkyPi)
 - [ ] `PanelDisplay` backend alongside inky/waveshare (`src/display/`)

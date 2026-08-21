@@ -22,7 +22,8 @@ corrected.
 |---|---|
 | [`KNOWN-ISSUES.md`](KNOWN-ISSUES.md) | **What is still broken and where to debug it** — start here |
 | [`patches/`](patches/) | Nine independent patches for the tablet — display, audio, battery, kiosk, burn-in |
-| [`inky-oled/`](inky-oled/) | Standalone Android dashboard app. No Raspberry Pi required |
+| [`PROJECT.md`](PROJECT.md) | Project tracker — phases, decision log, status |
+| Inky OLED app | **Moved to [jtn0123/InkyPi → `clients/android`](https://github.com/jtn0123/InkyPi/tree/clients/android/clients/android)** (history preserved, 2026-08-21) |
 | [`research/`](research/) | Emulator experiments behind the HDR patch, with results |
 
 ## The flash, in short
@@ -51,6 +52,8 @@ LineageOS 23.2-20260524-VANILLA-EXT4-GSI   Android 16 / SDK 36
 ```
 
 ## Inky OLED
+
+> **Now lives in [jtn0123/InkyPi/clients/android](https://github.com/jtn0123/InkyPi/tree/clients/android/clients/android)** as the tablet/OLED variant of InkyPi. The description below is kept for context.
 
 A dashboard app inspired by [InkyPi](https://github.com/fatihak/InkyPi) — plugin cards, scheduled
 refresh — but **running entirely on the tablet**. No Pi, no server, no e-ink hardware. Rendered for
