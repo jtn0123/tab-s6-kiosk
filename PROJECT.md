@@ -15,7 +15,7 @@ decision/status logs as things happen.
   `jtn0123/tab-s6-kiosk` (which the Windows session had created: 15 device patches A–O, research, KNOWN-ISSUES,
   secret scanning). The Windows session's "Inky OLED" Android app (fullscreen WebView dashboard, ~7.6k lines,
   339 tests, 12 screens, InkyPi newspaper/picture widgets ported) moved **with history** to
-  `jtn0123/InkyPi` → `clients/android/` (draft PR https://github.com/jtn0123/InkyPi/pull/635). The copy here was
+  `jtn0123/InkyPi` → `clients/android/` (draft PR https://github.com/jtn0123/InkyPi/pull/635 — CI green; CodeQL findings fixed). Side fix: PR #637 bumps pip to 26.2 for PYSEC-2026-3721, which was failing InkyPi's Security job on every branch. The copy here was
   removed so there is one canonical app. NAS dumps of both repos were broken partial copies; the only unique
   content (an uncommitted InkyPi typing-cleanup WIP) is saved as `S6 Tab\Inkypi-uncommitted-*.{patch,py}`.
   Windows log archived locally only (`docs/PROGRESS-windows-session.md`, gitignored — serials/IPs).
