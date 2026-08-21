@@ -42,7 +42,7 @@ decision/status logs as things happen.
 - [x] USB debugging enabled in Developer options
 - [x] Solve the Odin problem: **physical Windows gaming PC**, Justin at the keyboard. VM rejected (USB passthrough risk). Heimdall = backup only.
 - [x] ~~SSH into gaming PC~~ **ABANDONED 2026-08-16** — PC's Windows servicing stack is broken (likely gaming debloat); capability installer hung, removed OpenSSH files, MSI reinstall silently failed. Not worth more time. New plan: stage downloads on the Mac → 512GB USB drive → PC. Flash day is chat-guided (or Chrome Remote Desktop if wanted — browser-based, no Windows services). Leftover on PC: none (orphaned sshd service was deleted; authorized_keys file in C:\ProgramData\ssh is inert).
-- [~] Stage all downloads to the NAS: `\\10.27.27.196\media\Media\S6 Tab` (mounted at `/Volumes/media/Media/S6 Tab` on the Mac). Gaming PC reads the share directly on flash day; USB drive no longer needed.
+- [~] Stage all downloads to the NAS: `\\<nas>\media\Media\S6 Tab` (mounted at `/Volumes/media/Media/S6 Tab` on the Mac). Gaming PC reads the share directly on flash day; USB drive no longer needed.
   - [x] 02: Odin 3.14.4 (SamFw mirror) + Samsung USB driver
   - [x] 03: TWRP **3.7.0_9-0-gts6lwifi** (dl.twrp.me, 64MB) + generic AVB-disabled **vbmeta.tar** (dl.twrp.me/gts4lv — correct per both GSI guides)
   - [x] 04: **MisterZtr LineageOS 23.2 (Android 16) VANILLA EXT4 GSI** `LineageOS-23.2-20260524-VANILLA-EXT4-GSI.7z` (0.9GB; ⚠️ EXT4 variant required — EROFS does not boot on T860; VANILLA confirmed working by community)
@@ -61,10 +61,10 @@ decision/status logs as things happen.
 ### Phase 0.5 — Gaming PC prep (done 2026-08-16, via RDP from the Mac)
 - [x] RDP working: Windows App on Mac → `rdp` local user on Justin_Gaming_PC (PIN/MSA can't RDP; dedicated local admin user created). Physical console stays on Justin's session.
 - [x] Windows App reset: old Navy work account signed out, gov workspaces removed; only the gaming-PC connection remains
-- [x] Flash kit copied NAS → `C:\Users\rdp\Downloads\S6 Tab` (firmware zip verified 6.28GB)
+- [x] Flash kit copied NAS → `<pc>\S6 Tab (rdp user, unreadable — superseded)` (firmware zip verified 6.28GB)
 - [x] Odin 3.14.4 extracted; Samsung USB driver v1.5.51 installed
 - [x] Tablet USB detection: NOT visible under the `rdp` RDP session; works under Justin's console session but with flapping connect/disconnect toasts (marginal cable/port — rear USB 2.0 port + known-good cable to try). Both XDA zips staged (multidisabler built from ianmacd GitHub source, T860 support verified; tabs6-gsi-fixes.zip downloaded by Justin, verified, on NAS).
-- **HANDOVER 2026-08-16**: flash execution moved to a Claude session running ON the gaming PC under Justin's own account (where USB works). Full instructions in `TURNOVER.md` on the NAS (`\\10.27.27.196\media\Media\S6 Tab`); that session logs to `PROGRESS.md` alongside it — sync it back into this repo afterwards.
+- **HANDOVER 2026-08-16**: flash execution moved to a Claude session running ON the gaming PC under Justin's own account (where USB works). Full instructions in `TURNOVER.md` on the NAS (`\\<nas>\media\Media\S6 Tab`); that session logs to `PROGRESS.md` alongside it — sync it back into this repo afterwards.
 - Known quirk: synthetic typing into the RDP session garbles (every key → 'a'); workaround = Mac clipboard + ⌘V redirection, works reliably. Passwords always typed by Justin.
 
 ### Phase 1 — Flash weekend — ✅ COMPLETE 2026-08-16 (Windows-side session; full detail in docs/PROGRESS-windows-session.md)

@@ -10,7 +10,7 @@ Ask before anything destructive; the flash steps themselves are pre-authorized b
 **Log everything you do** (steps completed, results, surprises) by appending to
 `PROGRESS.md` in this same folder (create it if missing). The Mac-side session will sync
 it into the project git repo later. Note that this folder lives on the NAS
-(`\\10.27.27.196\media\Media\S6 Tab`, mapped from the Mac at `/Volumes/media/...`).
+(`\\<nas>\media\Media\S6 Tab`, mapped from the Mac at `/Volumes/media/...`).
 
 ---
 
@@ -28,7 +28,7 @@ Device facts (all confirmed):
 
 ## What's staged where
 
-Everything is in this NAS folder AND mirrored at `C:\Users\rdp\Downloads\S6 Tab`
+Everything is in this NAS folder AND mirrored at `<pc>\S6 Tab (rdp user, unreadable — superseded)`
 (readable by admins; Justin's account is admin — but if permissions annoy you, just
 re-copy from the NAS share):
 

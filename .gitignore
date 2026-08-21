@@ -4,3 +4,5 @@ downloads/
 *.zip
 *.apk
 .DS_Store
+# Windows session log — serials/emails/LAN IPs, never published
+docs/PROGRESS-*.md
