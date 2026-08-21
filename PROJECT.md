@@ -109,7 +109,8 @@ GSI updates: manual re-flash from MisterZtr releases (~15 min, data survives, re
 Built with SDK build-tools only (no Gradle), Java WebView shell + JS bridge, boot receiver, immersive mode,
 burn-in drift, on-device settings, touch panels, Home Assistant tiles, timer, news, newspaper/picture widgets.
 **Standalone by design (decided 2026-08-21): nothing from the Pi.** "True to InkyPi" = port plugins as JS widgets, same settings/playlist vocabulary, same data sources. Remaining items, tracked in the InkyPi PR:
-- [ ] Plugin parity: port remaining InkyPi plugins (calendar, APOD, AI text, image folder, …) as widgets
+- [x] Plugin parity: **Year** (year_progress + countdown) shipped 2026-08-21 on the clock line; parity table in clients/android/README.md
+- [ ] Plugin parity: calendar (ICS, needs RRULE expander) next; then todo_list / ai_text
 - [ ] Set as HOME/launcher; screen pinning
 - [ ] Presence-based wake (mmWave → HA) — idea parked in tab-s6-kiosk README
 
