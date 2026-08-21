@@ -111,7 +111,9 @@ burn-in drift, on-device settings, touch panels, Home Assistant tiles, timer, ne
 **Standalone by design (decided 2026-08-21): nothing from the Pi.** "True to InkyPi" = port plugins as JS widgets, same settings/playlist vocabulary, same data sources. Remaining items, tracked in the InkyPi PR:
 - [x] Plugin parity: **Year** (year_progress + countdown) shipped 2026-08-21 on the clock line; parity table in clients/android/README.md
 - [x] Plugin parity: **Calendar** ("Next" tile, ICS + RRULE expander) shipped 2026-08-21
+- [x] Visual upgrade 2026-08-21: pro icon pack (28 WMO, animated, live moon), calmer richer sky, sun-arc, colour pass, second tiers; coder/judge loop signed off 8.7/10 (PR #635)
 - [ ] Plugin parity: todo_list / ai_text next; then decide per-plugin on image_*/unsplash/github/screenshot
+- [ ] Install the new build on the tablet and check icons/sky at real size (judge suggestions: timer at-rest accent, hourly rain-bar caption, daily low callout anchor, Sensors void)
 - [ ] Set as HOME/launcher; screen pinning
 - [ ] Presence-based wake (mmWave → HA) — idea parked in tab-s6-kiosk README
 
