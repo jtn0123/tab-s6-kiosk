@@ -226,22 +226,9 @@ committed Seattle placeholder and an ordinary clean commit both went through.
 
 ## CI
 
-Two workflows:
-
-- **`.github/workflows/secret-scan.yml`** — the two scanner jobs described above, on every push
-  and pull request plus weekly.
-- **`.github/workflows/build.yml`** — runs the Inky OLED test suite on `ubuntu-latest` and
-  compiles the APK on `windows-latest`, so a change that does not build or does not pass
-  cannot reach `main`. Pushes are filtered to `main` so a PR branch does not run everything
-  twice, and both jobs carry a `timeout-minutes`. The build job resolves the Android SDK
-  explicitly and fails with what it found if there isn't one, rather than skipping. It also
-  asserts the shipping APK is not debuggable and that `assets/` stayed flat — both now written
-  to fail *closed*, which the debuggable check previously did not. Details in
-  [`inky-oled/README.md`](inky-oled/README.md#ci).
-
-```bash
-cd inky-oled && npm test        # the same suite locally; no npm install needed
-```
+One workflow, **`.github/workflows/secret-scan.yml`** — the two scanner jobs described above, on
+every push and pull request plus weekly. The Inky OLED build/test workflow moved with the app to
+[jtn0123/InkyPi](https://github.com/jtn0123/InkyPi/pull/635) on 2026-08-21.
 
 ## Warning
 
