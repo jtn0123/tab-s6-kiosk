@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CASE 05: deliberately WRONG element order (hdrBrightnessConfig before densityMapping).
+     The XSD declares them in an xs:sequence with densityMapping first, so a strict parser
+     would reject this. AOSP's own default_television.xml already hints the parser is
+     order-tolerant (it puts <height> before <width> inside <density>, against the schema).
+     Question: does xsdc enforce sequence order at the top level?
+     This matters because if order is enforced, a hand-assembled combined patch is fragile. -->
+<displayConfiguration>
+    <hdrBrightnessConfig>
+        <brightnessMap>
+            <point><first>0</first><second>0.6</second></point>
+            <point><first>1500</first><second>1.0</second></point>
+        </brightnessMap>
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+        <sdrHdrRatioMap>
+            <point><first>2.0</first><second>4.0</second></point>
+            <point><first>480.0</first><second>1.15</second></point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+    <densityMapping>
+        <density>
+            <width>320</width>
+            <height>640</height>
+            <density>200</density>
+        </density>
+    </densityMapping>
+</displayConfiguration>

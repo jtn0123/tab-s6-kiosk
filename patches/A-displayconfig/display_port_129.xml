@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PATCH A — display configuration for Galaxy Tab S6 (SM-T860 / gts6lwifi)
+  LineageOS 23.2 GSI / Android 16
+  Install to:  /vendor/etc/displayconfig/display_port_129.xml
+
+  WHY ONE FILE: Android loads exactly ONE display config per display (first filename match
+  wins, tried as display_id_<id>.xml -> display_<id>.xml -> display_port_<port>.xml).
+  Density and HDR therefore CANNOT be separate files. They are separate SECTIONS below and
+  either can be deleted independently without affecting the other — verified in an
+  Android 16 emulator (element order is also irrelevant; the xsdc parser is order-tolerant).
+
+  port 129 comes from this tablet's own dumpsys: address {port=129, model=0x40446df8ca940a}
+
+  ============================ SAFETY — READ THIS ============================
+  Inside <hdrBrightnessConfig>, these FIVE children are MANDATORY:
+      brightnessMap, brightnessIncreaseDebounceMillis, brightnessDecreaseDebounceMillis,
+      screenBrightnessRampIncrease, screenBrightnessRampDecrease
+  HdrBrightnessData.loadConfig() dereferences each with no null check. Omitting any one
+  throws NPE, which DisplayDeviceConfig.initFromFile does NOT catch (it catches only
+  IOException | DatatypeConfigurationException | XmlPullParserException). The NPE reaches
+  system_server and the device BOOTLOOPS PERMANENTLY.
+
+  Verified empirically, not assumed. Removing brightnessIncreaseDebounceMillis produced:
+      FATAL EXCEPTION IN SYSTEM PROCESS: android.display
+      NullPointerException at HdrBrightnessData.loadConfig(HdrBrightnessData.java:200)
+  and the emulator never booted again until the file was deleted.
+
+  RECOVERY IF IT BOOTLOOPS:
+      Boot TWRP (Vol Up + Power) and delete /vendor/etc/displayconfig/display_port_129.xml
+      DO NOT rely on adb — adb authorization requires system_server, which is what crashes.
+  ===========================================================================
+
+  Panel facts (from this tablet's dumpsys):
+      mMaxLuminance 564.3 nits, mMaxAverageLuminance 282.46, mMinLuminance 0.6134
+      supportedHdrTypes [2,3,4] = HDR10, HLG, HDR10+
+      native 1600x2560, true density ~287 dpi, GSI default density 360
+-->
+<displayConfiguration>
+
+    <!-- ==================== SECTION 1: DENSITY (safe, independently removable) ====================
+         GSI defaults this panel to 360 dpi, which renders noticeably larger than 1:1.
+         The panel's true density is ~287 dpi; Samsung's stock One UI ran ~300.
+         300 gives materially more usable screen area — worthwhile on a wall panel.
+         Verified in emulator: density changed 160 -> 200 via this mechanism.
+         To revert just this: delete this <densityMapping> block. Nothing else is affected.
+         (Runtime alternative, no file needed:  adb shell wm density 300  /  wm density reset) -->
+    <densityMapping>
+        <density>
+            <width>1600</width>
+            <height>2560</height>
+            <density>300</density>
+        </density>
+    </densityMapping>
+
+    <!-- ==================== SECTION 2: HDR (experimental, independently removable) ==============
+         Gives the compositor HDR headroom it currently does not have.
+         Without <sdrHdrRatioMap>, highestHdrSdrRatio is hard-capped at 1.0 = no HDR at all.
+         Emulator-verified: with this block, mHdrBrightnessData goes null -> populated with
+         highestHdrSdrRatio 4.0, and HdrBrightnessModifier actively consumes it.
+         UNPROVEN: whether this tablet's composer actually boosts highlights. Only real HDR
+         content on the device can answer that.
+         To revert just this: delete this <hdrBrightnessConfig> block. -->
+    <hdrBrightnessConfig>
+        <!-- ambient lux -> max screen brightness (0..1) permitted while HDR is active -->
+        <brightnessMap>
+            <point><first>0</first><second>0.6</second></point>
+            <point><first>500</first><second>0.85</second></point>
+            <point><first>1500</first><second>1.0</second></point>
+        </brightnessMap>
+
+        <brightnessIncreaseDebounceMillis>1000</brightnessIncreaseDebounceMillis>   <!-- MANDATORY -->
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>   <!-- MANDATORY -->
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>           <!-- MANDATORY -->
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>           <!-- MANDATORY -->
+
+        <allowInLowPowerMode>false</allowInLowPowerMode>
+
+        <!-- SDR nits -> permitted HDR boost ratio. THIS is the element that lifts the ceiling.
+             Tuned for a 564-nit panel: at ~300 nits SDR white, 1.8x lands near 540 nits,
+             inside real capability. Deliberately not aggressive — overshoot just clips. -->
+        <sdrHdrRatioMap>
+            <point><first>2.0</first><second>4.0</second></point>
+            <point><first>150.0</first><second>2.5</second></point>
+            <point><first>300.0</first><second>1.8</second></point>
+            <point><first>480.0</first><second>1.15</second></point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+
+    <!-- ==================== SECTION 3: AUTO-BRIGHTNESS (optional, off by default) ==============
+         Emulator-verified as safe to include (all children optional, no NPE path found).
+         Left commented out: a wall panel at fixed indoor lighting usually wants a stable
+         manual brightness, and the GSI's light-sensor behaviour on this device is untested.
+         Uncomment if you want the panel to dim at night.
+    <autoBrightness enabled="true">
+        <brighteningLightDebounceMillis>2000</brighteningLightDebounceMillis>
+        <darkeningLightDebounceMillis>4000</darkeningLightDebounceMillis>
+    </autoBrightness>
+    -->
+
+</displayConfiguration>

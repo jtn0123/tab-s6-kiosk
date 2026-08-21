@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NEGATIVE TEST FILE - deliberately malformed.
+     Omits <brightnessIncreaseDebounceMillis>, which HdrBrightnessData.loadConfig()
+     dereferences as getBrightnessIncreaseDebounceMillis().longValue() with no null check.
+     Expected: NPE propagates out of initFromFile (which catches only IOException |
+     DatatypeConfigurationException | XmlPullParserException) into system_server.
+     Purpose: determine empirically whether this bootloops or is survivable. -->
+<displayConfiguration>
+    <hdrBrightnessConfig>
+        <brightnessMap>
+            <point><first>0</first><second>0.5</second></point>
+            <point><first>1500</first><second>1.0</second></point>
+        </brightnessMap>
+        <brightnessDecreaseDebounceMillis>3000</brightnessDecreaseDebounceMillis>
+        <screenBrightnessRampIncrease>0.05</screenBrightnessRampIncrease>
+        <screenBrightnessRampDecrease>0.03</screenBrightnessRampDecrease>
+        <sdrHdrRatioMap>
+            <point><first>2.0</first><second>4.0</second></point>
+            <point><first>500.0</first><second>1.1</second></point>
+        </sdrHdrRatioMap>
+    </hdrBrightnessConfig>
+</displayConfiguration>

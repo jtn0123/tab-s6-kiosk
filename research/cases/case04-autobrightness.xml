@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CASE 04: autoBrightness block (all children optional per schema).
+     Motivation: a kitchen wall panel wants to dim at night. Currently
+     screen_brightness_mode=0 (manual). Question: does this block parse safely on its own,
+     and does anything NPE the way hdrBrightnessConfig does when children are omitted?
+     Deliberately minimal - only the optional debounce values plus the enabled attribute. -->
+<displayConfiguration>
+    <autoBrightness enabled="true">
+        <brighteningLightDebounceMillis>2000</brighteningLightDebounceMillis>
+        <darkeningLightDebounceMillis>4000</darkeningLightDebounceMillis>
+    </autoBrightness>
+</displayConfiguration>

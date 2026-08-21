@@ -1,8 +1,52 @@
+# build output
+inky-oled/build/
+*.idsig
+
+# The built dashboard APK. Deliberately NOT tracked: build.ps1 bakes assets/config.js
+# straight into it, so a locally built APK contains the owner's real coordinates. A zipped
+# APK is a binary, and the pre-commit secret scanner only reads text — it cannot see inside
+# one. Build it with inky-oled/build.ps1 instead of committing it.
+inky-oled/inkyoled.apk
+
+# assets/config.js stays TRACKED (it is the placeholder template everyone starts from) but
+# local edits to it are held back with:
+#     git update-index --skip-worktree inky-oled/assets/config.js
+# so a real location never lands in a commit. If you ever need to change the committed
+# template, --no-skip-worktree, edit, verify the diff contains no real coordinates, commit,
+# then re-apply --skip-worktree.
+
+# signing key — never commit
+*.keystore
+debug.keystore
+
+# AOSP sources pulled for research (Apache-2.0, Google copyright).
+# Not vendored here — research/README.md has the exact URLs to re-fetch them.
+research/DisplayDeviceConfig.java
+research/HdrBrightnessData.java
+research/display-device-config.xsd
+
+# Working log — kept local. Contains device serials, account emails and LAN IPs.
+# The README carries the condensed, publishable version of the findings.
+PROGRESS.md
+*-progress.md
+
+# reports generated on-device (contain serials / identifiers)
+*-report.txt
+speaker-report.txt
+battery-report.txt
+patches/D-kiosk-settings/backup.json
+
+# OS noise
+Thumbs.db
+.DS_Store
+
+# the simulator's scratch: nothing here is shipped, but it is handy to keep local
+inky-oled/sim/__pycache__/
+
+# Mac-side tracker additions
 downloads/
 *.img
 *.tar
-*.zip
-*.apk
 .DS_Store
-# Windows session log — serials/emails/LAN IPs, never published
+# Windows session log archive — serials/emails/LAN IPs, never published
 docs/PROGRESS-*.md

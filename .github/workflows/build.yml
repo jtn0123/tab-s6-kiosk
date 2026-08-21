@@ -1,0 +1,325 @@
+# Build + test.
+#
+# Deliberately a separate workflow from secret-scan.yml: those two scanner jobs are the
+# repo's guard against publishing a location or a token and must not be perturbed by
+# anything happening here.
+#
+# Two jobs:
+#   tests      the dashboard's node:test suite (no npm install — the app has no deps and
+#              neither does the harness)
+#   build-apk  compiles the APK exactly the way build.ps1 does locally, so a change that
+#              does not compile cannot reach main
+#
+# The APK is NOT uploaded as an artifact. build.ps1 bakes assets/config.js into it, and on
+# a public repo an artifact is a download link.
+#
+# --- house rule for every assertion in this file -----------------------------------------
+# An assertion must fail CLOSED. If the thing it inspects produced nothing — a tool that
+# exited non-zero, a glob that matched no files, an empty command substitution — the step
+# must fail, not conclude "nothing bad found". Two instances of the opposite have already
+# shipped here (`-notmatch` on an array, and `Select-String -Quiet` over an empty $badging),
+# and both times the security-critical check was the one that silently passed. Concretely:
+#   * after every native command, check $LASTEXITCODE before looking at its output;
+#   * before asserting *about* output, assert the output EXISTS (.Count -gt 0);
+#   * a suite that ran zero tests is a failure, not a pass (see "the suite really ran").
+
+name: build & test
+
+on:
+  # `push` on branches only + `pull_request` — without the branch filter a PR branch in this
+  # same repo ran the whole workflow twice for every commit.
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # One source of truth for the SDK pin. build.ps1 takes these as parameters, and the
+  # artefact checks below build the aapt2 path from the same values, so the workflow and
+  # the build script cannot drift onto different build-tools.
+  BUILD_TOOLS: '36.0.0'
+  ANDROID_PLATFORM: 'android-36'
+  # A floor, not the exact count: this exists to catch "the glob matched nothing and node
+  # --test exited 0", which is how a green CI can run zero tests. Raise it when the suite
+  # grows a lot; it should never need lowering.
+  MIN_TESTS: '150'
+
+jobs:
+  tests:
+    name: tests (node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: inky-oled
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # No `npm ci` / `npm install` on purpose: package.json has no dependencies, and the
+      # suite runs on node's built-in test runner. If this ever needs an install, something
+      # has gone wrong with the premise of the project.
+      - name: Assert the test suite has no dependencies
+        shell: bash
+        run: |
+          node -e '
+            const p = require("./package.json");
+            for (const k of ["dependencies", "devDependencies", "peerDependencies"]) {
+              const d = p[k] || {};
+              if (Object.keys(d).length) {
+                console.error("package.json declares " + k + " — the suite must stay install-free");
+                process.exit(1);
+              }
+            }
+            if (!p.scripts || !p.scripts.test) {
+              console.error("package.json has no test script — README documents `npm test`");
+              process.exit(1);
+            }
+            console.log("no dependencies declared; test script present");
+          '
+          test ! -d node_modules || (echo "node_modules is committed" && exit 1)
+
+      # `npm test`, not `node --test` directly: the README tells a human to run `npm test`,
+      # so that is the command that has to keep working. Running the underlying node line
+      # here would let the script rot while CI stayed green.
+      - name: Run tests (npm test)
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test-output.txt
+
+      # `node --test <glob>` exits 0 when the glob matches NOTHING — verified, not assumed.
+      # So a rename of test/ or a wrong working-directory would turn this job into a green
+      # light over zero executed tests. Parse the runner's own summary and require a floor.
+      - name: Assert the suite really ran
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const out = fs.readFileSync("test-output.txt", "utf8");
+            // A regex literal, not new RegExp(...): this string travels through YAML and a
+            // shell before node sees it, and every layer eats backslashes.
+            // Matches both reporters \u2014 "# pass 178" (tap) and the spec reporter s "i pass 178".
+            const seen = {};
+            for (const m of out.matchAll(/^\W*(tests|pass|fail) (\d+)\s*$/gm)) seen[m[1]] = Number(m[2]);
+            const total = seen.tests ?? null, pass = seen.pass ?? null, fail = seen.fail ?? null;
+            if (total === null || pass === null || fail === null) {
+              console.error("could not find a test summary in the output — did npm test run at all?");
+              process.exit(1);
+            }
+            const min = Number(process.env.MIN_TESTS);
+            console.log(`tests=${total} pass=${pass} fail=${fail} (floor ${min})`);
+            if (fail > 0) { console.error("failing tests"); process.exit(1); }
+            if (pass < min) {
+              console.error(`only ${pass} tests passed, floor is ${min} — the suite is not running in full`);
+              process.exit(1);
+            }
+          '
+
+      # Coverage is measured but not gated. The numbers are only meaningful because the
+      # harness hands vm.runInContext an ABSOLUTE filename under assets/ — with a bare
+      # "app.js" node attributed the app sources to nothing and printed 100% of an empty
+      # report. Assert the app's two source files actually appear, for exactly that reason.
+      - name: Coverage
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test --experimental-test-coverage "test/**/*.test.js" 2>&1 | tee coverage.txt
+          # Every shipped source must appear. Derived from the directory rather than a list
+          # kept here, so a widget added tomorrow is covered by this check on the same day —
+          # and so a widget file that is never loaded cannot hide behind a stale list.
+          missing=0
+          for f in assets/app.js assets/wx-*.js; do
+            b=$(basename "$f")
+            grep -q "$b" coverage.txt || { echo "coverage report does not mention $b"; missing=1; }
+          done
+          test "$missing" = 0
+
+  build-apk:
+    name: build apk (windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # javac, keytool and apksigner's JVM all come from here. Pinned so the build does not
+      # move underneath us when the runner image changes its default JDK.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The Android SDK is a hard requirement of build.ps1, so this step fails loudly with
+      # what it did find rather than skipping the build.
+      - name: Locate the Android SDK
+        id: sdk
+        shell: pwsh
+        run: |
+          $root = $env:ANDROID_SDK_ROOT
+          if (-not $root) { $root = $env:ANDROID_HOME }
+          if (-not $root -and (Test-Path 'C:\Android\android-sdk')) { $root = 'C:\Android\android-sdk' }
+          if (-not $root -or -not (Test-Path $root)) {
+            Write-Host "ANDROID_SDK_ROOT='$env:ANDROID_SDK_ROOT' ANDROID_HOME='$env:ANDROID_HOME'"
+            throw "No Android SDK on this runner. The APK build needs one; install it in this job or pin a runner image that ships it."
+          }
+          Write-Host "SDK root: $root"
+          if (Test-Path "$root\build-tools") {
+            Write-Host "build-tools present: $((Get-ChildItem "$root\build-tools" -Directory | ForEach-Object Name) -join ', ')"
+          } else { Write-Host "build-tools present: (none)" }
+          if (Test-Path "$root\platforms") {
+            Write-Host "platforms present: $((Get-ChildItem "$root\platforms" -Directory | ForEach-Object Name) -join ', ')"
+          } else { Write-Host "platforms present: (none)" }
+          "root=$root" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Install the pinned build-tools and platform
+        shell: pwsh
+        env:
+          SDK_ROOT: ${{ steps.sdk.outputs.root }}
+        run: |
+          $root = $env:SDK_ROOT
+          $bt = $env:BUILD_TOOLS
+          $pl = $env:ANDROID_PLATFORM
+          $needBt = -not (Test-Path "$root\build-tools\$bt\aapt2.exe")
+          $needPl = -not (Test-Path "$root\platforms\$pl\android.jar")
+          if (-not $needBt -and -not $needPl) { Write-Host "already installed"; exit 0 }
+
+          $mgr = Get-ChildItem "$root\cmdline-tools" -Recurse -Filter sdkmanager.bat -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+          if (-not $mgr) {
+            $mgr = Get-ChildItem "$root\tools\bin" -Filter sdkmanager.bat -ErrorAction SilentlyContinue |
+                   Select-Object -First 1
+          }
+          if (-not $mgr) {
+            throw "sdkmanager not found under $root. Cannot install build-tools;$bt / platforms;$pl."
+          }
+          Write-Host "using $($mgr.FullName)"
+
+          $pkgs = @()
+          if ($needBt) { $pkgs += "build-tools;$bt" }
+          if ($needPl) { $pkgs += "platforms;$pl" }
+          # licences on the hosted images are pre-accepted; the y's are for anything that is not
+          $yes = ("y`n" * 40)
+          $yes | & $mgr.FullName --sdk_root="$root" @pkgs
+          if ($LASTEXITCODE -ne 0) { throw "sdkmanager failed installing: $($pkgs -join ', ')" }
+
+          # Fail closed: sdkmanager has been known to report success and install nothing.
+          if (-not (Test-Path "$root\build-tools\$bt\aapt2.exe")) { throw "build-tools;$bt still missing after install" }
+          if (-not (Test-Path "$root\platforms\$pl\android.jar")) { throw "platforms;$pl still missing after install" }
+
+      - name: Build the APK
+        shell: pwsh
+        env:
+          ANDROID_SDK_ROOT: ${{ steps.sdk.outputs.root }}
+        run: |
+          pwsh -NoProfile -File inky-oled\build.ps1 `
+            -BuildToolsVersion $env:BUILD_TOOLS -Platform $env:ANDROID_PLATFORM
+          if ($LASTEXITCODE -ne 0) { throw "build.ps1 failed" }
+
+      # Everything below turns a property we care about into a build failure rather than
+      # something somebody notices on the wall six weeks later.
+      - name: Check the artefact
+        shell: pwsh
+        env:
+          SDK_ROOT: ${{ steps.sdk.outputs.root }}
+        run: |
+          $apk = "inky-oled\inkyoled.apk"
+          if (-not (Test-Path $apk)) { throw "build.ps1 reported success but produced no APK" }
+          $kb = [math]::Round((Get-Item $apk).Length / 1KB, 1)
+          Write-Host "APK size: $kb KB"
+          if ($kb -lt 30) { throw "APK is only $kb KB — something did not get packaged" }
+
+          # Same pin as build.ps1 got, from the same env var.
+          $aapt2 = "$env:SDK_ROOT\build-tools\$env:BUILD_TOOLS\aapt2.exe"
+          if (-not (Test-Path $aapt2)) { throw "aapt2 not found at $aapt2" }
+
+          # 1. the shipping build must not carry the WebView devtools socket.
+          #
+          #    This check has now been wrong twice, in two different ways, so it is written
+          #    out longhand.
+          #      a) `-notmatch` on the aapt2 output FILTERS the array instead of answering
+          #         yes/no, so it was true whenever any single line differed — always.
+          #      b) `Select-String -Quiet` over an EMPTY $badging returns $false, which reads
+          #         as "not debuggable". aapt2 exiting non-zero, or not running at all, then
+          #         printed "ok: not debuggable" and passed. PowerShell does not throw on a
+          #         native command's exit code (PSNativeCommandUseErrorActionPreference is
+          #         off by default), so nothing else caught it either.
+          #    Hence: check the exit code, then assert the output is non-empty, and only
+          #    then ask the question.
+          $badging = & $aapt2 dump badging $apk 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "aapt2 dump badging failed (exit $LASTEXITCODE): $badging" }
+          if (@($badging).Count -eq 0) { throw "aapt2 dump badging produced no output — cannot assert anything about this APK" }
+          if (-not (@($badging) | Select-String -Quiet -SimpleMatch 'package:')) {
+            throw "aapt2 dump badging output does not look like badging — refusing to conclude anything"
+          }
+          if (@($badging) | Select-String -Quiet -SimpleMatch 'application-debuggable') {
+            throw "SHIPPING BUILD IS DEBUGGABLE — WebView.setWebContentsDebuggingEnabled would be on"
+          }
+          Write-Host "ok: not debuggable (asserted over $(@($badging).Count) lines of badging)"
+
+          # 2. assets must be flat, and must be there at all. aapt2 on Windows writes
+          #    subdirectory separators as backslashes and file:///android_asset/ cannot
+          #    resolve them, so a subdirectory is a blank screen on the wall.
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $apk))
+          $assets = $zip.Entries | Where-Object { $_.FullName -like 'assets/*' -or $_.FullName -like 'assets\*' }
+          $names = @($assets | ForEach-Object { $_.FullName })
+          $zip.Dispose()
+          if ($names.Count -eq 0) { throw "the APK contains no assets at all" }
+          Write-Host "assets in apk: $($names -join ', ')"
+          foreach ($n in $names) {
+            if ($n -match '\\' -or ($n -replace '^assets/', '') -match '/') {
+              throw "asset is not flat: $n"
+            }
+          }
+          # The widget layer is one flat file per widget, so a hard-coded list here would go
+          # stale the first time one is added and this check would pass over a missing file.
+          # Take the list from the page itself: every <script src> index.html loads, plus the
+          # stylesheet it links, must be inside the APK. Fails closed — if the regex matches
+          # nothing, there is nothing to check and that is an error, not a pass.
+          $indexHtml = Get-Content 'inky-oled\assets\index.html' -Raw
+          $wanted = [regex]::Matches($indexHtml, '<script src="([^"]+)"') |
+                    ForEach-Object { $_.Groups[1].Value }
+          $wanted += [regex]::Matches($indexHtml, 'href="([^"]+\.css)"') |
+                     ForEach-Object { $_.Groups[1].Value }
+          if ($wanted.Count -lt 5) {
+            throw "could not read the asset list out of index.html (found $($wanted.Count)) - refusing to conclude the apk is complete"
+          }
+          $wanted += 'index.html'
+          foreach ($want in ($wanted | Sort-Object -Unique)) {
+            if ($names -notcontains "assets/$want") { throw "missing from the apk: assets/$want" }
+          }
+          Write-Host "ok: all $($wanted.Count) files index.html references are packaged"
+          if ($names | Where-Object { $_ -match '\.test\.' }) { throw "test code was packaged into the apk" }
+          Write-Host "ok: assets flat and complete"
+
+      - name: Build the debuggable variant too
+        shell: pwsh
+        env:
+          ANDROID_SDK_ROOT: ${{ steps.sdk.outputs.root }}
+          SDK_ROOT: ${{ steps.sdk.outputs.root }}
+        run: |
+          # The -Debuggable switch is the only supported way to get the devtools socket, so
+          # it has to keep working — and it has to actually set the flag.
+          pwsh -NoProfile -File inky-oled\build.ps1 -Debuggable `
+            -BuildToolsVersion $env:BUILD_TOOLS -Platform $env:ANDROID_PLATFORM
+          if ($LASTEXITCODE -ne 0) { throw "build.ps1 -Debuggable failed" }
+
+          # This one already failed closed on empty output (an absent flag throws), but the
+          # exit-code check is here so a broken aapt2 reports itself rather than being
+          # reported as "-Debuggable did not set android:debuggable".
+          $badging = & "$env:SDK_ROOT\build-tools\$env:BUILD_TOOLS\aapt2.exe" dump badging inky-oled\inkyoled.apk 2>&1
+          if ($LASTEXITCODE -ne 0) { throw "aapt2 dump badging failed (exit $LASTEXITCODE): $badging" }
+          if (-not (@($badging) | Select-String -Quiet -SimpleMatch 'application-debuggable')) {
+            throw "-Debuggable did not set android:debuggable"
+          }
+          Write-Host "ok: -Debuggable sets the flag, default build does not"
+          Remove-Item inky-oled\inkyoled.apk -Force   # never leave the debuggable one around
