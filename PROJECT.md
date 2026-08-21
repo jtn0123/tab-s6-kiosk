@@ -80,7 +80,16 @@ GSI updates: manual re-flash from MisterZtr releases (~15 min, data survives, re
 - [ ] Verify YouTube 1080p60 playback smooth (VP9, hardware decode, no thermal issues)
 - [ ] Record what's broken vs working in the status log
 
-### Phase 2 — Appliance setup
+### Phase 2 — Appliance setup (active to-do, 2026-08-16)
+- [ ] Sign into SmartTube (Settings → Accounts, phone code) — fixes recommendations
+- [ ] SmartTube: force VP9 + cap 1080p60 — avoid AV1 software decode
+- [ ] Install F-Droid (Brave → f-droid.org) → Aurora Store (Anonymous session) → Proton Pass (require PIN on open — shared wall device)
+- [ ] Optional: ReVanced YouTube + ReVanced GmsCore (revanced.app) if SmartTube's TV UI annoys
+- [ ] Smart plug ~80% charge cap (battery swelling)
+- [ ] Idle screen-off + dark UI habits (burn-in)
+- [ ] On new MisterZtr GSI release: re-flash system image + tabs6-gsi-fixes.zip (~15 min, no data format)
+
+### Phase 2 — original plan (reference)
 - [ ] Sideload SmartTube; settings: force VP9, cap 1080p60, disable AV1
 - [ ] Sideload browser
 - [ ] Screen timeout / burn-in mitigations (dark UI, no static max-brightness content)
