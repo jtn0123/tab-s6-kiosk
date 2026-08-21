@@ -108,21 +108,13 @@ GSI updates: manual re-flash from MisterZtr releases (~15 min, data survives, re
 ### Phase 3 — Kiosk APK — ✅ DONE as **Inky OLED** (2026-08-16→18, Windows session), now `jtn0123/InkyPi/clients/android`
 Built with SDK build-tools only (no Gradle), Java WebView shell + JS bridge, boot receiver, immersive mode,
 burn-in drift, on-device settings, touch panels, Home Assistant tiles, timer, news, newspaper/picture widgets.
-Standalone today (no server). Remaining kiosk items, tracked in the InkyPi PR:
-- [ ] Server mode: poll `/api/current_image` as primary screen, local widgets as offline fallback
+**Standalone by design (decided 2026-08-21): nothing from the Pi.** "True to InkyPi" = port plugins as JS widgets, same settings/playlist vocabulary, same data sources. Remaining items, tracked in the InkyPi PR:
+- [ ] Plugin parity: port remaining InkyPi plugins (calendar, APOD, AI text, image folder, …) as widgets
 - [ ] Set as HOME/launcher; screen pinning
 - [ ] Presence-based wake (mmWave → HA) — idea parked in tab-s6-kiosk README
 
-### Phase 4 — InkyPi `panel` profile (LAST — PRs to jtn0123/InkyPi)
-- [ ] `PanelDisplay` backend alongside inky/waveshare (`src/display/`)
-- [ ] `render_html()` on BasePlugin + `/live/<instance>` route (serve HTML, skip screenshot step)
-- [ ] Panel device profile: 2560x1600, full color, animation allowed, no palette quantization
-- [ ] SSE-driven refresh (reuse `/api/events`) instead of polling
-- [ ] Video loop support in image_folder/image_album (`<video autoplay muted loop>`, MP4/WebM not GIF)
-- [ ] Audit plugin templates for hardcoded e-ink dimensions/palette assumptions
-- [ ] Touch interactions (tap to advance recipe, check off todo) — stretch
-
----
+### Phase 4 — InkyPi `panel` profile — ❌ DROPPED 2026-08-21
+Superseded by the standalone decision: no server-side rendering for the tablet, no `/api/current_image` client, no `panel` display backend. Server work is limited to keeping `src/plugins/` as the reference for widget ports.
 
 ## Decision log
 
@@ -134,6 +126,7 @@ Standalone today (no server). Remaining kiosk items, tracked in the InkyPi PR:
 | 2026-08-16 | MP4/WebM loops instead of real GIFs | Hardware decoded, smaller, better quality |
 | 2026-08-16 | Custom WebView kiosk APK over Fully Kiosk | Fits the project; boots straight into panel as launcher; Fully Kiosk remains fallback |
 | 2026-08-16 | InkyPi server work is the LAST phase | Tablet must be flashed + stable first; panel can point at existing `/api/current_image` meanwhile |
+| 2026-08-21 | **Tablet app is standalone — nothing streamed from the Pi** | Justin's call; Pi rendering would make the tablet a dumb screen. Port plugins as JS widgets instead; InkyPi `panel` profile dropped |
 | 2026-08-16 | InkyPi PRs go to jtn0123/InkyPi | User's fork is the live project; do not PR the parent repo |
 | 2026-08-16 | Flash via physical Windows gaming PC (RDP/SSH remote-driven), not a Mac VM | Direct USB removes passthrough-hiccup-mid-write risk; SSH lets downloads be staged ahead of flash day |
 
