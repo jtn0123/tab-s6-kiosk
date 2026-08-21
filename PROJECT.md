@@ -67,7 +67,12 @@ decision/status logs as things happen.
 - **HANDOVER 2026-08-16**: flash execution moved to a Claude session running ON the gaming PC under Justin's own account (where USB works). Full instructions in `TURNOVER.md` on the NAS (`\\10.27.27.196\media\Media\S6 Tab`); that session logs to `PROGRESS.md` alongside it — sync it back into this repo afterwards.
 - Known quirk: synthetic typing into the RDP session garbles (every key → 'a'); workaround = Mac clipboard + ⌘V redirection, works reliably. Passwords always typed by Justin.
 
-### Phase 1 — Flash weekend
+### Phase 1 — Flash weekend — ✅ COMPLETE 2026-08-16 (Windows-side session; full detail in docs/PROGRESS-windows-session.md)
+Flashed: LineageOS 23.2 GSI (Android 16, VANILLA-EXT4) + multidisabler + tabs6-gsi-fixes. Bootloader unlocked, TWRP 3.7.0, **Magisk root**. Verified: boot, Wi-Fi, storage, haptics, brightness (Treble "extend brightness range"), color (SATURATED mode), SmartTube + Brave installed. Fixed post-flash: lock-screen "no service", battery %, SD-card format nag, adaptive-brightness RRO, battery charge cap.
+Key corrections vs. earlier assumptions: fingerprint MAY work via Treble workaround (untested, irrelevant); HDR is permanently gone on a GSI (Samsung display HAL — only a One UI port restores it, not worth it); `warranty_bit` stays 0 until a custom binary flash, not at unlock; density 360 is correct; USB triage step 1 on Samsung = tablet's "Use USB for → File transfer" setting, not cables; `adb root` drops USB+wireless every time (Magisk root replaced it); wireless debugging pair/connect ports differ.
+GSI updates: manual re-flash from MisterZtr releases (~15 min, data survives, re-flash fixes zip after; do NOT format data again).
+
+### Phase 1 (original plan, for reference)
 - [ ] Enable OEM unlocking → unlock bootloader (wipes device, blows Knox fuse — permanent)
 - [ ] Odin: TWRP in AP + vbmeta, auto-reboot OFF
 - [ ] TWRP: format data, flash GSI system.img
