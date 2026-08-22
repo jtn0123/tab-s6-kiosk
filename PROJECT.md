@@ -114,6 +114,7 @@ burn-in drift, on-device settings, touch panels, Home Assistant tiles, timer, ne
 - [x] Visual upgrade 2026-08-21: pro icon pack (28 WMO, animated, live moon), calmer richer sky, sun-arc, colour pass, second tiers; coder/judge loop signed off 8.7/10 (PR #635)
 - [x] Round B/C "illustrated-plus" realism 2026-08-21: cloud volume/texture, sky depth, daytime blue gradient, moon maria, card backdrop; judge 8.7/10 ship (PR #635)
 - [x] Location search on the tablet + second home screen 2026-08-21: Settings → Location (Open-Meteo geocoder, no key), swipe left/right between the dashboard and a tools/readings screen; installed and verified on the tablet (PR #635)
+- [x] **PR #635 merged into jtn0123/InkyPi main 2026-08-22** — the Android client now lives on main at `clients/android/`; 32 CI checks green, 0 CodeQL alerts, 407 client tests
 - [ ] Plugin parity: todo_list / ai_text next; then decide per-plugin on image_*/unsplash/github/screenshot
 - [ ] Install the new build on the tablet and check icons/sky at real size (judge suggestions: timer at-rest accent, hourly rain-bar caption, daily low callout anchor, Sensors void)
 - [ ] Set as HOME/launcher; screen pinning
