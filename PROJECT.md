@@ -113,6 +113,7 @@ burn-in drift, on-device settings, touch panels, Home Assistant tiles, timer, ne
 - [x] Plugin parity: **Calendar** ("Next" tile, ICS + RRULE expander) shipped 2026-08-21
 - [x] Visual upgrade 2026-08-21: pro icon pack (28 WMO, animated, live moon), calmer richer sky, sun-arc, colour pass, second tiers; coder/judge loop signed off 8.7/10 (PR #635)
 - [x] Round B/C "illustrated-plus" realism 2026-08-21: cloud volume/texture, sky depth, daytime blue gradient, moon maria, card backdrop; judge 8.7/10 ship (PR #635)
+- [x] Location search on the tablet + second home screen 2026-08-21: Settings → Location (Open-Meteo geocoder, no key), swipe left/right between the dashboard and a tools/readings screen; installed and verified on the tablet (PR #635)
 - [ ] Plugin parity: todo_list / ai_text next; then decide per-plugin on image_*/unsplash/github/screenshot
 - [ ] Install the new build on the tablet and check icons/sky at real size (judge suggestions: timer at-rest accent, hourly rain-bar caption, daily low callout anchor, Sensors void)
 - [ ] Set as HOME/launcher; screen pinning
@@ -161,4 +162,3 @@ Superseded by the standalone decision: no server-side rendering for the tablet, 
 - [SmartTube](https://github.com/yuliskov/SmartTube)
 - [InkyPi (jtn0123 fork)](https://github.com/jtn0123/InkyPi) — local: `~/Documents/Github/InkyPi`
 - Detailed flash steps: [docs/flash-walkthrough.md](docs/flash-walkthrough.md)
-- [x] Location search on the tablet + second home screen 2026-08-21: Settings → Location (Open-Meteo geocoder, no key), swipe left/right between the dashboard and a tools/readings screen; installed and verified on the tablet (PR #635)
