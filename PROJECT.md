@@ -161,3 +161,4 @@ Superseded by the standalone decision: no server-side rendering for the tablet, 
 - [SmartTube](https://github.com/yuliskov/SmartTube)
 - [InkyPi (jtn0123 fork)](https://github.com/jtn0123/InkyPi) — local: `~/Documents/Github/InkyPi`
 - Detailed flash steps: [docs/flash-walkthrough.md](docs/flash-walkthrough.md)
+- [x] Location search on the tablet + second home screen 2026-08-21: Settings → Location (Open-Meteo geocoder, no key), swipe left/right between the dashboard and a tools/readings screen; installed and verified on the tablet (PR #635)
